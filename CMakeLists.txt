@@ -9,7 +9,7 @@ set(GCC_STANDARD $ENV{STANDARD})
 message(STATUS "Compiling for the X86")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
-set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../Presto_new/lib)
+set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../../Presto_new/lib)
 set(REQUIRED_LIBRARIES
         m
         pthread
