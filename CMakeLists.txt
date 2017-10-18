@@ -1,50 +1,44 @@
-cmake_minimum_required(VERSION 2.8.0)
-project(Presto C)
+cmake_minimum_required(VERSION 3.5)
+project(IPCamTenvis)
 
-set(CMAKE_VERBOSE_MAKEFILE OFF)
+set(CMAKE_C_STANDARD 90)
 
-    message(STATUS "Target platform is set to '$ENV{PLATFORM}'")
+set(GCC_STANDARD $ENV{STANDARD})
 
-set(PRESTO_PLATFORM $ENV{PLATFORM})
+#PRESTO_PLATFORM STREQUAL "ubuntu"
+message(STATUS "Compiling for the X86")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../Presto_new/lib)
+set(REQUIRED_LIBRARIES
+        m
+        pthread
+        curl
+)
 
-if (PRESTO_PLATFORM STREQUAL "cross")
-    # this is for cross-compile using OpenWRT toolchain
-    set(PRESTO_PLATFORM $ENV{PLATFORM})
-    message(STATUS "Cross-compile build. Platform is set to ${PRESTO_PLATFORM}")
-    set(GCC_STANDARD "-std=c99")
-    add_subdirectory(Proxy)
-    add_subdirectory(WUD)
-elseif (PRESTO_PLATFORM STREQUAL "ubuntu")
-    # this is for x86/Ubuntu build
-    set(PRESTO_PLATFORM $ENV{PLATFORM})
-    message(STATUS "Ubuntu/X86 build. Platform is set to ${PRESTO_PLATFORM}")
-    set (CMAKE_C_STANDARD 90)
-    set(GCC_STANDARD "-std=c99")
-    add_subdirectory(Proxy)
-    add_subdirectory(WUD)
-elseif(PRESTO_PLATFORM STREQUAL "openwrt")
-    # this is for the OpenWRT target build.
-    set(CMAKE_VERBOSE_MAKEFILE OFF)
-    set(PRESTO_PLATFORM $ENV{PLATFORM})
-    message (STATUS "OpenWRT build. Platform is set to ${PRESTO_PLATFORM}")
-    set(GCC_STANDARD "-std=c89")
-    add_subdirectory(Proxy)
-    add_subdirectory(WUD)
-elseif(PRESTO_PLATFORM STREQUAL "quark")
-    # this is for the Quark
-    set(CMAKE_VERBOSE_MAKEFILE OFF)
-    set(PRESTO_PLATFORM $ENV{PLATFORM})
-    message (STATUS "Intel Quark build. Platform is set to ${PRESTO_PLATFORM}")
-    set(GCC_STANDARD "-std=c89")
-    add_subdirectory(Proxy)
-    add_subdirectory(WUD)
-else()
-    message (STATUS "PLATFORM is undefined. Please set to [ubuntu|cross|openwrt|quark] ${PRESTO_PLATFORM}")
-endif()
+#all include paths
+include_directories(
+        ./
+        ag_config
+        ag_threads
+        ${PROXY_LIBS_PATH}/pu_logger
+        ${PROXY_LIBS_PATH}/presto_commands
+        ${PROXY_LIBS_PATH}/pc_config
+        ${PROXY_LIBS_PATH}/libhttpcomm
+        ${PROXY_LIBS_PATH}/json
+)
 
-#NB! do not forget put it into top-level include file!
-#if STDC_VERSION >= 199901L
-#define _XOPEN_SOURCE 600
-#else
-#define _XOPEN_SOURCE 500
-#endif / STDC_VERSION /
+#Agent
+file (GLOB SOURCE_FILES
+        main.c
+        ag_config/*.c
+        ag_threads/*.c
+        ${PROXY_LIBS_PATH}/pc_config/pc_config.c
+        ${PROXY_LIBS_PATH}/presto_commands/*.c
+        ${PROXY_LIBS_PATH}/pu_logger/*.c
+        ${PROXY_LIBS_PATH}/json/*.c
+)
+
+add_executable(Tenvis ${SOURCE_FILES})
+
+target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
