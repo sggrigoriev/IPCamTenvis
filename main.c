@@ -27,7 +27,7 @@
 
 #include "ag_settings.h"
 #include "agent_release_version.h"
-#include "ag_threads.h"
+#include "at_main_thread.h"
 
 /* Help for Agent start parameters syntax */
 static void print_Agent_start_params();
@@ -40,7 +40,7 @@ int main() {
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
     print_Agent_start_params();
 
-    ag_main_thread();   /*Main Agent'd work cycle is hear */
+    at_main_thread();   /*Main Agent'd work cycle is hear */
 
     pu_stop_logger();
     exit(0);

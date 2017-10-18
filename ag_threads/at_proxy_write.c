@@ -19,4 +19,97 @@
  Created by gsg on 17/10/17.
 */
 
+#include <pthread.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
+
+#include "lib_tcp.h"
+#include "pu_logger.h"
+
+#include "aq_queues.h"
+#include "ag_defaults.h"
+#include "at_proxy_rw.h"
+
 #include "at_proxy_write.h"
+
+#define PT_THREAD_NAME "PROXY_WRITE"
+
+/*********************************************************************
+ * Local data
+ */
+static pthread_t id;
+static pthread_attr_t attr;
+
+static volatile int stop;   /* one stop for write and read agent threads */
+
+static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* buffer for write into the socket */
+
+static int write_socket;                /* writable socket */
+static pu_queue_t* from_main;           /* queue - the source of info to be written into the socket */
+
+/* Thread function: get info from main thread, write it into the socket */
+static void* proxy_write(void* params);
+
+int start_agent_write(int socket) {
+    write_socket = socket;
+    if(pthread_attr_init(&attr)) return 0;
+    if(pthread_create(&id, &attr, &proxy_write, NULL)) return 0;
+    return 1;
+}
+
+void stop_agent_write() {
+    void *ret;
+    pthread_join(id, &ret);
+    pthread_attr_destroy(&attr);
+
+    at_set_stop_proxy_rw_children();
+}
+
+static void* agent_write(void* params) {
+    from_main = aq_get_gueue(AQ_ToProxyQueue);
+
+/* Queue events init */
+    pu_queue_event_t events;
+    events = pu_add_queue_event(pu_create_event_set(), AQ_ToProxyQueue);
+
+/* Main loop */
+    while(!at_are_childs_stop()) {
+        pu_queue_event_t ev;
+
+        switch(ev=pu_wait_for_queues(events, DEFAULT_PROXY_WRITE_THREAD_TO_SEC)) {
+            case AQ_ToProxyQueue: {
+                size_t len = sizeof(out_buf);
+                while (pu_queue_pop(from_main, out_buf, &len)) {
+                    /* Prepare write operation */
+                    ssize_t ret;
+                    while(ret = lib_tcp_write(write_socket, out_buf, len, 1), !ret&&!at_are_childs_stop());  /* run until the timeout */
+                    if(at_are_childs_stop()) break; /* goto reconnect */
+                    if(ret < 0) { /* op start failed */
+                        pu_log(LL_ERROR, "%s. Write op failed %d %s. Reconnect", PT_THREAD_NAME, errno, strerror(errno));
+/* Put back non-sent message */
+                        pu_queue_push(from_main, out_buf, len);
+                        at_set_stop_proxy_rw_children();
+                        break;
+                    }
+                    pu_log(LL_DEBUG, "%s: written: %s", PT_THREAD_NAME, out_buf);
+                    len = sizeof(out_buf);
+                }
+                break;
+            }
+            case AQ_Timeout:
+                break;
+            case AQ_STOP:
+                at_set_stop_proxy_rw_children();
+                pu_log(LL_INFO, "%s: received STOP event. Terminated", PT_THREAD_NAME);
+                break;
+            default:
+                pu_log(LL_ERROR, "%s: Undefined event %d on wait!", PT_THREAD_NAME, ev);
+                break;
+        }
+    }
+    pu_log(LL_INFO, "%s is finished", PT_THREAD_NAME);
+    lib_tcp_client_close(write_socket);
+    pthread_exit(NULL);
+}
+

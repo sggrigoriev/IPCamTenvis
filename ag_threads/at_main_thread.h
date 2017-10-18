@@ -22,4 +22,6 @@
 #ifndef IPCAMTENVIS_AT_MAIN_THREAD_H
 #define IPCAMTENVIS_AT_MAIN_THREAD_H
 
+void at_main_thread();      /* Main Agent's thread */
+
 #endif /* IPCAMTENVIS_AT_MAIN_THREAD_H */

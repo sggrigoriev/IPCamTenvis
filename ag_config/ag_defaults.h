@@ -48,5 +48,9 @@
 /* IP Cam settings */
 #define DEFAULT_IPCAM_IP        "192.168.100.14"
 
+/************************************************************
+    Non-configurable defaults
+*/
+#define DEFAULT_PROXY_WRITE_THREAD_TO_SEC         1                   /* Timeout for incoming events in agent read/write threas. Zero means no timeout */
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

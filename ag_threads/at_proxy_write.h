@@ -22,4 +22,13 @@
 #ifndef IPCAMTENVIS_AT_PROXY_WRITE_H
 #define IPCAMTENVIS_AT_PROXY_WRITE_H
 
+/* Start agent write thread
+ *      wrie_socket - socket for write
+ *  Return 1
+*/
+int at_start_proxy_write(int write_socket);
+
+/* Stop agent write thread */
+void at_stop_proxy_write();
+
 #endif /* IPCAMTENVIS_AT_PROXY_WRITE_H */

@@ -22,4 +22,13 @@
 #ifndef IPCAMTENVIS_AT_PROXY_READ_H
 #define IPCAMTENVIS_AT_PROXY_READ_H
 
+/* Start the thread
+ *      read_socket - the open socket to read
+*/
+int at_start_proxy_read(int read_socket);
+
+/* stop the thread */
+void at_stop_proxy_read();
+
+
 #endif /* IPCAMTENVIS_AT_PROXY_READ_H */
