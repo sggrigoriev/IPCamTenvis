@@ -51,14 +51,14 @@ static pu_queue_t* from_main;           /* queue - the source of info to be writ
 /* Thread function: get info from main thread, write it into the socket */
 static void* proxy_write(void* params);
 
-int start_agent_write(int socket) {
+int at_start_proxy_write(int socket) {
     write_socket = socket;
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &proxy_write, NULL)) return 0;
     return 1;
 }
 
-void stop_agent_write() {
+void at_stop_proxy_write() {
     void *ret;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
@@ -66,7 +66,7 @@ void stop_agent_write() {
     at_set_stop_proxy_rw_children();
 }
 
-static void* agent_write(void* params) {
+static void* proxy_write(void* params) {
     from_main = aq_get_gueue(AQ_ToProxyQueue);
 
 /* Queue events init */

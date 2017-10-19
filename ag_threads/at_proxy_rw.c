@@ -120,9 +120,9 @@ static void* main_thread(void* params) {
         pu_log(LL_INFO, "%s: started", "AGENT_WRITE");
 
 /* It is hanging on the join inside of stop_agent_read function */
-        stop_agent_read();
+        at_stop_proxy_read();
 /* It is hanging on the join inside of stop_agent_write function */
-        stop_agent_write();
+        at_stop_proxy_write();
 
 /* Chilren are dead if we're here */
 /* Read & write sockets will be closed inside the agent_read & agent_write */

@@ -22,6 +22,9 @@
 #ifndef IPCAMTENVIS_AG_SETTINGS_H
 #define IPCAMTENVIS_AG_SETTINGS_H
 
+#include <stddef.h>     /* For size_t */
+
+#include "pu_logger.h"
 
 /*
     Set of "get" functions to make an access to settings for Presto modules
