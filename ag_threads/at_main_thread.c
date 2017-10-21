@@ -42,8 +42,8 @@ static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread'
 static pu_queue_event_t events;         /* main thread events set */
 static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;        /* main_thread -> proxy_write */
-static pu_queue_t* from_camera;     /* cam_control -> main_thread */
-static pu_queue_t* to_camera;       /* main_thread -> cam_control */
+static pu_queue_t* from_cam_control;     /* cam_control -> main_thread */
+static pu_queue_t* to_cam_controle;       /* main_thread -> cam_control */
 
 static char device_id[LIB_HTTP_DEVICE_ID_SIZE];
 
@@ -74,8 +74,8 @@ void at_main_thread() {
                     len = sizeof(mt_msg);
                 }
                 break;
-            case AQ_FromCamQueue:
-                while(pu_queue_pop(from_camera, mt_msg, &len)) {
+            case AQ_FromCamControl:
+                while(pu_queue_pop(from_cam_control, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Proxy %s", PT_THREAD_NAME, mt_msg);
                     process_camera_message(mt_msg);
                     len = sizeof(mt_msg);

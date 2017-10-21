@@ -18,5 +18,51 @@
 /*
  Created by gsg on 17/10/17.
 */
+#include <pthread.h>
+#include <string.h>
 
+#include "lib_http.h"
+#include "pu_logger.h"
+
+#include "aq_queues.h"
 #include "at_cam_control.h"
+
+#define PT_THREAD_NAME "CAM_CONTROL"
+
+/************************************************************************************
+ * Local data
+ */
+static pthread_t id;
+static pthread_attr_t attr;
+
+static volatile int stop;       /* Thread stop flag */
+
+static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
+static pu_queue_t* to_cam_control;      /* main_thread -> cam_control */
+static pu_queue_t* from_camera;         /* camera -> cam_control */
+static pu_queue_t* to_camera;           /* cam_control -> camera */
+
+static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
+/*****************************************************************************************
+ * Local functions
+ */
+static void* cam_control(void* params);
+
+/**********************************************
+ * Public functione definition
+ */
+void at_start_cam_control() {
+
+}
+
+void at_stop_cam_control() {
+
+}
+
+void at_set_stop_cam_control() {
+
+}
+/***********************************************************/
+static void* cam_control(void* params) {
+
+}

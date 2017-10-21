@@ -51,6 +51,7 @@
 /************************************************************
     Non-configurable defaults
 */
-#define DEFAULT_PROXY_WRITE_THREAD_TO_SEC         1                   /* Timeout for incoming events in agent read/write threas. Zero means no timeout */
+#define DEFAULT_PROXY_WRITE_THREAD_TO_SEC   1   /* Timeout for incoming events in agent read/write threas. Zero means no timeout */
+#define DEFAULT_CAM_WRITE_THREAD_TO_SEC     3600 /* Timeout for incoming events in cam_write therad */
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

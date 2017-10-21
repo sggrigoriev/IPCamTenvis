@@ -19,6 +19,7 @@ set(REQUIRED_LIBRARIES
 #all include paths
 include_directories(
         ./
+        ag_cam_io
         ag_config
         ag_threads
         ag_queues
@@ -34,6 +35,7 @@ include_directories(
 #Agent
 file (GLOB SOURCE_FILES
         main.c
+        ag_cam_io/*.c
         ag_config/*.c
         ag_threads/*.c
         ag_queues/*.c
