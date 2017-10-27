@@ -20,9 +20,11 @@ set(REQUIRED_LIBRARIES
 include_directories(
         ./
         ag_cam_io
+        ag_converter
         ag_config
         ag_threads
         ag_queues
+        ag_ring_buffer
         ${PROXY_LIBS_PATH}/pu_logger
         ${PROXY_LIBS_PATH}/presto_commands
         ${PROXY_LIBS_PATH}/pc_config
@@ -36,9 +38,11 @@ include_directories(
 file (GLOB SOURCE_FILES
         main.c
         ag_cam_io/*.c
+        ag_converter/*.c
         ag_config/*.c
         ag_threads/*.c
         ag_queues/*.c
+        ag_ring_buffer/ab_ring_bufer.c
         ${PROXY_LIBS_PATH}/pc_config/pc_config.c
         ${PROXY_LIBS_PATH}/presto_commands/*.c
         ${PROXY_LIBS_PATH}/pu_queues/*.c

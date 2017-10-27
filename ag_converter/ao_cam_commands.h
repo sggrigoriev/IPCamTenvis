@@ -16,16 +16,15 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 21/10/17.
+ Created by gsg on 25/10/17.
+ Contains Camera specific native commands and JSON answers
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_WRITE_H
-#define IPCAMTENVIS_AT_CAM_WRITE_H
+#ifndef IPCAMTENVIS_AO_CAM_COMMANDS_H
+#define IPCAMTENVIS_AO_CAM_COMMANDS_H
 
-int at_start_cam_write();
+#include <stddef.h>
 
-void at_stop_cam_write();
+char* cam_error_writing(char* buf, size_t max_size);
 
-void at_set_stop_cam_write();
-
-#endif /* IPCAMTENVIS_AT_CAM_WRITE_H */
+#endif /* IPCAMTENVIS_AO_CAM_COMMANDS_H */

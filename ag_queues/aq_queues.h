@@ -31,7 +31,7 @@
 
 /* Full Agent's queues events list */
 typedef enum {AQ_Timeout = PQ_TIMEOUT,
-    AQ_FromProxyQueue = 1, AQ_ToProxyQueue = 2, AQ_FromCamQueue = 3, AQ_ToCamQueue = 4, AQ_FromCamControl = 5, AQ_ToCamControl = 6,
+    AQ_FromProxyQueue = 1, AQ_ToProxyQueue = 2, AQ_FromCamControl = 3, AQ_ToCamControl = 4,
     AQ_STOP = PQ_STOP} queue_events_t;
 
 /* Init Agent queues service */

@@ -16,28 +16,20 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 17/10/17.
-
+ Created by gsg on 25/10/17.
+ Concerts Cam lingva to cloud JSON
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_CONTROL_H
-#define IPCAMTENVIS_AT_CAM_CONTROL_H
-
-/*******************************************
- * Initiates camera IO, start cam_read, cam_write and own thread
- * returns if cam_control stops
+#ifndef IPCAMTENVIS_AO_CAM2JSON_H
+#define IPCAMTENVIS_AO_CAM2JSON_H
+/********************************************************************
+ * Converts cam lingva to cloud JSON contructions
+ * @param cam_lingva    - input 0-terminated string with cam output
+ * @param json          - output 0-terminated string with converted to JSON data
+ * @param max_size      - json buf max size
+ * @return              - 1 if OK, 0 if not, If 0 the json contains the diagniostics
  */
-int at_start_cam_control();
 
-/*******************************************
- * Stops own thread and both child threads
- */
-void at_stop_cam_control();
+int ao_cam2json(const char* cam_lingva, char* json, size_t max_size);
 
-/********************************************
- * Set the flag to stop main thread
- */
-void at_set_stop_cam_control();
-
-
-#endif /* IPCAMTENVIS_AT_CAM_CONTROL_H */
+#endif /* IPCAMTENVIS_AO_CAM2JSON_H */

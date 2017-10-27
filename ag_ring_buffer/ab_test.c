@@ -16,28 +16,6 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 17/10/17.
-
+ Created by gsg on 27/10/17.
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_CONTROL_H
-#define IPCAMTENVIS_AT_CAM_CONTROL_H
-
-/*******************************************
- * Initiates camera IO, start cam_read, cam_write and own thread
- * returns if cam_control stops
- */
-int at_start_cam_control();
-
-/*******************************************
- * Stops own thread and both child threads
- */
-void at_stop_cam_control();
-
-/********************************************
- * Set the flag to stop main thread
- */
-void at_set_stop_cam_control();
-
-
-#endif /* IPCAMTENVIS_AT_CAM_CONTROL_H */

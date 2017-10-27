@@ -30,7 +30,7 @@
 #include "at_proxy_rw.h"
 #include "at_proxy_read.h"
 
-#define PT_THREAD_NAME "PROXY_READ"
+#define AT_THREAD_NAME "PROXY_READ"
 
 /***************************************************************************************************
  * Local data
@@ -68,12 +68,12 @@ static void* proxy_read(void* params) {
 
     lib_tcp_conn_t* all_conns = lib_tcp_init_conns(1, LIB_HTTP_MAX_MSG_SIZE-LIB_HTTP_HEADER_SIZE);
     if(!all_conns) {
-        pu_log(LL_ERROR, "%s: memory allocation error.", PT_THREAD_NAME);
+        pu_log(LL_ERROR, "%s: memory allocation error.", AT_THREAD_NAME);
         at_set_stop_proxy_rw_children();
         goto allez;      /* Allez kaputt */
     }
     if(!lib_tcp_add_new_conn(read_socket, all_conns)) {
-        pu_log(LL_ERROR, "%s: new incoming connection exeeds max amount. Aborted", PT_THREAD_NAME);
+        pu_log(LL_ERROR, "%s: new incoming connection exeeds max amount. Aborted", AT_THREAD_NAME);
         at_set_stop_proxy_rw_children();
         goto allez;
     }
@@ -81,12 +81,12 @@ static void* proxy_read(void* params) {
     while(!at_are_childs_stop()) {
         lib_tcp_rd_t *conn = lib_tcp_read(all_conns, 1); /* connection removed inside */
         if (!conn) {
-            pu_log(LL_ERROR, "%s. Read op failed %d %s. Reconnect", PT_THREAD_NAME, errno, strerror(errno));
+            pu_log(LL_ERROR, "%s. Read op failed %d %s. Reconnect", AT_THREAD_NAME, errno, strerror(errno));
             at_set_stop_proxy_rw_children();
             break;
         }
         if(conn == LIB_TCP_READ_EOF) {
-            pu_log(LL_ERROR, "%s. Read op failed. Nobody on remote side (EOF). Reconnect", PT_THREAD_NAME);
+            pu_log(LL_ERROR, "%s. Read op failed. Nobody on remote side (EOF). Reconnect", AT_THREAD_NAME);
             at_set_stop_proxy_rw_children();
             break;
         }
@@ -94,22 +94,22 @@ static void* proxy_read(void* params) {
             continue;   /* timeout */
         }
         if (conn == LIB_TCP_READ_MSG_TOO_LONG) {
-            pu_log(LL_ERROR, "%s: incoming mesage too large. Ignored", PT_THREAD_NAME);
+            pu_log(LL_ERROR, "%s: incoming mesage too large. Ignored", AT_THREAD_NAME);
             continue;
         }
         if (conn == LIB_TCP_READ_NO_READY_CONNS) {
-            pu_log(LL_ERROR, "%s: internal error - no ready sockets. Reconnect", PT_THREAD_NAME);
+            pu_log(LL_ERROR, "%s: internal error - no ready sockets. Reconnect", AT_THREAD_NAME);
             at_set_stop_proxy_rw_children();
             break;
         }
         while (lib_tcp_assemble(conn, out_buf, sizeof(out_buf))) {     /* Read all fully incoming messages */
             pu_queue_push(from_proxy, out_buf, strlen(out_buf) + 1);
 
-            pu_log(LL_INFO, "%s: message sent: %s", PT_THREAD_NAME, out_buf);
+            pu_log(LL_INFO, "%s: message sent: %s", AT_THREAD_NAME, out_buf);
         }
     }
     allez:
     lib_tcp_destroy_conns(all_conns);
-    pu_log(LL_INFO, "%s is finished", PT_THREAD_NAME);
+    pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

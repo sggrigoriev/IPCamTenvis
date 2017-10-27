@@ -19,15 +19,16 @@
  Created by gsg on 17/10/17.
 */
 
-
 #include "lib_http.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
 
 #include "aq_queues.h"
+#include "ao_json2cam.h"
+
 #include "at_main_thread.h"
 
-#define PT_THREAD_NAME  "IPCamTenvis"
+#define AT_THREAD_NAME  "IPCamTenvis"
 /****************************************************************************************
     Local functione declaration
 */
@@ -40,12 +41,10 @@ static void process_camera_message(char* msg);
 */
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;         /* main thread events set */
-static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
-static pu_queue_t* to_proxy;        /* main_thread -> proxy_write */
-static pu_queue_t* from_cam_control;     /* cam_control -> main_thread */
-static pu_queue_t* to_cam_controle;       /* main_thread -> cam_control */
-
-static char device_id[LIB_HTTP_DEVICE_ID_SIZE];
+static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
+static pu_queue_t* to_proxy;            /* main_thread -> proxy_write */
+static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
+static pu_queue_t* to_cam_controle;     /* main_thread -> cam_control */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -56,7 +55,7 @@ void at_main_thread() {
     main_finish = 0;
 
     if(!main_thread_startup()) {
-        pu_log(LL_ERROR, "%s: Initialization failed. Abort", PT_THREAD_NAME);
+        pu_log(LL_ERROR, "%s: Initialization failed. Abort", AT_THREAD_NAME);
         main_finish = 1;
     }
 
@@ -69,14 +68,14 @@ void at_main_thread() {
         switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
                 while(pu_queue_pop(from_poxy, mt_msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from the Proxy %s", PT_THREAD_NAME, mt_msg);
+                    pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
                     process_proxy_message(mt_msg);
                     len = sizeof(mt_msg);
                 }
                 break;
             case AQ_FromCamControl:
                 while(pu_queue_pop(from_cam_control, mt_msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from the Proxy %s", PT_THREAD_NAME, mt_msg);
+                    pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
                     process_camera_message(mt_msg);
                     len = sizeof(mt_msg);
                 }
@@ -85,14 +84,16 @@ void at_main_thread() {
                 break;
             case AQ_STOP:
                 main_finish = 1;
-                pu_log(LL_INFO, "%s received STOP event. Terminated", PT_THREAD_NAME);
+                pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
                 break;
             default:
-                pu_log(LL_ERROR, "%s: Undefined event %d on wait.", PT_THREAD_NAME, ev);
+                pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
                 break;
 
         }
     }
+    pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
+    pthread_exit(NULL);
 }
 /*****************************************************************************************
     Local functions deinition
@@ -102,6 +103,9 @@ int main_thread_startup() {
     return 0;
 }
 static void process_proxy_message(char* msg) {
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    if(!ao_json2cam(msg, buf, sizeof(buf))) {
+        pu_log(LL_ERROR, "%s cloud to camera translation error: %s. Ignored.", AT_THREAD_NAME, buf);
 
 }
 static void process_camera_message(char* msg) {

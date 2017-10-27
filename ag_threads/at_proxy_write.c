@@ -33,7 +33,7 @@
 
 #include "at_proxy_write.h"
 
-#define PT_THREAD_NAME "PROXY_WRITE"
+#define AT_THREAD_NAME "PROXY_WRITE"
 
 /*********************************************************************
  * Local data
@@ -86,13 +86,13 @@ static void* proxy_write(void* params) {
                     while(ret = lib_tcp_write(write_socket, out_buf, len, 1), !ret&&!at_are_childs_stop());  /* run until the timeout */
                     if(at_are_childs_stop()) break; /* goto reconnect */
                     if(ret < 0) { /* op start failed */
-                        pu_log(LL_ERROR, "%s. Write op failed %d %s. Reconnect", PT_THREAD_NAME, errno, strerror(errno));
+                        pu_log(LL_ERROR, "%s. Write op failed %d %s. Reconnect", AT_THREAD_NAME, errno, strerror(errno));
 /* Put back non-sent message */
                         pu_queue_push(from_main, out_buf, len);
                         at_set_stop_proxy_rw_children();
                         break;
                     }
-                    pu_log(LL_DEBUG, "%s: written: %s", PT_THREAD_NAME, out_buf);
+                    pu_log(LL_DEBUG, "%s: written: %s", AT_THREAD_NAME, out_buf);
                     len = sizeof(out_buf);
                 }
                 break;
@@ -101,14 +101,14 @@ static void* proxy_write(void* params) {
                 break;
             case AQ_STOP:
                 at_set_stop_proxy_rw_children();
-                pu_log(LL_INFO, "%s: received STOP event. Terminated", PT_THREAD_NAME);
+                pu_log(LL_INFO, "%s: received STOP event. Terminated", AT_THREAD_NAME);
                 break;
             default:
-                pu_log(LL_ERROR, "%s: Undefined event %d on wait!", PT_THREAD_NAME, ev);
+                pu_log(LL_ERROR, "%s: Undefined event %d on wait!", AT_THREAD_NAME, ev);
                 break;
         }
     }
-    pu_log(LL_INFO, "%s is finished", PT_THREAD_NAME);
+    pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
     lib_tcp_client_close(write_socket);
     pthread_exit(NULL);
 }

@@ -16,20 +16,20 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 21/10/17.
+ Created by gsg on 25/10/17.
+ Converts JSON-style commands from cloud to cam's language
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_READ_H
-#define IPCAMTENVIS_AT_CAM_READ_H
+#ifndef IPCAMTENVIS_AO_JSON2CAM_H
+#define IPCAMTENVIS_AO_JSON2CAM_H
 
-/* Start the thread */
-int at_start_cam_read();
+/*********************************************************************
+ * Converts JSON-style commands into the Camera's words
+ * @param json          - input 0-terminated JSON string
+ * @param cam_lingva    - output 0-terminated string with some html staf
+ * @param max_size      - output buf size
+ * @return              - 1 if Ok, 0 if not, If 0 the cam_lingva containg diagnistics
+ */
+int ao_json2cam(const char* json, char* cam_lingva, size_t max_size);
 
-/* Stop the thread */
-void at_stop_cam_read();
-
-/* Switch on the stop flag - assync stop */
-void at_set_stop_cam_read();
-
-
-#endif /* IPCAMTENVIS_AT_CAM_READ_H */
+#endif /* IPCAMTENVIS_AO_JSON2CAM_H */
