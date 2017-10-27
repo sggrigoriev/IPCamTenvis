@@ -52,7 +52,7 @@ file (GLOB SOURCE_FILES
 )
 
 #ab_test
-file (GLOB SOURCE_FILES
+file (GLOB SOURCE_FILES_AB_TEST
         ag_ring_buffer/*.c
         ${PROXY_LIBS_PATH}/pu_logger/*.c
         )
@@ -61,5 +61,5 @@ file (GLOB SOURCE_FILES
 add_executable(Tenvis ${SOURCE_FILES})
 target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 
-add_executable(ab_test ${SOURCE_FILES})
+add_executable(ab_test ${SOURCE_FILES_AB_TEST})
 target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
