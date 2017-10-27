@@ -51,6 +51,15 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/json/*.c
 )
 
-add_executable(Tenvis ${SOURCE_FILES})
+#ab_test
+file (GLOB SOURCE_FILES
+        ag_ring_buffer/*.c
+        ${PROXY_LIBS_PATH}/pu_logger/*.c
+        )
 
+
+add_executable(Tenvis ${SOURCE_FILES})
 target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
+
+add_executable(ab_test ${SOURCE_FILES})
+target_link_libraries(ab_test ${REQUIRED_LIBRARIES})

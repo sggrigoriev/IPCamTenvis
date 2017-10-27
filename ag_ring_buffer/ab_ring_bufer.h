@@ -31,7 +31,7 @@
 typedef unsigned char t_ab_byte;
 typedef struct {
     size_t ls_size;
-    const t_ab_byte* data;
+    t_ab_byte* data;
 } t_ab_block;
 typedef enum {
     AB_ERROR,       /* Data was not written. */
@@ -46,10 +46,9 @@ typedef enum {
  * NB2. Buffer can not take more than chunk_size bytes in one shot!
  * @param max_chunks - max amount of chunks stored ar one time
  * @param chunk_size - standard chunk size. Better if real portions would have this size.
- * @param delta - delta between the first chink to read and the 1st overwritten chunk in case of buffer ovf
  * @return - 1 if OK, 0 if not (worng input params or memory allocation problems
  */
-int ab_init(size_t max_chunks, size_t chunk_size, unsigned int delta);
+int ab_init(size_t max_chunks, size_t chunk_size);
 /****************************************
  * Closes the ring buffer
  */
@@ -67,7 +66,7 @@ const t_ab_block ab_getBlock(unsigned long to_sec);
  * @param data  pointer to the data to be saved
  * @return t_ab_put_rc (see the description on t_ab_put_rc)
  */
-t_ab_put_rc ab_put_Block(size_t data_size, const t_ab_byte* data);
+t_ab_put_rc ab_putBlock(size_t data_size, const t_ab_byte* data);
 
 
 
