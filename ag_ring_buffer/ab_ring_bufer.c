@@ -131,7 +131,9 @@ const t_ab_block ab_getBlock(unsigned long to_sec) {
     assert(buf_initialized);
     t_ab_block ret = {0l, NULL};
 
-    if((!is_data) && (!wait_for_data(to_sec))) return ret;   /* timeout */
+    if(!is_data) {                              /* To prevent wait call for most cases. */
+        if(!wait_for_data(to_sec)) return ret;   /* timeout */
+    }
     pthread_mutex_lock(&rw_index_guard);
         ret = buffer[read_index];
         read_index = shift(read_index);

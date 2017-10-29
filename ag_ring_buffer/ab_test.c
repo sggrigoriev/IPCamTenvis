@@ -75,13 +75,12 @@ int main() {
 
     ab_init(2, 10);
 
+    pthread_attr_init(&writer_attr);
+    pthread_create(&writer_id, &writer_attr, &writer, NULL);
+
     pthread_attr_init(&reader_attr);
     pthread_create(&reader_id, &reader_attr, &reader, NULL);
 
-//    sleep(60);
-
-    pthread_attr_init(&writer_attr);
-    pthread_create(&writer_id, &writer_attr, &writer, NULL);
 
     pthread_join(reader_id, &ret);
     pthread_attr_destroy(&reader_attr);
