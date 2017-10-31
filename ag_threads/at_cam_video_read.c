@@ -16,20 +16,38 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
- Converts JSON-style commands from cloud to cam's language
+ Created by gsg on 30/10/17.
+ Read the video flow from the camera
 */
 
-#ifndef IPCAMTENVIS_AO_JSON2CAM_H
-#define IPCAMTENVIS_AO_JSON2CAM_H
+#include "at_cam_video_read.h"
 
-/*********************************************************************
- * Converts JSON-style commands into the Camera's words
- * @param json          - input 0-terminated JSON string
- * @param cam_lingva    - output 0-terminated string with some html staf
- * @param max_size      - output buf size
- * @return              - 1 if Ok, 0 if not, If 0 the cam_lingva containg diagnistics
+/********************************************
+ * Local data
  */
-int ao_json2cam(const char* json, char* cam_lingva, size_t max_size);
 
-#endif /* IPCAMTENVIS_AO_JSON2CAM_H */
+static volatile int stop = 0;
+static volatile int stopped = 1;
+
+/*********************************************
+ * Global functions
+ */
+
+int at_start_video_read() {
+    return 0;
+}
+
+void at_stop_video_read() {
+    /**************************/
+
+    stopped = 1;
+}
+
+int at_is_video_read_run() {
+    return !stopped;
+}
+
+void at_set_stop_video_read() {
+    stop = 1;
+}
+

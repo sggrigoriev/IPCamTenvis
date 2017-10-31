@@ -70,8 +70,9 @@ static volatile size_t shift(volatile size_t index);
  * @param dest - pointer to the destination
  * @param data - data to write
  * @param size - data size
+ * @return - 1 if OK, 0 if error
  */
-static void put_data(t_ab_block* dest, const t_ab_byte* data, size_t size);
+static int put_data(t_ab_block* dest, const t_ab_byte* data, size_t size);
 /********************************************************
  * Wait until smth will be writtem into the buffer
  * @param to_sec - timeout in seconds. If timeout == 0 - wait forever
@@ -175,7 +176,7 @@ t_ab_put_rc ab_putBlock(size_t data_size, const t_ab_byte* data) {
         ptr = buffer + write_index;
 //        printf("putBock data = %d, wr = %lu, rd = %lu\t", is_data, write_index, read_index);
     pthread_mutex_unlock(&rw_index_guard);
-    put_data(ptr, data, data_size);
+    if(!put_data(ptr, data, data_size)) ret = AB_ERROR;
     return ret;
 }
 
@@ -185,11 +186,12 @@ t_ab_put_rc ab_putBlock(size_t data_size, const t_ab_byte* data) {
 static volatile size_t shift(volatile size_t index) {
     return (index == (buf_len-1))?0:index+1;
 }
-static void put_data(t_ab_block* dest, const t_ab_byte* data, size_t size) {
+static int put_data(t_ab_block* dest, const t_ab_byte* data, size_t size) {
     dest->ls_size = size;
     dest->data = malloc(size);
-    assert(dest->data);
+    if(!dest->data) return 0;
     memcpy(dest->data, data, size);
+    return 1;
 }
 static int wait_for_data(unsigned long to_sec) {
     struct timespec timeToWait;

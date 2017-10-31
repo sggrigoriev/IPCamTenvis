@@ -16,16 +16,21 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
+ Created by gsg on 30/10/17.
 */
 
-#include <stddef.h>
-#include <memory.h>
+#include "ac_udp.h"
 
-#include "ao_json2cam.h"
-
-int ao_json2cam(const char* json, char* cam_lingva, size_t max_size) {
-    if(!max_size) return 0;
-    strncpy(cam_lingva, "I'm ao_json2cam function. Implement me please!", max_size-1);
+t_ac_init_connections ac_init_udp_connections {
+    return 0;
+};
+t_ac_close_connections ac_close_udp_connections {
+    return 0;
+}
+t_ac_video_read ac_http_stream_read {
+    t_ab_block ret = {0l, NULL};
+    return ret;
+}
+t_ac_video_write ac_http_stream_write {
     return 0;
 }

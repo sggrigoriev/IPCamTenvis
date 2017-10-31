@@ -16,13 +16,31 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
+ Created by gsg on 30/10/17.
+ Read vieo stream from camera. Reconnects until stop or success if looses connection
 */
 
-#include "ao_cam2json.h"
+#ifndef IPCAMTENVIS_AT_CAM_VIDEO_READ_H
 
-int ao_cam2json(const char* cam_lingva, char* json, size_t max_size) {
-    if(!max_size) return 0;
-    strncpy(json, "I'm poor ao_cam2json function. Please implement me!");
-    return 0;
-}
+#define IPCAMTENVIS_AT_CAM_VIDEO_READ_H
+
+/***************************
+ * Start getting cideo stream from the camera
+ * @return - 1 is OK, 0 if not
+ */
+int at_start_video_read();
+/*****************************
+ * Stop read streaming (join)
+ */
+void at_stop_video_read();
+/*****************************
+ * Check if read stream runs
+ * @return 1 if runs 0 if not
+ */
+int at_is_video_read_run();
+/*******************************
+ * Set sign to stop the thread
+ */
+void at_set_stop_video_read();
+
+#endif /* IPCAMTENVIS_AT_CAM_VIDEO_READ_H */

@@ -31,7 +31,7 @@
 #include "at_proxy_write.h"
 
 
-#define PT_THREAD_NAME "AGENT_MAIN"
+#define AT_THREAD_NAME "AGENT_MAIN"
 
 /*************************************************************************
  * Local data
@@ -88,13 +88,13 @@ static void* main_thread(void* params) {
         chids_stop = 0;
 
         if(server_socket = lib_tcp_get_server_socket(ag_getProxyPort()), server_socket < 0) {
-            pu_log(LL_ERROR, "%s: unable to bind to the port %d. %d %s. Exiting.", PT_THREAD_NAME, ag_getProxyPort(), errno, strerror(errno));
+            pu_log(LL_ERROR, "%s: unable to bind to the port %d. %d %s. Exiting.", AT_THREAD_NAME, ag_getProxyPort(), errno, strerror(errno));
             stop = 1;
             break;
         }
         do {
             if (read_socket = lib_tcp_listen(server_socket, 1), read_socket < 0) {
-                pu_log(LL_ERROR, "%s: listen error. %d %s. Exiting", PT_THREAD_NAME, errno, strerror(errno));
+                pu_log(LL_ERROR, "%s: listen error. %d %s. Exiting", AT_THREAD_NAME, errno, strerror(errno));
                 lib_tcp_client_close(server_socket);
                 server_socket = -1;
                 break;      /* Go to bing again */
@@ -108,13 +108,13 @@ static void* main_thread(void* params) {
         write_socket = dup(read_socket);
 
         if(!at_start_proxy_read(read_socket)) {
-            pu_log(LL_ERROR, "%s: Creating %s failed: %s", PT_THREAD_NAME, "AGENT_READ", strerror(errno));
+            pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "AGENT_READ", strerror(errno));
             break;
         }
         pu_log(LL_INFO, "%s: started", "AGENT_READ");
 
         if(!at_start_proxy_write(write_socket)) {
-            pu_log(LL_ERROR, "%s: Creating %s failed: %s", PT_THREAD_NAME, "AGENT_WRITE", strerror(errno));
+            pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "AGENT_WRITE", strerror(errno));
             break;
         }
         pu_log(LL_INFO, "%s: started", "AGENT_WRITE");

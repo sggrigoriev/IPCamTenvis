@@ -50,6 +50,7 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "Agent start parameters:");
     pu_log(LL_INFO, "\tConfiguration file name: %s", ag_getCfgFileName());
     pu_log(LL_INFO, "\tLog file name: %s", ag_getLogFileName());
+    pu_log(LL_INFO, "\tMax records in queue: %d", ag_getQueuesRecAmt());
     pu_log(LL_INFO, "\t\tRecords amount in log file: %d", ag_getLogRecordsAmt());
     pu_log(LL_INFO, "\t\tLog level: %d", ag_getLogVevel());
     pu_log(LL_INFO, "\tAgent-Proxy communication port: %d", ag_getProxyPort());
@@ -58,5 +59,7 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "\tAgent watchdog sending interval in seconds: %d", ag_getAgentWDTO());
     pu_log(LL_INFO, "\tAgent device type: %d", ag_getAgentDeviceType());
     pu_log(LL_INFO, "\tCam IP: %s", ag_getIPCamIP());
-    pu_log(LL_INFO, "\tMax records in queue: %d", ag_getQueuesRecAmt());
+    pu_log(LL_INFO, "\tStreaming protocol: %d", ag_getIPCamProtocol());
+    pu_log(LL_INFO, "\tBuffer chunk size: %d", ag_getVideoChunkSize());
+    pu_log(LL_INFO, "\tBuffer chunks amount: %d", ag_getVidoeChunksAmount());
 }

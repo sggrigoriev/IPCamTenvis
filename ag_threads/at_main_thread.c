@@ -19,12 +19,23 @@
  Created by gsg on 17/10/17.
 */
 
+#include <memory.h>
+#include <errno.h>
+#include <ag_converter/ao_cmd_data.h>
+#include <ag_config/ag_settings.h>
+
 #include "lib_http.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
 
 #include "aq_queues.h"
-#include "ao_json2cam.h"
+#include "at_proxy_rw.h"
+#include "at_cam_control.h"
+#include "at_cam_video.h"
+
+#include "ao_cmd_cloud.h"
+#include "ao_cma_cam.h"
+#include "ac_video_interface.h"
 
 #include "at_main_thread.h"
 
@@ -33,6 +44,7 @@
     Local functione declaration
 */
 static int main_thread_startup();
+static void main_thread_shutdown();
 static void process_proxy_message(char* msg);
 static void process_camera_message(char* msg);
 
@@ -44,12 +56,12 @@ static pu_queue_event_t events;         /* main thread events set */
 static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;            /* main_thread -> proxy_write */
 static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
-static pu_queue_t* to_cam_controle;     /* main_thread -> cam_control */
+static pu_queue_t* to_cam_control;     /* main_thread -> cam_control */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
 /****************************************************************************************
-    Global functions definition
+    Global function definition
 */
 void at_main_thread() {
     main_finish = 0;
@@ -92,6 +104,7 @@ void at_main_thread() {
 
         }
     }
+    main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
@@ -99,15 +112,95 @@ void at_main_thread() {
     Local functions deinition
 */
 
-int main_thread_startup() {
-    return 0;
+static int main_thread_startup() {
+/* Queues initiation */
+    aq_init_queues();
+
+    from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
+    to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
+    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
+    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
+
+    events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
+    events = pu_add_queue_event(events, AQ_FromCamControl);
+
+/* Setup the ring buffer for video streaming */
+    if(!ab_init(ag_getVidoeChunksAmount(), ag_getVideoChunkSize())) {
+        pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
+        return 0;
+    }
+
+/* Video interface init */
+    ac_video_set_io();
+
+/* Threads start */
+    if(!at_start_proxy_rw()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "PROXY_RW", strerror(errno));
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "PROXY_RW");
+
+    if(!at_start_cam_control()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "CAM_CONTROL", strerror(errno));
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "CAM_CONTROL");
+
+    return 1;
+}
+static void main_thread_shutdown() {
+    at_set_stop_proxy_rw();
+    at_set_stop_cam_control();
+    at_cam_video_stop();
+
+    at_stop_proxy_rw();
+    at_stop_cam_control();
+
+    aq_erase_queues();
+    ab_close();         /* Erase videostream buffer */
 }
 static void process_proxy_message(char* msg) {
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    if(!ao_json2cam(msg, buf, sizeof(buf))) {
-        pu_log(LL_ERROR, "%s cloud to camera translation error: %s. Ignored.", AT_THREAD_NAME, buf);
+    t_ao_cloud_msg data;
+    t_ao_cloud_msg_type msg_type;
 
+    switch(msg_type=ao_cloud_decode(msg, &data)) {
+        case AO_CLOUD_PROXY_ID:                         /* Don't know waht to do with it */
+            break;
+        case AO_CLOUD_CONNECTION_STATE:                 /* reconnection case - someone should send to us new conn prams*/
+            at_cam_video_stop();
+            break;
+        case AO_CLOUD_VIDEO_START:
+            at_cam_video_start(data.video_start);
+            break;
+        case AO_CLOUD_VIDEO_STOP:
+            at_cam_video_stop();
+            break;
+        case AO_CLOUD_PZT:
+            pu_queue_push(to_cam_control, msg, strlen(msg)+1); /* Decode/encode is in thread */
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: undefined message type from Proxy. Type = %d. Message ignored", AT_THREAD_NAME, msg_type);
+            break;
+    }
 }
-static void process_camera_message(char* msg) {
 
+static void process_camera_message(char* msg) {
+    t_ao_cam_msg data;
+    t_ao_cam_msg_type msg_type;
+
+    switch(msg_type=ao_cam_decode(msg, &data)) {
+        case AO_CAM_RESULT: {
+            pu_queue_msg_t answer[LIB_HTTP_MAX_MSG_SIZE];
+            if(ao_cloud_encode(data, answer, sizeof(answer))) {
+                pu_queue_push(to_proxy, answer, strlen(answer)+1);
+            }
+            else {
+                pu_log(LL_ERROR, "%s: can't convert %s to cloud format, Cam message ignored", AT_THREAD_NAME, msg);
+            }
+        }
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: undefined message type from IPCamera. Type = %d. Message %s ignored", AT_THREAD_NAME, msg_type, msg);
+            break;
+    }
 }

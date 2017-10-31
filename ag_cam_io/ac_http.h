@@ -25,18 +25,19 @@
 
 #include <stddef.h>
 
+#include "ac_video_interface.h"
 /**************************************
  * (Re)connects to the camera
  * @return 1 if connected, 0 if not NB! 0 is case of hard error!!!
  */
-int ac_reconnect();
+int ac_http_reconnect();
 
 /* Read into in_buf the message from the cloud (GET). Answer ACK(s) id command(s) came
  *      in_buf  - buffer for data received
  *      size    - buffer size
  *  Return  0 if timeout, 1 if OK, -1 if error - reconnect required
 */
-int ac_read(char* in_buf, size_t size);
+int ac_http_read(char* in_buf, size_t size);
 
 /* POST the data to cloud; receive (possibly) the answer
  *      buf         - message to be sent (0-terminated string)
@@ -44,7 +45,13 @@ int ac_read(char* in_buf, size_t size);
  *      rest_size   - buffer size
  *  Returns 0 if error, 1 if OK
 */
-int ac_write(char* buf, char* resp, size_t resp_size);
+int ac_http_write(char* buf, char* resp, size_t resp_size);
+
+t_ac_init_connections ac_init_http_stream_connections;
+t_ac_close_connections ac_close_http_sream_connections;
+
+t_ac_video_read ac_http_stream_read;
+t_ac_video_write ac_http_stream_write;
 
 
 #endif /* IPCAMTENVIS_AC_HTTP_H */

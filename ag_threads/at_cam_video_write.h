@@ -16,30 +16,30 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 17/10/17.
- This is an API to handle videostreaming outside - (re)start and stop
+ Created by gsg on 30/10/17.
+ Write vieo stream to the cloud. Reconnects until stop or success if looses connection
 */
-#include "ao_cmd_data.h"
 
-#ifndef IPCAMTENVIS_AT_CAM_VIDEO_H
-#define IPCAMTENVIS_AT_CAM_VIDEO_H
+#ifndef IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H
+#define IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H
 
-/**************************************************
- * Start IPCam with given parameters
- * @param params - camera start parameters
+/**************************
+ * Run streaming into cloud
  * @return - 1 if OK, 0 if not
  */
-int at_cam_video_start(t_ao_video_start params);
-/*****************************************************
- * Stop video translation
- * @param params - camera stop parameters
- * @return - 1 if OK, 0 if not
+int at_start_video_write(t_ao_video_start params);
+/**************************
+ * Stop the thread (join)
  */
-int at_cam_video_stop();
-/***************************************************
- * Check if video translation is on
- * @return 0 if off, 1 if on
+void at_stop_video_write();
+/****************************
+ * Check is streaming works
+ * @return 1 if write stream runs
  */
-int at_is_video_run();
+int at_is_video_write_run();
+/******************************
+ * Set sign to stop the thread
+ */
+void at_set_stop_video_write();
 
-#endif /* IPCAMTENVIS_AT_CAM_VIDEO_H */
+#endif /* IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H */

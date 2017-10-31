@@ -16,15 +16,14 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
- Contains Camera specific native commands and JSON answers
+ Created by gsg on 30/10/17.
 */
 
-#ifndef IPCAMTENVIS_AO_CAM_COMMANDS_H
-#define IPCAMTENVIS_AO_CAM_COMMANDS_H
+#include "ao_cma_cam.h"
 
-#include <stddef.h>
-
-char* cam_error_writing(char* buf, size_t max_size);
-
-#endif /* IPCAMTENVIS_AO_CAM_COMMANDS_H */
+t_ao_cam_msg_type ao_cam_decode(const char* cam_message, t_ao_cam_msg* data) {
+    return AO_CAM_UNDEF;
+}
+const char* ao_cam_encode(const t_ao_cloud_msg data, char* cam_message, size_t msg_size) {
+    return NULL;
+}

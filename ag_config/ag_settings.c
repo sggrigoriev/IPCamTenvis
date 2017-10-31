@@ -53,6 +53,12 @@
 #define AGENT_WATCHDOG_TO_SEC       "WATCHDOG_TO_SEC"
 
 #define AGENT_IPCAM_IP              "IPCAM_IP"
+#define AGENT_IPCAM_PROTOCOL        "IPCAM_PROTOCOL"
+    #define AGENT_IC_RTMP           "RTMP"
+    #define AGENT_IC_RTSP           "RTSP"
+#define AGENT_CHUNK_SIZE            "CHUNK_SIZE"
+#define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
+
 /*************************************************************************
     Some macros
 */
@@ -75,6 +81,9 @@ static unsigned int wud_port;
 static unsigned int watchdog_to_sec;
 
 static char         ipcam_ip[LIB_HTTP_MAX_IPADDRES_SIZE];
+static int          video_protocol;
+static unsigned int chunk_size;
+static unsigned int chunks_amount;
 
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE];
 /***********************************************************************
@@ -89,6 +98,13 @@ static void initiate_defaults();
 /* Copy log_level_t value (see pu_logger.h) of field_name of cgf object into uint_setting. */
 /* Copy default value in case of absence of the field in the object */
 static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_setting);
+/*******************************************************************************
+ * Get configured video protocol type
+ * @param cfg - parsed configuration file
+ * @param field_name - setting name
+ * @param prot_val - setting value converted to int (see ad_defaults.h)
+ */
+static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val);
 
 /*************************************************************************
     Set of "get" functions to make an access to settings for Presto modules
@@ -132,6 +148,15 @@ unsigned int    ag_getAgentWDTO() {
 const char*     ag_getIPCamIP() {
     AGS_RET(DEFAULT_IPCAM_IP, ipcam_ip);
 }
+int ag_getIPCamProtocol() {
+    AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
+}
+unsigned int   ag_getVideoChunkSize() {
+    AGS_RET(DEFAULT_CHUNK_SIZE, chunk_size);
+}
+unsigned int    ag_getVidoeChunksAmount() {
+    AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
+}
 /**************************************************************************************************************************
     Thread-protected functions
 */
@@ -165,6 +190,11 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getUintValue(cfg, AGENT_WATCHDOG_TO_SEC, &watchdog_to_sec))                             AGS_ERR;
 
     if(!getStrValue(cfg, AGENT_IPCAM_IP, ipcam_ip, sizeof(ipcam_ip)))                           AGS_ERR;
+
+    getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
+
+    if(!getUintValue(cfg, AGENT_CHUNK_SIZE, &chunk_size))                             AGS_ERR;
+    if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                             AGS_ERR;
 
     cJSON_Delete(cfg);
 
@@ -203,17 +233,31 @@ static void initiate_defaults() {
 */
 static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_setting) {
     char buf[10];
-    if(!getStrValue(cfg, field_name, buf, sizeof(buf))) {
+    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
         fprintf(stderr, "Default will be used instead.\n");
-    }
-    else {
-        if(!strcmp(buf, AGENT_LL_DEBUG)) *llt_setting = LL_DEBUG;
-        else if(!strcmp(buf, AGENT_LL_WARNING)) *llt_setting = LL_WARNING;
-        else if(!strcmp(buf, AGENT_LL_INFO)) *llt_setting = LL_INFO;
-        else if(!strcmp(buf, AGENT_LL_ERROR)) *llt_setting = LL_ERROR;
-        else
-            fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
-                    field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
-            );
-    }
+    else if(!strcmp(buf, AGENT_LL_DEBUG))
+        *llt_setting = LL_DEBUG;
+    else if(!strcmp(buf, AGENT_LL_WARNING))
+        *llt_setting = LL_WARNING;
+    else if(!strcmp(buf, AGENT_LL_INFO))
+        *llt_setting = LL_INFO;
+    else if(!strcmp(buf, AGENT_LL_ERROR))
+        *llt_setting = LL_ERROR;
+    else
+        fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
+                field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
+        );
+}
+static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val) {
+    char buf[10];
+    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
+        fprintf(stderr, "Default will be used instead.\n");
+    else if(!strcmp(buf, AGENT_IC_RTMP))
+        *prot_val = AG_VIDEO_RTMP;
+    else if(!strcmp(buf, AGENT_IC_RTSP))
+        *prot_val = AG_VIDEO_RTSP;
+    else
+        fprintf(stderr, "Setting %s = %s. Posssible values are %s or %s. Default will be used instead\n",
+                field_name, buf, AGENT_IC_RTMP, AGENT_IC_RTSP
+        );
 }

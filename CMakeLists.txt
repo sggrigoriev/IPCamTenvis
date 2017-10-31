@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 90)
 
 set(GCC_STANDARD $ENV{STANDARD})
 
+add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
+
 #PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")

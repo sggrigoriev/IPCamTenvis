@@ -16,20 +16,15 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
- Concerts Cam lingva to cloud JSON
+ Created by gsg on 30/10/17.
 */
 
-#ifndef IPCAMTENVIS_AO_CAM2JSON_H
-#define IPCAMTENVIS_AO_CAM2JSON_H
-/********************************************************************
- * Converts cam lingva to cloud JSON contructions
- * @param cam_lingva    - input 0-terminated string with cam output
- * @param json          - output 0-terminated string with converted to JSON data
- * @param max_size      - json buf max size
- * @return              - 1 if OK, 0 if not, If 0 the json contains the diagniostics
- */
+#include "ao_cmd_cloud.h"
 
-int ao_cam2json(const char* cam_lingva, char* json, size_t max_size);
+t_ao_cloud_msg_type ao_cloud_decode(const char* cloud_message, t_ao_cloud_msg* data) {
+    return AO_CLOUD_UNDEF;
+}
 
-#endif /* IPCAMTENVIS_AO_CAM2JSON_H */
+const char* ao_cloud_encode(const t_ao_cloud_msg data, char* cloud_message, size_t msg_size) {
+    return NULL;
+}

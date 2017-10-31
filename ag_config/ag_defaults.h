@@ -47,6 +47,11 @@
 
 /* IP Cam settings */
 #define DEFAULT_IPCAM_IP        "192.168.100.14"
+#define AG_VIDEO_RTMP           1
+#define AG_VIDEO_RTSP           0
+#define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTMP
+#define DEFAULT_CHUNK_SIZE      1460
+#define DEFAULT_CHUNKS_AMOUNT   12
 
 /************************************************************
     Non-configurable defaults

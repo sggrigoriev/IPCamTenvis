@@ -19,4 +19,32 @@
  Created by gsg on 17/10/17.
 */
 
+#include "pu_logger.h"
+
+#include "ac_video_interface.h"
+#include "at_cam_video_read.h"
+#include "at_cam_video_write.h"
+
 #include "at_cam_video.h"
+
+int at_cam_video_start(t_ao_video_start params) {
+    if(at_is_video_run()) at_cam_video_stop();
+    at_start_video_write(params);
+    at_start_video_read(params);
+
+    return 1;
+}
+
+int at_cam_video_stop() {
+    at_set_stop_video_write();
+    at_set_stop_video_read();
+    at_stop_video_read();
+    at_stop_video_write();
+    ac_close_connections();
+    return 1;
+}
+
+int at_is_video_run() {
+    return (at_is_video_read_run() && at_is_video_write_run());
+}
+

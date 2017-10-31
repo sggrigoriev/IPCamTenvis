@@ -16,7 +16,18 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/10/17.
+ Created by gsg on 30/10/17.
 */
 
-#include "ao_cam_commands.h"
+#ifndef IPCAMTENVIS_AC_UDP_H
+#define IPCAMTENVIS_AC_UDP_H
+
+#include "ac_video_interface.h"
+
+t_ac_init_connections ac_init_udp_connections;
+t_ac_close_connections ac_close_udp_connections;
+
+t_ac_video_read ac_udp_stream_read;
+t_ac_video_write ac_udp_stream_write;
+
+#endif /* IPCAMTENVIS_AC_UDP_H */
