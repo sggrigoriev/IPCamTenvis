@@ -23,7 +23,7 @@
 #ifndef IPCAMTENVIS_AO_CMA_CAM_H
 #define IPCAMTENVIS_AO_CMA_CAM_H
 
-#include <stddef.h
+#include <stddef.h>
 
 #include "ao_cmd_data.h"
 

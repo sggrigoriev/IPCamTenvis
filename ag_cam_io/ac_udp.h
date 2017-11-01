@@ -24,10 +24,10 @@
 
 #include "ac_video_interface.h"
 
-t_ac_init_connections ac_init_udp_connections;
-t_ac_close_connections ac_close_udp_connections;
+int ac_init_udp_connections(t_ao_video_start params, t_ac_conn_type rw);
+int ac_close_udp_connections(t_ac_conn_type rw);
 
-t_ac_video_read ac_udp_stream_read;
-t_ac_video_write ac_udp_stream_write;
+size_t ac_udp_stream_read(size_t size, t_ab_byte* buf);
+int ac_udp_stream_write(size_t size, const t_ab_byte* buf);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */

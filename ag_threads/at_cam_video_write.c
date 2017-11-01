@@ -106,6 +106,7 @@ static void* the_thread(void* params) {
             free(ret.data);
         }
     }
+    ac_close_connections(AC_WRITE_CONN);
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

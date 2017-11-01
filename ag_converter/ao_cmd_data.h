@@ -23,6 +23,8 @@
 #ifndef IPCAMTENVIS_AO_CMD_DATA_H
 #define IPCAMTENVIS_AO_CMD_DATA_H
 
+#include "lib_http.h"
+
 /*************************************************************************
  * Cloud & Proxy messages
  */

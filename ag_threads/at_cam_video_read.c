@@ -122,6 +122,7 @@ static void* the_thread(void* params) {
             free(buf);
         }
     }
+    ac_close_connections(AC_READ_CONN);
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

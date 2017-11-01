@@ -40,7 +40,7 @@ int at_cam_video_stop() {
     at_set_stop_video_read();
     at_stop_video_read();
     at_stop_video_write();
-    ac_close_connections();
+    ac_close_connections(AC_ALL_CONN);
     return 1;
 }
 

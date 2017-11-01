@@ -45,13 +45,13 @@ int ac_http_read(char* in_buf, size_t size);
  *      rest_size   - buffer size
  *  Returns 0 if error, 1 if OK
 */
-int ac_http_write(char* buf, char* resp, size_t resp_size);
+int ac_http_write(const char* buf, char* resp, size_t resp_size);
 
-t_ac_init_connections ac_init_http_stream_connections;
-t_ac_close_connections ac_close_http_sream_connections;
+int ac_init_http_stream_connections(t_ao_video_start params, t_ac_conn_type rw);
+int ac_close_http_sream_connections(t_ac_conn_type rw);
 
-t_ac_video_read ac_http_stream_read;
-t_ac_video_write ac_http_stream_write;
+size_t ac_http_stream_read(size_t size, t_ab_byte* buf);
+int ac_http_stream_write(size_t size, const t_ab_byte* buf);
 
 
 #endif /* IPCAMTENVIS_AC_HTTP_H */

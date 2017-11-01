@@ -36,7 +36,7 @@ typedef enum {AC_READ_CONN, AC_WRITE_CONN, AC_ALL_CONN} t_ac_conn_type;
  * t_ab_byte - buffer to store info
  * Return 0 if error or amount of bytes red if > 0
  */
-typedef const size_t (*t_ac_video_read)(size_t, t_ab_byte*);
+typedef size_t (*t_ac_video_read)(size_t, t_ab_byte*);
 /******************************************************************
  * Write streaming data
  * size_t - buffer size in bytes
@@ -61,10 +61,10 @@ typedef int (*t_ac_close_connections)(t_ac_conn_type);
  */
 void ac_video_set_io();
 
-t_ac_init_connections ac_init_connections = NULL;
-t_ac_close_connections ac_close_connections = NULL;
-t_ac_video_read ac_video_read = NULL;
-t_ac_video_write ac_video_write = NULL;
+extern t_ac_init_connections ac_init_connections;
+extern t_ac_close_connections ac_close_connections;
+extern t_ac_video_read ac_video_read;
+extern t_ac_video_write ac_video_write;
 
 
 #endif /* IPCAMTENVIS_AC_VIDEO_INTERFACE_H */

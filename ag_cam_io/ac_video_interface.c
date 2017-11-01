@@ -29,30 +29,35 @@
 
 #include "ac_video_interface.h"
 
+t_ac_init_connections ac_init_connections = NULL;
+t_ac_close_connections ac_close_connections = NULL;
+t_ac_video_read ac_video_read = NULL;
+t_ac_video_write ac_video_write = NULL;
+
+
 void ac_video_set_io() {
     int code = ag_getIPCamProtocol();
     switch(code) {
         case AG_VIDEO_RTMP:
             pu_log(LL_INFO, "The RTMP interface is assigned");
-            ac_video_read = ac_http_stream_read;
-            ac_video_write = ac_http_stream_write;
-            ac_init_connections = ac_init_http_stream_connections;
+            ac_video_read = &ac_http_stream_read;
+            ac_video_write = &ac_http_stream_write;
+            ac_init_connections = &ac_init_http_stream_connections;
             ac_close_connections = ac_close_http_sream_connections;
             break;
         case AG_VIDEO_RTSP:
             pu_log(LL_INFO, "The RTSP interface is assigned");
-            pu_log(LL_ERROR, "The RTSP interface dosen't implemented. RTMP will be used instead");
-            ac_video_read = ac_http_stream_read;
-            ac_video_write = ac_http_stream_write;
-            ac_init_connections = ac_init_http_stream_connections;
-            ac_close_connections = ac_close_http_sream_connections;
+            ac_video_read = &ac_udp_stream_read;
+            ac_video_write = &ac_udp_stream_write;
+            ac_init_connections = &ac_init_http_stream_connections;
+            ac_close_connections = &ac_close_http_sream_connections;
             break;
         default:
             pu_log(LL_ERROR, "Unsupported interface code %d. RTMP will be used instead", code);
-            ac_video_read = ac_http_stream_read;
-            ac_video_write = ac_http_stream_write;
-            ac_init_connections = ac_init_http_stream_connections;
-            ac_close_connections = ac_close_http_sream_connections;
+            ac_video_read = &ac_http_stream_read;
+            ac_video_write = &ac_http_stream_write;
+            ac_init_connections = &ac_init_http_stream_connections;
+            ac_close_connections = &ac_close_http_sream_connections;
             break;
     }
 }

@@ -98,7 +98,7 @@ static void* cam_control(void* params) {
                             if(!ao_cam_encode(data, to_cam_msg, sizeof(to_cam_msg))) {
                                 pu_log(LL_ERROR, "%s: can't convert %s to camera message. Ignored", AT_THREAD_NAME, msg);
                             }
-                            else if(!ac_write(to_cam_msg, resp, sizeof(resp))) {
+                            else if(!ac_http_write(to_cam_msg, resp, sizeof(resp))) {
                                 pu_log(LL_ERROR, "%s, can't write %s to cam. Joppa.", AT_THREAD_NAME, to_cam_msg);
                             }
                             else if(strlen(resp)) {

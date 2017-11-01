@@ -21,15 +21,19 @@
 
 #include "ac_http.h"
 
-t_ac_init_connections ac_init_http_stream_connections {
+int ac_http_write(const char* buf, char* resp, size_t resp_size) {
     return 0;
 }
-t_ac_close_connections ac_close_http_sream_connections {
+
+int ac_init_http_stream_connections(t_ao_video_start params, t_ac_conn_type rw) {
     return 0;
 }
-t_ac_video_read ac_http_stream_read {
+int ac_close_http_sream_connections(t_ac_conn_type rw) {
     return 0;
 }
-t_ac_video_write ac_http_stream_write {
+size_t ac_http_stream_read(size_t size, t_ab_byte* buf) {
+    return 0;
+}
+int ac_http_stream_write(size_t size, const t_ab_byte* buf) {
     return 0;
 }
