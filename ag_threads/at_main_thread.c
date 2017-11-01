@@ -125,7 +125,7 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromCamControl);
 
 /* Setup the ring buffer for video streaming */
-    if(!ab_init(ag_getVidoeChunksAmount(), ag_getVideoChunkSize())) {
+    if(!ab_init(ag_getVidoeChunksAmount())) {
         pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
         return 0;
     }

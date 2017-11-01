@@ -19,7 +19,7 @@
  Created by gsg on 30/10/17.
 */
 #include <pthread.h>
-#include <ag_ring_buffer/ab_ring_bufer.h>
+#include <malloc.h>
 
 #include "pu_logger.h"
 
@@ -84,8 +84,8 @@ void at_set_stop_video_write() {
 static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
     while(!stop) {
-        if (!ac_init_connections(conn_params)) {
-            pu_log(LL_ERROR, "at_cam_video_start: can not establish video streaming.");
+        if (!ac_init_connections(conn_params, AC_WRITE_CONN)) {
+            pu_log(LL_ERROR, "%s: can not establish video streaming.", AT_THREAD_NAME);
             reconnect = 1;
             sleep(1);
         }
@@ -98,26 +98,12 @@ static void* the_thread(void* params) {
                 pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
                 continue;
             }
-            switch (ab_putBlock(ret.ls_size, ret.data)) {
-                case AB_ERROR:
-                    pu_log(LL_ERROR, "%s: Error writing into video buffer", AT_THREAD_NAME);
-                    continue;
-                case AB_OK:
-                    break;
-                case AB_OVFERFLOW:
-                    pu_log(LL_WARNING, "%s: Video buffer overflow", AT_THREAD_NAME);
-                    break;
-                case AB_TRUNCATED:
-                    pu_log(LL_WARNING, "%s: Video data truncated", AT_THREAD_NAME);
-                    break;
-                default:
-                    pu_log(LL_ERROR, "%s: Unrecognoized error from ab_putBlock()", AT_THREAD_NAME);
-                    continue;
-            }
             if (!ac_video_write(ret.ls_size, ret.data)) {
                 pu_log(LL_ERROR, "%s: Lost connection to the video-client", AT_THREAD_NAME);
+                ac_close_connections(AC_WRITE_CONN);
                 reconnect = 1;
             }
+            free(ret.data);
         }
     }
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);

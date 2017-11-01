@@ -56,7 +56,6 @@
 #define AGENT_IPCAM_PROTOCOL        "IPCAM_PROTOCOL"
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
-#define AGENT_CHUNK_SIZE            "CHUNK_SIZE"
 #define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
 
 /*************************************************************************
@@ -82,7 +81,6 @@ static unsigned int watchdog_to_sec;
 
 static char         ipcam_ip[LIB_HTTP_MAX_IPADDRES_SIZE];
 static int          video_protocol;
-static unsigned int chunk_size;
 static unsigned int chunks_amount;
 
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE];
@@ -151,9 +149,6 @@ const char*     ag_getIPCamIP() {
 int ag_getIPCamProtocol() {
     AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
 }
-unsigned int   ag_getVideoChunkSize() {
-    AGS_RET(DEFAULT_CHUNK_SIZE, chunk_size);
-}
 unsigned int    ag_getVidoeChunksAmount() {
     AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
 }
@@ -193,8 +188,7 @@ int ag_load_config(const char* cfg_file_name) {
 
     getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
 
-    if(!getUintValue(cfg, AGENT_CHUNK_SIZE, &chunk_size))                             AGS_ERR;
-    if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                             AGS_ERR;
+    if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                                 AGS_ERR;
 
     cJSON_Delete(cfg);
 

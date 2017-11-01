@@ -27,12 +27,35 @@
 #include "ab_ring_bufer.h"
 #include "ao_cmd_data.h"
 
+#define AC_MAX_STREAM_BUFF_SIZE 16384
 
-typedef const t_ab_block (*t_ac_video_read)(unsigned long);
+typedef enum {AC_READ_CONN, AC_WRITE_CONN, AC_ALL_CONN} t_ac_conn_type;
+/*****************************************************************
+ * Read streaming data
+ * size_t - buffer size in bytes
+ * t_ab_byte - buffer to store info
+ * Return 0 if error or amount of bytes red if > 0
+ */
+typedef const size_t (*t_ac_video_read)(size_t, t_ab_byte*);
+/******************************************************************
+ * Write streaming data
+ * size_t - buffer size in bytes
+ * t_ab_byte* - buffer with data to be written
+ * Return 0 if error, 1 if not
+ */
 typedef int(*t_ac_video_write)(size_t, const t_ab_byte*);
-
-typedef int (*t_ac_init_connections)(t_ao_video_start);
-typedef int (*t_ac_close_connections)();
+/**********************************************************************
+ * Initiate streaming read/wrie connection
+ * t_ao_video_start - connection parameters
+ * t_ac_conn_type - AC_READ_CONN for read initiation or AC_WRITE_CONN for write initiation
+ * Return 0 if error, 1 if OK
+ */
+typedef int (*t_ac_init_connections)(t_ao_video_start, t_ac_conn_type);
+/*********************************************************************
+ * Cllose read or write connection
+ * t_ac_conn_type - shows which connection should be closed
+ */
+typedef int (*t_ac_close_connections)(t_ac_conn_type);
 
 /* Set video stream read/write functions depending on configuration
  */

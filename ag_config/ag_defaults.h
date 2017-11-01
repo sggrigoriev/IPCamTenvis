@@ -50,7 +50,6 @@
 #define AG_VIDEO_RTMP           1
 #define AG_VIDEO_RTSP           0
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTMP
-#define DEFAULT_CHUNK_SIZE      1460
 #define DEFAULT_CHUNKS_AMOUNT   12
 
 /************************************************************

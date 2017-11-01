@@ -32,8 +32,8 @@ pthread_attr_t writer_attr, reader_attr;
 void* writer(void* v) {     /* Writer thiead */
     unsigned i = 0;
     while(1) {
-        t_ab_byte ar[3];
- //       sleep(1);
+        t_ab_byte* ar = malloc(3);
+//        sleep(1);
         i++;
         ar[0] = i; ar[1] = i;ar[2] = i;
         switch (ab_putBlock(3, ar)) {
@@ -44,10 +44,7 @@ void* writer(void* v) {     /* Writer thiead */
                 printf("writer: ab_putBlock return AB_OK\n");
                 break;
             case AB_OVFERFLOW:
-                printf("writer: ab_putBlock return AB_OVFERFLOW\n");
-                break;
-            case AB_TRUNCATED:
-                printf("writer: ab_putBlock return AB_TRUNCATED\n");
+//                printf("writer: ab_putBlock return AB_OVFERFLOW\n");
                 break;
             default:
                 printf("writer: ab_putBlock return something strange...\n");
@@ -59,6 +56,7 @@ void* writer(void* v) {     /* Writer thiead */
 
 void* reader(void* v) {     /* Reader thread */
     while(1) {
+        sleep(1);
         t_ab_block ret = ab_getBlock(20);
         if(!ret.ls_size) {
             printf("reader: timeout! Nothing to read\n");
@@ -73,7 +71,7 @@ void* reader(void* v) {     /* Reader thread */
 int main() {
     void *ret;
 
-    ab_init(2, 10);
+    ab_init(20);
 
     pthread_attr_init(&writer_attr);
     pthread_create(&writer_id, &writer_attr, &writer, NULL);

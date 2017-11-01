@@ -50,7 +50,6 @@ unsigned int    ag_getAgentWDTO();          /* timeout for watchdog sending */
 
 const char*     ag_getIPCamIP();            /* IP Camera address */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
-unsigned int    ag_getVideoChunkSize();     /* One video peace streaming size in bytes */
 unsigned int    ag_getVidoeChunksAmount();  /* Amount of buffers for video translation */
 /**************************************************************************************************************************
     Thread-protected functions

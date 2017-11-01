@@ -25,6 +25,6 @@ t_ao_cloud_msg_type ao_cloud_decode(const char* cloud_message, t_ao_cloud_msg* d
     return AO_CLOUD_UNDEF;
 }
 
-const char* ao_cloud_encode(const t_ao_cloud_msg data, char* cloud_message, size_t msg_size) {
+const char* ao_cloud_encode(const t_ao_cam_msg data, char* cloud_message, size_t msg_size) {
     return NULL;
 }

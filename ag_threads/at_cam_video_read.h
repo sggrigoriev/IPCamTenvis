@@ -21,14 +21,16 @@
 */
 
 #ifndef IPCAMTENVIS_AT_CAM_VIDEO_READ_H
-
 #define IPCAMTENVIS_AT_CAM_VIDEO_READ_H
+
+
+#include "ao_cmd_data.h"
 
 /***************************
  * Start getting cideo stream from the camera
  * @return - 1 is OK, 0 if not
  */
-int at_start_video_read();
+int at_start_video_read(t_ao_video_start params);
 /*****************************
  * Stop read streaming (join)
  */

@@ -28,8 +28,7 @@ t_ac_close_connections ac_close_http_sream_connections {
     return 0;
 }
 t_ac_video_read ac_http_stream_read {
-    t_ab_block ret = {0l, NULL};
-    return ret;
+    return 0;
 }
 t_ac_video_write ac_http_stream_write {
     return 0;
