@@ -16,24 +16,7 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 21/10/17.
+ Created by gsg on 13/11/17.
 */
 
-#include "ac_http.h"
-
-int ac_http_write(const char* buf, char* resp, size_t resp_size) {
-    return 0;
-}
-
-int ac_init_http_stream_connections(t_ao_video_start params, t_ac_conn_type rw) {
-    return 0;
-}
-int ac_close_http_sream_connections(t_ac_conn_type rw) {
-    return 0;
-}
-size_t ac_http_stream_read(size_t size, t_ab_byte* buf) {
-    return 0;
-}
-int ac_http_stream_write(size_t size, const t_ab_byte* buf) {
-    return 0;
-}
+#include "ac_rstp.h"

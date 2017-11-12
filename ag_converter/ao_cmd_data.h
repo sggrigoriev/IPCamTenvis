@@ -30,12 +30,13 @@
  */
 
 typedef enum {
-    AO_CLOUD_UNDEF,           /* Can't understand the command */
-    AO_CLOUD_PROXY_ID,         /* Proxy device ID */
-    AO_CLOUD_CONNECTION_STATE,/* Off line or on line */
-    AO_CLOUD_VIDEO_START,     /* Start video streaming */
-    AO_CLOUD_VIDEO_STOP,      /* Stop video straeming */
-    AO_CLOUD_PZT              /* PZT command */
+    AO_CLOUD_UNDEF,             /* Can't understand the command */
+    AO_CLOUD_PROXY_ID,          /* Proxy device ID */
+    AO_CLOUD_CONNECTION_STATE,  /* Off line or on line */
+    AO_CLOUD_VIDEO_PARAMS,      /* Video-server connection parameters */
+    AO_COUD_START_VIDEO,        /* First time - open connection, second time - Start video streaming */
+    AO_CLOUD_STOP_VIDEO,        /* Stop video streaming */
+    AO_CLOUD_PZT                /* PZT command */
 } t_ao_cloud_msg_type;
 
 typedef struct{
@@ -74,7 +75,7 @@ typedef union {
  */
 typedef enum {
     AO_CAM_UNDEF,           /* Can't understand the command */
-    AO_CAM_RESULT           /* answer to command: OK or error */
+    AO_CAM_RESULT,          /* answer to command: OK or error */
 } t_ao_cam_msg_type;
 
 typedef struct {

@@ -25,21 +25,20 @@
 #define IPCAMTENVIS_AT_CAM_VIDEO_H
 
 /**************************************************
- * Start IPCam with given parameters
+ * Start IPCam thread. Connection parameters will come later
  * @param params - camera start parameters
  * @return - 1 if OK, 0 if not
  */
-int at_cam_video_start(t_ao_video_start params);
+int at_start_video_mgr();
 /*****************************************************
  * Stop video translation
  * @param params - camera stop parameters
  * @return - 1 if OK, 0 if not
  */
-int at_cam_video_stop();
+int at_stop_video_mgr();
 /***************************************************
- * Check if video translation is on
- * @return 0 if off, 1 if on
+ * Set stop flag to 1
  */
-int at_is_video_run();
+void at_set_stop_video_mgr();
 
 #endif /* IPCAMTENVIS_AT_CAM_VIDEO_H */
