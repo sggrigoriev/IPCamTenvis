@@ -20,6 +20,8 @@
 */
 
 #include <pthread.h>
+#include <memory.h>
+#include <ag_converter/ao_cmd_data.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
@@ -39,15 +41,31 @@
 /*************************************************************************
  * Local data
  */
+
 static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop;       /* Thread stop flag */
 
+typedef enum {AT_UNDEFINED_STATE, AT_INITIAL_STATE, AT_CONNECTED_STATE, AT_PLAYING_STATE} t_mgr_state;
+
 static t_ao_video_start connection_data;
 
+static t_mgr_state own_status = AT_INITIAL_STATE;
+static pu_queue_t* from_agent;
+static pu_queue_t* to_agent;
+
+static t_ao_video_conn_data conn_params;
+
 static void* main_thread(void* params);
+
 static void process_message(const char* msg);
+    static int processUndefined(const char* in, char* out, size_t size);
+    static int processInitial(const char* in, char* out, size_t size);
+    static int processConnected(const char* in, char* out, size_t size);
+    static int processPlaying(const char* in, char* out, size_t size);
+    static void processBad(const char* in, char* out, size_t size, const char* diagnostics, int rc, t_mgr_state new_state);
+
 static void stop_video_threads();
 static void start_video_threads();
 
@@ -76,13 +94,7 @@ void at_set_stop_video_mgr() {
  * Local functions implementation
  */
 
-typedef enum {AT_UNDEFINED_STATE, AT_INITIAL_STATE, AT_CONNECTED_STATE, AT_PLAYING_STATE} t_mgr_state;
 
-static t_mgr_state own_status = AT_INITIAL_STATE;
-static pu_queue_t* from_agent;
-static pu_queue_t* to_agent;
-
-static t_ao_video_start conn_params;
 
 static void* main_thread(void* params) {
 
@@ -126,12 +138,108 @@ static void* main_thread(void* params) {
     pthread_exit(NULL);
 }
 /* Processing commands from cloud: VIDEO_CONNECT, VIDEO_DISCONNECT, START_PLAY, STOP_PLAY */
-/* TODO!!! 1) state machine needed; 2) think through output */
 static void process_message(const char* msg) {
-    t_ao_cloud_msg data;
     char responce[LIB_HTTP_MAX_MSG_SIZE];
-    t_ao_cloud_msg_type msg_type;
-    char out_msg[LIB_HTTP_MAX_MSG_SIZE];
+    int out = 0;
+
+    while (!out) {
+        switch (own_status) {
+            case AT_UNDEFINED_STATE:
+                out = processUndefined(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_INITIAL_STATE:
+                out = processInitial(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_CONNECTED_STATE:
+                out = processConnected(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_PLAYING_STATE:
+                out = processPlaying(msg, responce, sizeof(responce) - 1);
+                break;
+            default:
+                processBad(msg, responce, sizeof(responce)-1, "Video Manager in unrecognized state. Loot at Agent's log!", -1, AT_UNDEFINED_STATE);
+                out = 1;
+                break;
+        }
+    }
+    pu_queue_push(to_agent, responce, strlen(responce) + 1);
+}
+
+static int processUndefined(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            conn_params = data.video_conn_data;
+            own_status = AT_INITIAL_STATE;
+            pu_log(LL_DEBUG, "%s: Video server connection info received. %s", AT_THREAD_NAME, in);
+            return 1;
+        case AO_COUD_START_VIDEO:
+        case AO_CLOUD_STOP_VIDEO:
+            pu_log(LL_ERROR, "%s: Video server connection parameters were not sent! %s", AT_THREAD_NAME, in);
+            processBad(in, out, size, "Can not perform: connection parameers were not sent", -2, AT_UNDEFINED_STATE);
+            return 1;
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
+            processBad(in, out, size, "Vide Manager received undefined command.", -3, own_status);
+            return 1;
+    }
+}
+static int processInitial(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            conn_params = data.video_conn_data;
+            pu_log(LL_WARNING, "%s Vide server parameters updated. %s", AT_THREAD_NAME, in);
+            return 1;
+        case AO_COUD_START_VIDEO:
+            if(!ac_connect(conn_params, out, size))
+            break;
+        case AO_CLOUD_STOP_VIDEO:
+            break;
+        default:
+            break;
+    }
+}
+static int processConnected(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            break;
+        case AO_COUD_START_VIDEO:
+            break;
+        case AO_CLOUD_STOP_VIDEO:
+            break;
+        default:
+            break;
+    }
+}
+static int processPlaying(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            break;
+        case AO_COUD_START_VIDEO:
+            break;
+        case AO_CLOUD_STOP_VIDEO:
+            break;
+        default:
+            break;
+    }
+}
+static void processBad(const char* in, char* out, size_t size, const char* diagnostics, int rc, t_mgr_state new_state) {
+    t_ao_msg err;
+    err.own_error.msg_type = AO_OWN_ERROR;
+    err.own_error.rc = rc;
+    strncpy(err.own_error.error, diagnostics, sizeof(err.own_error.error)-1);
+    ao_cloud_encode(err, out, size);
+
+    own_status = new_state;
+}
+
 
     switch(msg_type=ao_cloud_decode(msg, &data)) {
         case AO_CLOUD_VIDEO_PARAMS:

@@ -32,7 +32,7 @@
  * @param data - internal structure
  * @return - message type
  */
-t_ao_cloud_msg_type ao_cloud_decode(const char* cloud_message, t_ao_cloud_msg* data);
+t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data);
 
 /********************************************************************************************
  * Encode internal structure into cloud/Proxy JSON command
@@ -41,6 +41,6 @@ t_ao_cloud_msg_type ao_cloud_decode(const char* cloud_message, t_ao_cloud_msg* d
  * @param msg_size - buffer size
  * @return - pointer to the buffer
  */
-const char* ao_cloud_encode(const t_ao_cam_msg data, char* cloud_message, size_t msg_size);
+const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size);
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

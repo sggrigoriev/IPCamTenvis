@@ -33,7 +33,7 @@
  * @param data - internal cam message presentation
  * @return - messahe type
  */
-t_ao_cam_msg_type ao_cam_decode(const char* cam_message, t_ao_cam_msg* data);
+t_ao_msg_type ao_cam_decode(const char* cam_message, t_ao_msg* data);
 
 /*************************************************************************************
  * Converts internal structure to camera message
@@ -42,6 +42,6 @@ t_ao_cam_msg_type ao_cam_decode(const char* cam_message, t_ao_cam_msg* data);
  * @param msg_size - max buffer size
  * @return
  */
-const char* ao_cam_encode(const t_ao_cloud_msg data, char* cam_message, size_t msg_size);
+const char* ao_cam_encode(const t_ao_msg data, char* cam_message, size_t msg_size);
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */
