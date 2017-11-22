@@ -26,6 +26,8 @@
 
 #include "pu_logger.h"
 
+#include "ao_cmd_data.h"
+
 /*
     Set of "get" functions to make an access to settings for Presto modules
 */
@@ -50,10 +52,23 @@ unsigned int    ag_getAgentWDTO();          /* timeout for watchdog sending */
 
 const char*     ag_getIPCamIP();            /* IP Camera address */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
-unsigned int    ag_getVidoeChunksAmount();  /* Amount of buffers for video translation */
+unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
 /**************************************************************************************************************************
     Thread-protected functions
 */
+/*****************************************
+ * @return NULL if no string or connection string
+ */
+const t_ao_video_conn_data* ag_getVideoConnectionData();
+/*****************************************
+ * Erase connection data to NULL
+ */
+void ag_dropVideoConnectionData();
+/******************************************
+ * Save cloud connection parameters
+ * @param con_data - pointer to cloud connection parameters to be saved
+ */
+void ag_saveVideoConnectionData(const t_ao_video_conn_data* con_data);
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */

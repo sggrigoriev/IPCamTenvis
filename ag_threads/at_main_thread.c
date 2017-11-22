@@ -66,6 +66,8 @@ static pu_queue_t* to_video_mgr;        /* main_thread -> video manager */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
+static volatile int gw_is_online;       /* 1 if there is a connection to the cloud; 0 if not */
+
 /****************************************************************************************
     Global function definition
 */
@@ -126,6 +128,7 @@ void at_main_thread() {
 */
 
 static int main_thread_startup() {
+    gw_is_online = 0;       /* Initial state = off */
 /* Queues initiation */
     aq_init_queues();
 
@@ -141,7 +144,7 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromVideoMgr);
 
 /* Setup the ring buffer for video streaming */
-    if(!ab_init(ag_getVidoeChunksAmount())) {
+    if(!ab_init(ag_getVideoChunksAmount())) {
         pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
         return 0;
     }
@@ -163,7 +166,7 @@ static int main_thread_startup() {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "VIDEO_MANAGER", strerror(errno));
         return 0;
     }
-    pu_log(LL_INFO, "%s: started", "CAM_CONTROL");
+    pu_log(LL_INFO, "%s: started", "VIDEO_MANAGER");
 
     return 1;
 }
@@ -180,14 +183,16 @@ static void main_thread_shutdown() {
     ab_close();         /* Erase videostream buffer */
 }
 static void process_proxy_message(char* msg) {
-    t_ao_cloud_msg data;
-    t_ao_cloud_msg_type msg_type;
+    t_ao_msg data;
+    t_ao_msg_type msg_type;
 
     switch(msg_type=ao_cloud_decode(msg, &data)) {
         case AO_CLOUD_PROXY_ID:                         /* Don't know waht to do with it */
+            /* Save deviceID here! */
             break;
         case AO_CLOUD_CONNECTION_STATE:                 /* reconnection case - someone should send to us new conn prams*/
-            send_disconnect_to_video_mgr();             /* so we have to disconnect anyway */
+            if(gw_is_online && data.conn_status.is_online)
+                send_disconnect_to_video_mgr();             /* so we have to disconnect anyway */
             break;
         case AO_CLOUD_VIDEO_PARAMS:
         case AO_COUD_START_VIDEO:

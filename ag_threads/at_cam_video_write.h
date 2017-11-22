@@ -27,7 +27,7 @@
  * Run streaming into cloud
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_write(t_ao_video_start params);
+int at_start_video_write();
 /**************************
  * Stop the thread (join)
  */

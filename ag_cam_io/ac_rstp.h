@@ -28,12 +28,11 @@
 
 /*******************************************************************
  * Make VS-Agent and Agent-Camera connection
- * @param data - VS connection parameters
  * @param responce - operation result
  * @param size - max buffer size
  * @return - 1 if OK, 0 if not
  */
-int ac_connect(t_ao_video_start data,  char* responce, size_t size);
+int ac_connect(char* responce, size_t size);
 /**********************************************
  * Disconnects from VS and from camera
  * @param responce - operation result
@@ -42,12 +41,11 @@ int ac_connect(t_ao_video_start data,  char* responce, size_t size);
 void ac_disconnect(char* responce, size_t size);
 /*********************************************************************
  * Start video playing
- * @param data - connection params (if any)
  * @param responce - operation result
  * @param size - max buffer size
  * @return - 1 if OK, 0 if not
  */
-int ac_start_play(t_ao_video_start data,  char* responce, size_t size);
+int ac_start_play(char* responce, size_t size);
 /*********************************************
  * Stop playing video
  * @param responce - operation result

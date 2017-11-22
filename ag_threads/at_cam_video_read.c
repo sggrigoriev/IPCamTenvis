@@ -25,7 +25,7 @@
 #include "pu_logger.h"
 
 #include "ab_ring_bufer.h"
-#include "ac_video_interface.h"
+#include "ac_rstp.h"
 
 #include "at_cam_video_read.h"
 
@@ -51,7 +51,7 @@ static t_ao_video_start conn_params;
  * Global functions
  */
 
-int at_start_video_read(t_ao_video_start params) {
+int at_start_video_read() {
     conn_params = params;
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &the_thread, NULL)) return 0;

@@ -43,14 +43,12 @@ static pthread_attr_t attr;
 
 static void* the_thread(void* params);
 
-static t_ao_video_start conn_params;
 
 /*********************************************
  * Global functions
  */
 
-int at_start_video_write(t_ao_video_start params) {
-    conn_params = params;
+int at_start_video_write() {
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &the_thread, NULL)) return 0;
     stopped = 0;

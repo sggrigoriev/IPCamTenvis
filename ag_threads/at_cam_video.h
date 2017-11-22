@@ -40,5 +40,9 @@ int at_stop_video_mgr();
  * Set stop flag to 1
  */
 void at_set_stop_video_mgr();
+/***************************************************
+ *  @return 1 if run, 0 if not
+ */
+int at_is_video_mgr_run();
 
 #endif /* IPCAMTENVIS_AT_CAM_VIDEO_H */
