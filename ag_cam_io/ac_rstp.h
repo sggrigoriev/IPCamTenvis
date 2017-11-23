@@ -26,6 +26,8 @@
 #ifndef IPCAMTENVIS_AC_RSTP_H
 #define IPCAMTENVIS_AC_RSTP_H
 
+#define AC_CAM_RSTP_SESSION_ID_LEN  20
+
 /*******************************************************************
  * Make VS-Agent and Agent-Camera connection
  * @param responce - operation result

@@ -21,6 +21,7 @@
 
 #include <pthread.h>
 #include <memory.h>
+#include <ag_converter/ao_cmd_data.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
@@ -31,11 +32,11 @@
 
 #include "ac_rstp.h"
 
-#include "at_cam_video_read.h"
-#include "at_cam_video_write.h"
+#include "at_video_connector.h"
 
 #include "ag_settings.h"
 #include "at_cam_video.h"
+
 
 #define AT_THREAD_NAME "VIDEO_MANAGER"
 
@@ -52,11 +53,20 @@ static pthread_attr_t attr;
 static volatile int stop;       /* Thread stop flag */
 static volatile int is_run;
 
-typedef enum {AT_UNDEFINED_STATE, AT_INITIAL_STATE, AT_CONNECTED_STATE, AT_PLAYING_STATE} t_mgr_state;
+typedef enum {
+    AT_UNDEFINED,           /* No connecting parameters */
+    AT_INITIAL,             /* Connecting parameters are saved */
+    AT_CONNECTING_START,    /* Video connector starts, connection is in process */
+    AT_CONNECTED,           /* Connection OK, video connector returns session ID */
+    AT_PLAY_START,          /* Streaming starts */
+    AT_PLAYING,             /* Video connector reports the streaming is in progress */
+    AT_PLAY_STOP,           /* Cloud asks for stop, streaming goes down */
+    AT_NO_PLAY              /* Vide connector reportd the streaming is down; goto AT_CONNECTED */
+} t_mgr_state;
 
 static t_ao_video_start connection_data;
 
-static t_mgr_state own_status = AT_INITIAL_STATE;
+static t_mgr_state own_status = AT_UNDEFINED;
 static pu_queue_t* from_agent;
 static pu_queue_t* to_agent;
 
@@ -67,12 +77,13 @@ static void* main_thread(void* params);
 static void process_message(const char* msg);
     static int processUndefined(const char* in, char* out, size_t size);
     static int processInitial(const char* in, char* out, size_t size);
+    static int processConnectingStart(const char* in, char* out, size_t size);
     static int processConnected(const char* in, char* out, size_t size);
+    static int processPlayStart(const char* in, char* out, size_t size);
     static int processPlaying(const char* in, char* out, size_t size);
+    static int processPlayStop(const char* in, char* out, size_t size);
+    static int processNoPlay(const char* in, char* out, size_t size);
     static void processBad(const char* in, char* out, size_t size, const char* diagnostics, int rc, t_mgr_state new_state);
-
-static void stop_video_threads();
-static void start_video_threads();
 
 static int video_start_play();
 static int video_stop_play();
@@ -145,7 +156,7 @@ static void* main_thread(void* params) {
         }
     }
 /* shutdown procedure */
-    stop_video_threads();
+    at_stop_video_connector();
     is_run = 0;
     pthread_exit(NULL);
 }
@@ -156,20 +167,31 @@ static void process_message(const char* msg) {
 
     while (!out) {
         switch (own_status) {
-            case AT_UNDEFINED_STATE:
+            case AT_UNDEFINED:
                 out = processUndefined(msg, responce, sizeof(responce) - 1);
                 break;
-            case AT_INITIAL_STATE:
+            case AT_INITIAL:
                 out = processInitial(msg, responce, sizeof(responce) - 1);
                 break;
-            case AT_CONNECTED_STATE:
+            case AT_CONNECTING_START:
+                out = processConnectingStart(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_CONNECTED:
                 out = processConnected(msg, responce, sizeof(responce) - 1);
                 break;
-            case AT_PLAYING_STATE:
+            case AT_PLAY_START:
+                out = processPlayStart(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_PLAYING:
                 out = processPlaying(msg, responce, sizeof(responce) - 1);
                 break;
+            case AT_PLAY_STOP:
+                out = processPlayStop(msg, responce, sizeof(responce) - 1);
+                break;
+            case AT_NO_PLAY:
+                out = processNoPlay(msg, responce, sizeof(responce) - 1);
             default:
-                processBad(msg, responce, sizeof(responce)-1, "Video Manager in unrecognized state. Loot at Agent's log!", -1, AT_UNDEFINED_STATE);
+                pu_log(LL_ERROR, "%s at unrecognized state. Internal error.", AT_THREAD_NAME);
                 out = 1;
                 break;
         }
@@ -187,14 +209,18 @@ static int processUndefined(const char* in, char* out, size_t size) {
 /* answer creation should be here! */
             pu_log(LL_DEBUG, "%s: Video server connection info received. %s", AT_THREAD_NAME, in);
             return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_STOP_RESULT:
+        case AO_CAM_VIDEO_PLAY_START_RESULT:
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+            pu_log(LL_ERROR, "%s Cam is conneting at unuppropriate time %s. Streaming processes will be killed immediately", AT_THREAD_NAME, in);
+            at_stop_video_connector();
+            return SM_EXIT;
         case AO_COUD_START_VIDEO:
         case AO_CLOUD_STOP_VIDEO:
             pu_log(LL_ERROR, "%s: Video server connection parameters were not sent! %s", AT_THREAD_NAME, in);
-            processBad(in, out, size, "Can not perform: connection parameers were not sent", -2, AT_UNDEFINED_STATE);
             return SM_EXIT;
         default:
             pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
-            processBad(in, out, size, "Vide Manager received undefined command.", -3, own_status);
             return SM_EXIT;
     }
 }
@@ -204,23 +230,59 @@ static int processInitial(const char* in, char* out, size_t size) {
     switch(msg_type=ao_cloud_decode(in, &data)) {
         case AO_CLOUD_VIDEO_PARAMS:
             ag_dropVideoConnectionData();
-            own_status--;
+            own_status = AT_UNDEFINED;
             pu_log(LL_WARNING, "%s Video server connection parameters were dropped. %s", AT_THREAD_NAME, in);
             return SM_NOEXTIT;
         case AO_COUD_START_VIDEO:
-            if(ac_connect(out, size)) {
-                own_status++;
-            }
-            else {
-                pu_log(LL_ERROR, "%s Can't establish cloud-Proxy-Cam connection", AT_THREAD_NAME);
-            }
+            at_start_video_connector();
+            own_status = AT_CONNECTING_START;
             return SM_EXIT;
         case AO_CLOUD_STOP_VIDEO:
-            pu_log(LL_WARNING, "%s Cloud requested stop play for non-playing Cam", AT_THREAD_NAME);
+            pu_log(LL_WARNING, "%s Cloud requested stop play for non-connected Cam", AT_THREAD_NAME);
+            return SM_EXIT;
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+        case AO_CAM_VIDEO_PLAY_START_RESULT:
+        case AO_CAM_VIDEO_PLAY_STOP_RESULT:
+            pu_log(LL_ERROR, "%s %s - Cam is not connected yet! Streaming/connection wil be killed", AT_THREAD_NAME, in);
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
+            return SM_EXIT;
+    }
+}
+static int processConnectingStart(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            at_stop_video_connector();
+            ag_dropVideoConnectionData();
+            own_status = AT_UNDEFINED;
+            pu_log(LL_WARNING, "%s Video server connection parameters were dropped. %s", AT_THREAD_NAME, in);
+            return SM_NOEXTIT;
+        case AO_COUD_START_VIDEO:
+            pu_log(LL_WARNING, "%s %s - Camera is already on connecting state", AT_THREAD_NAME, in);
+            return SM_EXIT;
+        case AO_CLOUD_STOP_VIDEO:
+            pu_log(LL_WARNING, "%s %s - Cloud requested stop play. Cam in connecting state. Ignored", AT_THREAD_NAME,
+                   in);
+            return SM_EXIT;
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+/* TODO - prepare and send answer to the cloud */
+            own_status = AT_CONNECTED;
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_START_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam already start play!", AT_THREAD_NAME, in);
+/* TODO - prepare and send answer to the cloud */
+            own_status = AT_PLAYING;
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_STOP_RESULT:
+            pu_log(LL_WARNING,
+                   "%s %s Cam is not playing. At least, nobody here didn't know about it. Set to 'CONNECTED'",
+                   AT_THREAD_NAME, in);
+            own_status = AT_CONNECTED;
             return SM_EXIT;
         default:
             pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
-            processBad(in, out, size, "Vide Manager received undefined command.", -3, own_status);
             return SM_EXIT;
     }
 }
@@ -229,23 +291,62 @@ static int processConnected(const char* in, char* out, size_t size) {
     t_ao_msg data;
     switch(msg_type=ao_cloud_decode(in, &data)) {
         case AO_CLOUD_VIDEO_PARAMS:
-            ac_disconnect(out, size);
-            own_status--;
+            at_stop_video_connector();
+            own_status = AT_INITIAL;
             return SM_NOEXTIT;
         case AO_COUD_START_VIDEO:
-            if(video_start_play()) {
-                own_status++;
-            }
-            else {
-                pu_log(LL_ERROR, "%s Can't start play video", AT_THREAD_NAME);
-            }
+            pu_log(LL_WARNING, "%s %s - Start play command came during the Cam just connected. Too quick.", AT_THREAD_NAME, in);
             return SM_EXIT;
         case AO_CLOUD_STOP_VIDEO:
-            pu_log(LL_WARNING, "%s Cloud requested stop pay for non-playing Camera");
+            pu_log(LL_WARNING, "%s %s - Stop play command came during the Cam is just connected. Too quick", AT_THREAD_NAME, in);
+            return SM_EXIT;
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam is already connected", AT_THREAD_NAME, in);
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_START_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam is playing and here we thought it was just connected...", AT_THREAD_NAME, in);
+            own_status = AT_PLAYING;
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_STOP_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam reported stop playing and we here just in 'Connected' state", AT_THREAD_NAME, in);
+/* TODO - prepare and send answer to the cloud */
             return SM_EXIT;
         default:
             pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
-            processBad(in, out, size, "Vide Manager received undefined command.", -3, own_status);
+            return SM_EXIT;
+    }
+}
+static int processPlayStart(const char* in, char* out, size_t size) {
+    t_ao_msg_type msg_type;
+    t_ao_msg data;
+    switch(msg_type=ao_cloud_decode(in, &data)) {
+        case AO_CLOUD_VIDEO_PARAMS:
+            at_stop_video_connector();
+            own_status = AT_INITIAL;
+            return SM_NOEXTIT;
+        case AO_COUD_START_VIDEO:
+            pu_log(LL_WARNING, "%s %s - Start play command came during the Cam already trying to start play.", AT_THREAD_NAME, in);
+            return SM_EXIT;
+        case AO_CLOUD_STOP_VIDEO:
+            pu_log(LL_WARNING, "%s %s - Stop play command came during the Cam is trying to start play. Too quick", AT_THREAD_NAME, in);
+            return SM_EXIT;
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam is already connected and start playing now", AT_THREAD_NAME, in);
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_START_RESULT:
+            own_status = AT_PLAYING;
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+        case AO_CAM_VIDEO_PLAY_STOP_RESULT:
+            pu_log(LL_WARNING, "%s %s - Cam reported stop playing and we here just trying to start play!", AT_THREAD_NAME, in);
+            own_status = AT_CONNECTED;
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
             return SM_EXIT;
     }
 }
@@ -254,16 +355,21 @@ static int processPlaying(const char* in, char* out, size_t size) {
     t_ao_msg data;
     switch(msg_type=ao_cloud_decode(in, &data)) {
         case AO_CLOUD_VIDEO_PARAMS:
-            video_stop_play();
-            own_status--;
+            at_stop_video_connector();
+            own_status = AT_INITIAL;
             return SM_NOEXTIT;
         case AO_COUD_START_VIDEO:
-            pu_log(LL_WARNING, "%s Cloud requested play for already playimg Cam");
+            pu_log(LL_WARNING, "%s %s - Cloud requested play for already playimg Cam", AT_THREAD_NAME, in);
             return SM_EXIT;
         case AO_CLOUD_STOP_VIDEO:
-            video_stop_play();
-            own_status--;
+            pu_log(LL_WARNING, "%s %s - Cloud requested stop play for playimg Cam. Wait.", AT_THREAD_NAME, in);
             return SM_EXIT;
+        case AO_CAM_VIDEO_CONNECTON_RESULT:
+            pu_log(LL_WARNING, "%s %s - Get connection result... Cam seems already connected and playing now", AT_THREAD_NAME, in);
+/* TODO - prepare and send answer to the cloud */
+            return SM_EXIT;
+
+
         default:
             pu_log(LL_ERROR, "%s: Unrecognozed command %d received %s", AT_THREAD_NAME, msg_type, in);
             processBad(in, out, size, "Vide Manager received undefined command.", -3, own_status);
@@ -271,7 +377,12 @@ static int processPlaying(const char* in, char* out, size_t size) {
 
     }
 }
+static int processPlayStop(const char* in, char* out, size_t size) {
 
+}
+static int processNoPlay(const char* in, char* out, size_t size) {
+
+}
 static void processBad(const char* in, char* out, size_t size, const char* diagnostics, int rc, t_mgr_state new_state) {
     t_ao_msg err;
     err.own_error.msg_type = AO_OWN_ERROR;
@@ -281,20 +392,6 @@ static void processBad(const char* in, char* out, size_t size, const char* diagn
 
     own_status = new_state;
 }
-
-
-static void stop_video_threads() {
-    at_set_stop_video_read();
-    at_set_stop_video_write();
-
-    at_stop_video_read();
-    at_set_stop_video_write();
-}
-static void start_video_threads() {
-    at_start_video_write();
-    at_start_video_read();
-}
-
 
 static int video_start_play() {
     return 0;

@@ -38,7 +38,10 @@ typedef enum {
     AO_CLOUD_STOP_VIDEO,        /* Stop video streaming */
     AO_CLOUD_PZT,               /* PZT command */
 /* CAMERA PART */
-    AO_CAM_RESULT,          /* answer to command: OK or error */
+    AO_CAM_VIDEO_CONNECTON_RESULT,         /* 1 and sessionID or 0 and diagnostics */
+    AO_CAM_VIDEO_PLAY_START_RESULT,        /* 1 as OK, 0 and diagnostics */
+    AO_CAM_VIDEO_PLAY_STOP_RESULT,          /* 1 as OK, 0 and diagnostics */
+
 /* Own messages */
     AO_OWN_ERROR
 } t_ao_msg_type;
@@ -79,8 +82,21 @@ typedef struct {
 typedef struct {
     t_ao_cam_msg_type msg_type;
     int result;              /* 0 - ERROR, 1 - OK */
+    char session_id[AC_CAM_RSTP_SESSION_ID_LEN];  /* '\0' or some zero-terminated string */
     char diagnostics[129];  /* '\0' or some zero-terminated string */
-} t_ao_cam_result;
+} t_ao_cam_video_connection_result;
+
+typedef struct {
+    t_ao_cam_msg_type msg_type;
+    int result;              /* 0 - ERROR, 1 - OK */
+    char diagnostics[129];  /* '\0' or some zero-terminated string */
+} t_ao_cam_video_start_result;
+
+typedef struct {
+    t_ao_cam_msg_type msg_type;
+    int result;              /* 0 - ERROR, 1 - OK */
+    char diagnostics[129];  /* '\0' or some zero-terminated string */
+} t_ao_cam_video_stop_result;
 
 /* Own part - Agent's messages */
 typedef struct {
@@ -96,10 +112,12 @@ typedef union {
     t_ao_video_conn_data video_conn_data;
     t_ao_video_start    video_start;
     t_ao_video_stop     video_stop;
+/* CAM answers */
+    t_ao_cam_video_connection_result    cam_video_connection_result;
+    t_ao_cam_video_start_result         cam_video_start_result;
+    t_ao_cam_video_stop_result          cam_video_stop_result;
+
     t_ao_pzt            pzt;
-
-    t_ao_cam_result     cam_result;
-
     t_ao_own_error      own_error;
 } t_ao_msg;
 
