@@ -53,13 +53,17 @@ unsigned int    ag_getAgentWDTO();          /* timeout for watchdog sending */
 const char*     ag_getIPCamIP();            /* IP Camera address */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
 unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
+
+time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
+time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
+time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
 /**************************************************************************************************************************
     Thread-protected functions
 */
 /*****************************************
  * @return NULL if no string or connection string
  */
-const t_ao_video_conn_data* ag_getVideoConnectionData();
+const t_ao_in_video_params ag_getVideoConnectionData();
 /*****************************************
  * Erase connection data to NULL
  */
@@ -68,7 +72,14 @@ void ag_dropVideoConnectionData();
  * Save cloud connection parameters
  * @param con_data - pointer to cloud connection parameters to be saved
  */
-void ag_saveVideoConnectionData(const t_ao_video_conn_data* con_data);
+void ag_saveVideoConnectionData(const t_ao_in_video_params con_data);
+/*********************************************************************
+ * Save stream session sent by cloud
+ * @param stream_details
+ */
+void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details);
+void ag_dropStreamDetails();
+
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */

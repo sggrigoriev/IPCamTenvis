@@ -31,6 +31,7 @@ include_directories(
         ${PROXY_LIBS_PATH}/presto_commands
         ${PROXY_LIBS_PATH}/pc_config
         ${PROXY_LIBS_PATH}/pu_queues
+        ${PROXY_LIBS_PATH}/libtimer
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
@@ -49,6 +50,7 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/presto_commands/*.c
         ${PROXY_LIBS_PATH}/pu_queues/*.c
         ${PROXY_LIBS_PATH}/pu_logger/*.c
+        ${PROXY_LIBS_PATH}/libtimer/*.c
         ${PROXY_LIBS_PATH}/libtcp/*.c
         ${PROXY_LIBS_PATH}/json/*.c
 )
