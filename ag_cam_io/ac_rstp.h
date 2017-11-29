@@ -23,10 +23,12 @@
 
 #include "ao_cmd_data.h"
 
-#ifndef IPCAMTENVIS_AC_RSTP_H
-#define IPCAMTENVIS_AC_RSTP_H
+#ifndef IPCAMTENVIS_AC_RTSP_H
+#define IPCAMTENVIS_AC_RTSP_H
 
 #define AC_CAM_RSTP_SESSION_ID_LEN  20
+
+typedef
 
 /*******************************************************************
  * Make VS-Agent and Agent-Camera connection

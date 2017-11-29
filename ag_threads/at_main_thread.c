@@ -21,9 +21,7 @@
 
 #include <memory.h>
 #include <errno.h>
-#include <ag_converter/ao_cmd_data.h>
 
-#include "lib_http.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
 
@@ -32,12 +30,9 @@
 #include "ab_ring_bufer.h"
 
 #include "at_proxy_rw.h"
-#include "at_cam_control.h"
+#include "ao_cmd_cloud.h"
 #include "at_cam_video.h"
 
-#include "ao_cmd_data.h"
-#include "ao_cmd_cloud.h"
-#include "ao_cma_cam.h"
 
 #include "at_main_thread.h"
 
@@ -48,8 +43,6 @@
 static int main_thread_startup();
 static void main_thread_shutdown();
 static void process_proxy_message(char* msg);
-static void process_camera_message(char* msg);
-static void process_video_message(char* msg);
 static void send_disconnect_to_video_mgr();
 
 /****************************************************************************************
@@ -59,8 +52,8 @@ static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread'
 static pu_queue_event_t events;         /* main thread events set */
 static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;            /* main_thread -> proxy_write */
-static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
-static pu_queue_t* to_cam_control;      /* main_thread -> cam_control */
+//static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
+//static pu_queue_t* to_cam_control;      /* main_thread -> cam_control */
 static pu_queue_t* from_video_mgr;      /* video manager -> main_thread */
 static pu_queue_t* to_video_mgr;        /* main_thread -> video manager */
 
@@ -94,16 +87,12 @@ void at_main_thread() {
                 }
                 break;
             case AQ_FromCamControl:
-                while(pu_queue_pop(from_cam_control, mt_msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from Camera Control %s", AT_THREAD_NAME, mt_msg);
-                    process_camera_message(mt_msg);
-                    len = sizeof(mt_msg);
-                }
+                pu_log(LL_ERROR, "%s: %s Camera control is not omplemented yet", AT_THREAD_NAME, mt_msg);
                 break;
             case AQ_FromVideoMgr:
                 while(pu_queue_pop(from_video_mgr, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Video Manager %s", AT_THREAD_NAME, mt_msg);
-                    process_video_message(mt_msg);
+                    pu_queue_push(to_proxy, mt_msg, strlen(mt_msg)+1);
                     len = sizeof(mt_msg);
                 }
                 break;
@@ -134,8 +123,8 @@ static int main_thread_startup() {
 
     from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
     to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
-    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
-    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
+//    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
+//    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
     from_video_mgr = aq_get_gueue(AQ_FromVideoMgr);      /* video manager -> main_thread */
     to_video_mgr = aq_get_gueue(AQ_ToVideoMgr);        /* main_thread -> video manager */
 
@@ -156,12 +145,6 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "PROXY_RW");
 
-    if(!at_start_cam_control()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "CAM_CONTROL", strerror(errno));
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: started", "CAM_CONTROL");
-
     if(!at_start_video_mgr()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "VIDEO_MANAGER", strerror(errno));
         return 0;
@@ -172,11 +155,9 @@ static int main_thread_startup() {
 }
 static void main_thread_shutdown() {
     at_set_stop_proxy_rw();
-    at_set_stop_cam_control();
     at_set_stop_video_mgr();
 
     at_stop_proxy_rw();
-    at_stop_cam_control();
     at_stop_video_mgr();
 
     aq_erase_queues();
@@ -187,20 +168,22 @@ static void process_proxy_message(char* msg) {
     t_ao_msg_type msg_type;
 
     switch(msg_type=ao_cloud_decode(msg, &data)) {
-        case AO_CLOUD_PROXY_ID:                         /* Don't know waht to do with it */
-            /* Save deviceID here! */
+        case AO_IN_PROXY_ID:                         /* Don't know waht to do with it */
+            ag_saveProxyID(data.in_proxy_id.proxy_device_id);
             break;
-        case AO_CLOUD_CONNECTION_STATE:                 /* reconnection case - someone should send to us new conn prams*/
-            if(gw_is_online && data.conn_status.is_online)
+        case AO_IN_CONNECTION_STATE:                 /* reconnection case - someone should send to us new conn prams*/
+            if(gw_is_online && data.in_connection_state.is_online)
                 send_disconnect_to_video_mgr();             /* so we have to disconnect anyway */
             break;
-        case AO_CLOUD_VIDEO_PARAMS:
-        case AO_COUD_START_VIDEO:
-        case AO_CLOUD_STOP_VIDEO:
+        case AO_IN_VIDEO_PARAMS:        /* Video server connection parameters */
+        case AO_IN_START_STREAM_0:      /* Start connection */
+        case AO_IN_STREAM_SESS_DETAILS: /* Cloud provides session details */
+        case AO_IN_SS_TO_1_RESP:        /* Answer from cloud - they reflected the sccesful connection from Cam */
+        case AO_IN_SS_TO_0_RESP:        /* Answer from cloud - they reflected Cam vidoe disconnection from Wowza */
             pu_queue_push(to_video_mgr, msg, strlen(msg)+1);
             break;
-        case AO_CLOUD_PZT:
-            pu_queue_push(to_cam_control, msg, strlen(msg)+1); /* Decode/encode is in thread */
+        case AO_IN_PZT:
+            pu_log(LL_ERROR, "%s: %s PZ commands not implemented yet",AT_THREAD_NAME, msg);
             break;
         default:
             pu_log(LL_ERROR, "%s: undefined message type from Proxy. Type = %d. Message ignored", AT_THREAD_NAME, msg_type);
@@ -208,46 +191,6 @@ static void process_proxy_message(char* msg) {
     }
 }
 
-static void process_camera_message(char* msg) {
-    t_ao_cam_msg data;
-    t_ao_cam_msg_type msg_type;
-
-    switch(msg_type=ao_cam_decode(msg, &data)) {
-        case AO_CAM_RESULT: {
-            pu_queue_msg_t answer[LIB_HTTP_MAX_MSG_SIZE];
-            if(ao_cloud_encode(data, answer, sizeof(answer))) {
-                pu_queue_push(to_proxy, answer, strlen(answer)+1);
-            }
-            else {
-                pu_log(LL_ERROR, "%s: can't convert %s to cloud format, Cam message ignored", AT_THREAD_NAME, msg);
-            }
-        }
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: undefined message type from IPCamera. Type = %d. Message %s ignored", AT_THREAD_NAME, msg_type, msg);
-            break;
-    }
-}
-static void process_video_message(char* msg) {
-    t_ao_cam_msg data;
-    t_ao_cam_msg_type msg_type;
-
-    switch(msg_type=ao_cam_decode(msg, &data)) {
-        case AO_CAM_RESULT: {
-            pu_queue_msg_t answer[LIB_HTTP_MAX_MSG_SIZE];
-            if(ao_cloud_encode(data, answer, sizeof(answer))) {
-                pu_queue_push(to_proxy, answer, strlen(answer)+1);
-            }
-            else {
-                pu_log(LL_ERROR, "%s: can't convert %s to cloud format, Cam message ignored", AT_THREAD_NAME, msg);
-            }
-        }
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: undefined message type from IPCamera. Type = %d. Message %s ignored", AT_THREAD_NAME, msg_type, msg);
-            break;
-    }
-}
 static void send_disconnect_to_video_mgr() {
 
 }

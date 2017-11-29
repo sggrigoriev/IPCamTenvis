@@ -83,6 +83,8 @@ void ag_dropStreamDetails();
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */
+void ag_saveProxyID(const char* proxy_id);
+const char* void ad_getProcyID();
 int ag_load_config(const char* cfg_file_name);
 
 

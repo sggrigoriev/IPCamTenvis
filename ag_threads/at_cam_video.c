@@ -21,23 +21,18 @@
 
 #include <pthread.h>
 #include <memory.h>
-#include <ag_converter/ao_cmd_data.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
 #include "lib_timer.h"
 
 #include "aq_queues.h"
+#include "ag_settings.h"
 #include "ao_cmd_data.h"
 #include "ao_cmd_cloud.h"
-
 #include "at_video_connector.h"
 
-#include "ag_settings.h"
-#include "at_cam_control.h"
 #include "at_cam_video.h"
-
-
 
 #define AT_THREAD_NAME "VIDEO_MANAGER"
 
@@ -52,7 +47,6 @@ static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop;       /* Thread stop flag */
-static volatile int is_run;
 
 typedef enum {
     AT_INITIAL,                 /* No connection info */
@@ -138,7 +132,6 @@ void at_set_stop_video_mgr() {
 static void* main_thread(void* params) {
 
     stop = 0;
-    is_run = 1;
 
     unsigned int events_timeout = 1; /* Wait 1 second - timeouts for respond from cloud should be enabled! */
     pu_queue_event_t events;
@@ -176,7 +169,6 @@ static void* main_thread(void* params) {
     }
 /* shutdown procedure */
     at_stop_video_connector();
-    is_run = 0;
     pthread_exit(NULL);
 }
 
@@ -271,7 +263,7 @@ static int processSessionIdAwaiting(const char* in, char* out, size_t size) {
             session_id_to_up = 0;   /* Dpop timeout - got the reapond */
             ag_saveStreamDetails(data.in_stream_sess_details);
         case AO_CAM_DISCONNECTED:   /* Reconnection case */
-            at_start_cam_control();     /* start VC to connect */
+            at_start_video_connector();     /* start VC to connect */
             own_status = AT_CONNECTING;
             pu_log(LL_INFO, "%s %s - Got session details, start connection process", AT_THREAD_NAME, in);
             break;
@@ -287,7 +279,7 @@ static int processConnecting(const char* in, char* out, size_t size) {
 
     switch (ao_cloud_decode(in, &data)) {
         case AO_IN_VIDEO_PARAMS:    /* Reconnect case */
-            at_stop_cam_control();
+            at_stop_video_connector();
             ag_dropVideoConnectionData();
             own_status = AT_INITIAL;
             pu_log(LL_INFO, "%s %s - New connection data received on Connecting state. Reconnect", AT_THREAD_NAME, in);
@@ -302,7 +294,7 @@ static int processConnecting(const char* in, char* out, size_t size) {
             }
             else {  /* Alas! VC could not connect to the video server */
                 prepare_unsucc_cam_connection(out, size);
-                at_stop_cam_control();
+                at_stop_video_connector();
                 own_status = AT_SESSION_ID_AWAITING;
                 pu_log(LL_ERROR, "%s %s - Cam could not connect to the video server. Reconnect Cam", AT_THREAD_NAME, in);
                 return SM_NOEXTIT;
@@ -321,13 +313,13 @@ static int processConnRespAwaiting(const char* in, char* out, size_t size) {
     switch (ao_cloud_decode(in, &data)) {
         case AO_IN_VIDEO_PARAMS:    /* Reconnect case */
             conn_resp_to_up = 0;
-            at_stop_cam_control();
+            at_stop_video_connector();
             ag_dropVideoConnectionData();
             own_status = AT_INITIAL;
             pu_log(LL_INFO, "%s %s - New connection data received on Connected state. Stop video and reconnect", AT_THREAD_NAME, in);
             return SM_NOEXTIT;
         case AO_CAM_DISCONNECTED:      /* Due to some internal reason cam disconnected. Bad... */
-            at_stop_cam_control();
+            at_stop_video_connector();
             own_status = AT_SESSION_ID_AWAITING; /*  Goto reconnect */
             pu_log(LL_ERROR, "%s %s - Cam could not connect to the video server. Trying to reconnect Cam", AT_THREAD_NAME, in);
             return SM_NOEXTIT;
@@ -348,7 +340,7 @@ static int processConnected(const char* in, char* out, size_t size) {
 
     switch (ao_cloud_decode(in, &data)) {
         case AO_IN_VIDEO_PARAMS:    /* Reconnect case */
-            at_stop_cam_control();
+            at_stop_video_connector();
             ag_dropVideoConnectionData();
             own_status = AT_INITIAL;
             pu_log(LL_INFO, "%s %s - New connection data received on Connected state. Stop video and reconnect", AT_THREAD_NAME, in);
@@ -356,12 +348,12 @@ static int processConnected(const char* in, char* out, size_t size) {
         case AO_CAM_DISCONNECTED:      /* Just disconnected. Maybe this is correct, maybe not */
             if(data.cam_disconnected.error_disconnection) { /* Bad reason - some error */
                 prepare_bad_cam_disconnection(out, size);
-                at_stop_cam_control();
+                at_stop_video_connector();
                 own_status = AT_SESSION_ID_AWAITING; /*  Goto reconnect */
                 pu_log(LL_ERROR, "%s %s - Cam disconnectd from the video server by error. Trying to reconnect Cam", AT_THREAD_NAME, in);
             }
             else {  /* Disconnected by user */
-                at_stop_cam_control();
+                at_stop_video_connector();
                 prepare_cam_disconnection(out, size);
                 disconn_resp_to_up = 1;
                 lib_timer_init(&disconn_resp_to, ag_getDisconnectRespTO());

@@ -18,8 +18,8 @@
 /*
  Created by gsg on 23/11/17.
  1. Establishing connections to cloud wideo URL and cam video url
- 2. Report to video manager session ID (Limitation! currently could work with only one viewer!) - keeps ONE session
- 3. Start/stop
+ 2. Start/stop streaming
+ Currently supports RTSP plus UDP
 */
 
 #ifndef IPCAMTENVIS_AT_VIDEO_CONNECTOR_H
@@ -37,9 +37,5 @@ int at_start_video_connector();
  * @return - 1 if OK, 0 if not
  */
 int at_stop_video_connector();
-/***************************************************
- * Set stop flag to 1
- */
-void at_set_stop_video_connector();
 
 #endif /* IPCAMTENVIS_AT_VIDEO_CONNECTOR_H */
