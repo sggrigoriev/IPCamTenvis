@@ -20,12 +20,16 @@
 */
 #include <pthread.h>
 #include <memory.h>
+#include <ag_cam_io/ac_rtsp.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
 
+#include "ac_rtsp.h"
+#include "ac_tcp.h"
 #include "at_cam_video_read.h"
 #include "at_cam_video_write.h"
+#include "ag_settings.h"
 
 #include "at_video_connector.h"
 
@@ -45,7 +49,10 @@ static void* main_thread(void* params);
 static void stop_streaming();
 static int video_server_connect();
 static int cam_connect();
-static void say_bad_connection_to_vm();
+
+static void say_cant_connect_to_vm();
+static void say_connected_to_vm();
+static void say_disconnected_to_vm();
 
 /*************************************************************************
  * Global functions definition
@@ -70,26 +77,90 @@ int at_stop_video_connector() {
  */
 
 static void* main_thread(void* params) {
-    int video_sock = -1;
-    int cam_sock = -1;
-    char request[LIB_HTTP_MAX_MSG_SIZE] = {0};
-    char answer[LIB_HTTP_MAX_MSG_SIZE] = {0};
+    int video_sock;
+    int cam_sock;
+    int video_track_number;
+    int tear_down_in_progress;
+    char msg[LIB_HTTP_MAX_MSG_SIZE] = {0};
+    char session_id[AC_CAM_RSTP_SESSION_ID_LEN];
 
     stop = 0;
 
     on_reconnect:
+        video_sock = -1;
+        cam_sock = -1;
+        video_track_number = -1;
+        tear_down_in_progress = 0;
+
         video_sock = video_server_connect();
         cam_sock = cam_connect();
         if((video_sock < 0) || (cam_sock < 0)) {
-            say_bad_connection_to_vm();
-            stop = 0;
+            say_cant_connect_to_vm();
+            goto on_error;
         }
+        say_connected_to_vm();
     while(!stop) {
+        t_ac_rtsp_msg data;
 
+        if(!ac_tcp_read(video_sock, msg, sizeof(msg))) goto on_error;
+        data = rtsp_parse(msg);
+        pu_log(LL_DEBUG, "%s: %s - came from videoserver", AT_THREAD_NAME, msg);
+
+        switch(data.msg_type) {
+            case AC_DESCRIBE:
+                video_track_number = data.describe.video_track_number;
+                break;
+            case AC_ANNOUNCE:
+                video_track_number = data.announce.video_track_number;
+                break;
+            case AC_SETUP:
+                if (data.setup.track_number == video_track_number) {
+                    ag_saveVideoServerPort(data.setup.client_port);
+                    if(!at_start_video_write()) goto on_error;              /* Start wideo writer - 1/2 of streaming */
+                }
+                break;
+            case AC_PLAY:
+                strncpy(session_id, data.play.session_id, sizeof(session_id)-1);
+                break;
+            case AC_TEARDOWN:
+                tear_down_in_progress = 1;
+                break;
+            case AC_UNDEFINED:
+                pu_log(LL_ERROR, "%s: %s - Unrecognized message from video server", AT_THREAD_NAME, msg);
+                break;
+            default:
+                break;
+        }
+
+        if(!ac_tcp_write(cam_sock, msg)) goto on_error;
+        if(!ac_tcp_read(cam_sock, msg, sizeof(msg))) goto on_error;
+        data = rtsp_parse(msg);
+        pu_log(LL_DEBUG, "%s: %s - came from camers", AT_THREAD_NAME, msg);
+
+        switch(data.msg_type) {
+            case AC_SETUP:
+                if (data.setup.track_number == video_track_number) {
+                    ag_saveCamPort(data.setup.server_port);
+                    if(!at_start_video_read()) goto on_error;               /* Start wideo reader - 2/2 of streaming */
+                }
+                break;
+            case AC_JUST_ANSWER:
+                if (tear_down_in_progress) {
+                    stop = 1;
+                    say_disconnected_to_vm();
+                }
+                break;
+            default:
+                break;
+        }
     }
-
-/* total shutdoen */
-    stop_streaming();
+    on_error:
+        stop_streaming();
+        ac_rtsp_disconnect();
+        if(!tear_down_in_progress) {
+            pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
+            goto on_reconnect;
+        }
     pthread_exit(NULL);
 }
 
@@ -97,6 +168,6 @@ static void stop_streaming() {
     at_set_stop_video_read();
     at_set_stop_video_write();
 
-    at_stop_video_read();
-    at_stop_video_write();
+    if(at_is_video_read_run()) at_stop_video_read();
+    if(at_is_video_write_run()) at_stop_video_write();
 }

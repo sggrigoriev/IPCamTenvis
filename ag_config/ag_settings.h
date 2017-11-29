@@ -84,7 +84,17 @@ void ag_dropStreamDetails();
    Return 1 if Ok, 0 if not
 */
 void ag_saveProxyID(const char* proxy_id);
-const char* void ad_getProcyID();
+const char* ad_getProхyID();
+
+void ag_saveVideoServerIP(const char* ip_address);
+const char* ag_getVideoServerIP();
+
+void ag_saveVideoServerPort(int port);
+int ag_getVideoServerPort();
+
+void ag_saveCamPort(int port);
+int ag_getCamPort();
+
 int ag_load_config(const char* cfg_file_name);
 
 

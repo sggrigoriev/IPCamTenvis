@@ -51,11 +51,13 @@
 #define AG_VIDEO_RTSP           0
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTMP
 #define DEFAULT_CHUNKS_AMOUNT   12
-
+#define DEFAULT_MAX_UDP_STREAM_BUFF_SIZE    1550    /* I had 1514 in trace and add a little...*/
 /************************************************************
     Non-configurable defaults
 */
 #define DEFAULT_PROXY_WRITE_THREAD_TO_SEC   1   /* Timeout for incoming events in agent read/write threas. Zero means no timeout */
 #define DEFAULT_CAM_WRITE_THREAD_TO_SEC     3600 /* Timeout for incoming events in cam_write therad */
+#define DEFAULT_INTERNET_RECONNECT_ATTEMPTS 3   /* Times to repeat connection attempts to video server */
+#defiam DEFAULT_INTERNET_RECONECT_TIMEOUTS  10  /* TO to start new reconnect attempt */
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

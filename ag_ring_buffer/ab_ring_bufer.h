@@ -55,7 +55,7 @@ void ab_close();
 /****************************************
  * Get block for read. If nothing to read - wait until the info or timeout.
  * In case of timeout returns zero data: {0, NULL}
- * @param - to_sec - timeout in seconds waiting for data
+ * @param - to_sec - timeout in seconds waiting for data. If 0 it should wait forever
  * @return pointer to data and size. NB! The reader will be responsible for block memory erase!
  */
 const t_ab_block ab_getBlock(unsigned long to_sec);

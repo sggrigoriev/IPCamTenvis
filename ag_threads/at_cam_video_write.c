@@ -20,11 +20,13 @@
 */
 #include <pthread.h>
 #include <malloc.h>
+#include <ag_ring_buffer/ab_ring_bufer.h>
 
 #include "pu_logger.h"
 
 #include "ab_ring_bufer.h"
-#include "ac_video_interface.h"
+#include "ac_udp.h"
+#include "ag_settings.h"
 
 #include "at_cam_video_write.h"
 
@@ -36,7 +38,7 @@
 static volatile int stop = 0;
 static volatile int stopped = 1;
 
-static volatile int reconnect;
+int socket;
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -49,6 +51,11 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_write() {
+    if((socket = ac_udp_server_connecion(ag_getVideoServerIP(), ag_getVideoServerPort())) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
+        stopped = 1;
+        return 0;
+    }
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &the_thread, NULL)) return 0;
     stopped = 0;
@@ -82,29 +89,20 @@ void at_set_stop_video_write() {
 static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
     while(!stop) {
-        if (!ac_init_connections(conn_params, AC_WRITE_CONN)) {
-            pu_log(LL_ERROR, "%s: can not establish video streaming.", AT_THREAD_NAME);
-            reconnect = 1;
-            sleep(1);
+        const t_ab_block ret = ab_getBlock(1);
+        if(!ret.ls_size) {
+            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
+            continue;
         }
-        else {
-            reconnect = 0;
+        if(!ac_udp_write(socket, ret.data, ret.ls_size)) {
+            pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
+            break;
         }
-        while (!stop && !reconnect) {
-            t_ab_block ret = ab_getBlock(20);
-            if(!ret.ls_size) {
-                pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
-                continue;
-            }
-            if (!ac_video_write(ret.ls_size, ret.data)) {
-                pu_log(LL_ERROR, "%s: Lost connection to the video-client", AT_THREAD_NAME);
-                ac_close_connections(AC_WRITE_CONN);
-                reconnect = 1;
-            }
-            free(ret.data);
-        }
+        free(ret.data);
     }
-    ac_close_connections(AC_WRITE_CONN);
+    ac_close_connection(socket);
+    socket = -1;
+    stopped = 1;
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
