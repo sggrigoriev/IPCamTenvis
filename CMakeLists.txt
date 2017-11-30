@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD 90)
 set(GCC_STANDARD $ENV{STANDARD})
 
 add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
+add_definitions( -DLOCAL_TEST)
 
 #PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")
@@ -61,9 +62,30 @@ file (GLOB SOURCE_FILES_AB_TEST
         ${PROXY_LIBS_PATH}/pu_logger/*.c
         )
 
-
+#local_test
+file (GLOB SOURCE_FILES_LOCAL_TEST
+        vlc_local_test/*.c
+        ag_cam_io/*.c
+        ag_converter/*.c
+        ag_config/*.c
+        ag_threads/at_cam_video_read.c
+        ag_threads/at_cam_video_write.c
+        ag_threads/at_video_connector.c
+        ag_queues/*.c
+        ag_ring_buffer/ab_ring_bufer.c
+        ${PROXY_LIBS_PATH}/pc_config/pc_config.c
+        ${PROXY_LIBS_PATH}/presto_commands/*.c
+        ${PROXY_LIBS_PATH}/pu_queues/*.c
+        ${PROXY_LIBS_PATH}/pu_logger/*.c
+        ${PROXY_LIBS_PATH}/libtimer/*.c
+        ${PROXY_LIBS_PATH}/libtcp/*.c
+        ${PROXY_LIBS_PATH}/json/*.c
+        )
 add_executable(Tenvis ${SOURCE_FILES})
 target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 
 add_executable(ab_test ${SOURCE_FILES_AB_TEST})
 target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
+
+add_executable(local_test ${SOURCE_FILES_LOCAL_TEST})
+target_link_libraries(local_test ${REQUIRED_LIBRARIES})

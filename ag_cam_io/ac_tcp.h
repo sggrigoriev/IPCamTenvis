@@ -24,7 +24,7 @@
 
 #include <stdio.h>
 
-const char* ac_tcp_read(int socket, char* buf, size_t size);
-int ac_tcp_write(int socket, const char* msg);
+const char* ac_tcp_read(int sock, char* buf, size_t size);
+int ac_tcp_write(int sock, const char* msg);
 
 #endif /* IPCAMTENVIS_AC_TCP_H */

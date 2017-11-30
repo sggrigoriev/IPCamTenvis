@@ -43,9 +43,11 @@ static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop;       /* Thread stop flag */
-
-static void* main_thread(void* params);
-
+#ifndef LOCAL_TEST
+    static void* main_thread(void* params);
+#else
+    static int vlc_connect();
+#endif
 static void stop_streaming();
 static int video_server_connect();
 static int cam_connect();
@@ -59,7 +61,7 @@ static void say_disconnected_to_vm();
  */
 int at_start_video_connector() {
     if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &main_thread, NULL)) return 0;
+    if(pthread_create(&id, &attr, &vc_thread, NULL)) return 0;
     return 1;
 }
 int at_stop_video_connector() {
@@ -75,14 +77,16 @@ int at_stop_video_connector() {
 /*************************************************************************
  * Local functionsimplementation
  */
-
-static void* main_thread(void* params) {
+#ifndef LOCAL_TEST
+static
+#endif
+void* vc_thread(void* params) {
     int video_sock;
     int cam_sock;
     int video_track_number;
     int tear_down_in_progress;
     char msg[LIB_HTTP_MAX_MSG_SIZE] = {0};
-    char session_id[AC_CAM_RSTP_SESSION_ID_LEN];
+    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
 
     stop = 0;
 
@@ -115,7 +119,7 @@ static void* main_thread(void* params) {
                 break;
             case AC_SETUP:
                 if (data.setup.track_number == video_track_number) {
-                    ag_saveVideoServerPort(data.setup.client_port);
+                    ag_saveClientPort(data.setup.client_port);
                     if(!at_start_video_write()) goto on_error;              /* Start wideo writer - 1/2 of streaming */
                 }
                 break;
@@ -140,7 +144,7 @@ static void* main_thread(void* params) {
         switch(data.msg_type) {
             case AC_SETUP:
                 if (data.setup.track_number == video_track_number) {
-                    ag_saveCamPort(data.setup.server_port);
+                    ag_saveServerPort(data.setup.server_port);
                     if(!at_start_video_read()) goto on_error;               /* Start wideo reader - 2/2 of streaming */
                 }
                 break;
@@ -161,7 +165,11 @@ static void* main_thread(void* params) {
             pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
             goto on_reconnect;
         }
+#ifndef LOCAL_TEST
     pthread_exit(NULL);
+#else
+    return NULL;
+#endif
 }
 
 static void stop_streaming() {
@@ -171,3 +179,29 @@ static void stop_streaming() {
     if(at_is_video_read_run()) at_stop_video_read();
     if(at_is_video_write_run()) at_stop_video_write();
 }
+
+static int video_server_connect() {
+#ifdef LOCAL_TEST
+    return vlc_connect();
+#endif
+/* Here starts the correct connection to vidoe server */
+    return -1;
+}
+static int cam_connect() {
+    return -1;
+}
+static void say_cant_connect_to_vm() {
+    pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
+}
+static void say_connected_to_vm() {
+    pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
+}
+static void say_disconnected_to_vm() {
+    pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
+}
+
+#ifdef LOCAL_TEST
+    static int vlc_connect(){
+        return -1;
+    }
+#endif

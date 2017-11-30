@@ -24,6 +24,7 @@
 #define IPCAMTENVIS_AO_CMD_DATA_H
 
 #include "lib_http.h"
+#include "ag_defaults.h"
 
 /*************************************************************************
  * All from and to Agent messages internak format: from Proxy, from Cam
@@ -64,11 +65,11 @@ typedef struct {
 
 /* AO_IN_VIDEO_PARAMS */
 typedef struct {
-    t_ao_msgtype msg_type;
+    t_ao_msg_type msg_type;
     int result_code;
-    bool apiServerSsl;
+    int apiServerSsl;                           /* 0/1 */
     char videoServer[LIB_HTTP_MAX_URL_SIZE];
-    bool videoServerSsl;
+    int videoServerSsl;                         /* 0/1 */
     char sessionId[LIB_HTTP_AUTHENTICATION_STRING_SIZE];
 } t_ao_in_video_params;
 
@@ -80,7 +81,7 @@ typedef struct {
 /* AO_IN_STREAM_SESS_DETAILS */
 typedef struct {
     t_ao_msg_type    msg_type;
-    char session_id[AC_CAM_RSTP_SESSION_ID_LEN];
+    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
 } t_ao_in_stream_sess_details;
 
 /* AO_IN_SS_TO_1_RESP */
@@ -100,29 +101,29 @@ typedef struct {
 
 /* AO_OUT_STREAM_SESSION_REQ */
 typedef struct {
-    t_ao_cam_msg_type msg_type;
+    t_ao_msg_type msg_type;
 } t_ao_out_stream_session_req;
 
 /* AO_CAM_CONNECTED */
 typedef struct {
-    t_ao_cam_msg_type msg_type;
+    t_ao_msg_type msg_type;
     int connected;              /* 1 if connected, 0 if failed */
 } t_ao_cam_connected;
 
 /* AO_OUT_SS_1_REQUEST */
 typedef struct {
-    t_ao_cam_msg_type msg_type;
+    t_ao_msg_type msg_type;
     int connected;
 } t_ao_out_ss_1_request;
 
 /* AO_CAM_DISCONNECTED */
 typedef struct {
-    t_ao_cam_msg_type msg_type;
+    t_ao_msg_type msg_type;
     int error_disconnection;
 } t_ao_cam_disconnected;
 /* AO_OUT_SS_0_REQUEST */
 typedef struct {
-    t_ao_cam_msg_type msg_type;
+    t_ao_msg_type msg_type;
 } t_ao_out_ss_0_request;
 
 typedef union {

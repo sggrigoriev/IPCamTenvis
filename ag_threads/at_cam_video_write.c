@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <malloc.h>
 #include <ag_ring_buffer/ab_ring_bufer.h>
+#include <netinet/in.h>
 
 #include "pu_logger.h"
 
@@ -38,7 +39,8 @@
 static volatile int stop = 0;
 static volatile int stopped = 1;
 
-int socket;
+static int sock;
+static struct sockaddr_in sin={0};
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -51,7 +53,8 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_write() {
-    if((socket = ac_udp_server_connecion(ag_getVideoServerIP(), ag_getVideoServerPort())) < 0) {
+    char ip[LIB_HTTP_MAX_IPADDRES_SIZE];
+    if((sock = ac_udp_client_connection(ag_getClientIP(ip, sizeof(ip)), ag_getClientPort(), &sin)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         stopped = 1;
         return 0;
@@ -94,14 +97,14 @@ static void* the_thread(void* params) {
             pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
             continue;
         }
-        if(!ac_udp_write(socket, ret.data, ret.ls_size)) {
+        if(!ac_udp_write(sock, ret.data, ret.ls_size, &sin)) {
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
             break;
         }
         free(ret.data);
     }
-    ac_close_connection(socket);
-    socket = -1;
+    ac_close_connection(sock);
+    sock= -1;
     stopped = 1;
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);

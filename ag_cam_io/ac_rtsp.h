@@ -26,8 +26,6 @@
 #ifndef IPCAMTENVIS_AC_RTSP_H
 #define IPCAMTENVIS_AC_RTSP_H
 
-#define AC_CAM_RSTP_SESSION_ID_LEN  20
-
 typedef enum {
     AC_UNDEFINED,
     AC_DESCRIBE,
@@ -54,7 +52,7 @@ typedef struct {
 } t_ac_rtsp_setup;
 typedef struct {
     t_ac_rtsp_type msg_type;
-    char session_id[AC_CAM_RSTP_SESSION_ID_LEN];
+    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
 } t_ac_rtsp_play;
 typedef struct {
     t_ac_rtsp_type msg_type;

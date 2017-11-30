@@ -21,9 +21,9 @@
 
 #include "ao_cma_cam.h"
 
-t_ao_cam_msg_type ao_cam_decode(const char* cam_message, t_ao_cam_msg* data) {
-    return AO_CAM_UNDEF;
+t_ao_msg_type ao_cam_decode(const char* cam_message, t_ao_msg* data) {
+    return AO_UNDEF;
 }
-const char* ao_cam_encode(const t_ao_cloud_msg data, char* cam_message, size_t msg_size) {
+const char* ao_cam_encode(const t_ao_msg data, char* cam_message, size_t msg_size) {
     return NULL;
 }

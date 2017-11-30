@@ -53,6 +53,7 @@
 #define AGENT_WATCHDOG_TO_SEC       "WATCHDOG_TO_SEC"
 
 #define AGENT_IPCAM_IP              "IPCAM_IP"
+#define AGENT_IPCAM_PORT            "IPCAM_PORT"
 #define AGENT_IPCAM_PROTOCOL        "IPCAM_PROTOCOL"
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
@@ -80,10 +81,19 @@ static unsigned int wud_port;
 static unsigned int watchdog_to_sec;
 
 static char         ipcam_ip[LIB_HTTP_MAX_IPADDRES_SIZE];
+static int          ipcam_port;
 static int          video_protocol;
 static unsigned int chunks_amount;
 
-static char         conf_fname[LIB_HTTP_MAX_URL_SIZE];
+/****************************************************
+ * Non- configurable but saved & updates persistent params
+ *
+ */
+static char client_ip[LIB_HTTP_MAX_IPADDRES_SIZE] = {0};
+static int client_port = -1;
+static int server_port = -1;
+
+static char         conf_fname[LIB_HTTP_MAX_URL_SIZE] = {0};
 /***********************************************************************
     Local functions
 */
@@ -143,8 +153,11 @@ unsigned int    ag_getWUDPort() {
 unsigned int    ag_getAgentWDTO() {
     AGS_RET(DEFAULT_WATCHDOG_TO_SEC, watchdog_to_sec);
 }
-const char*     ag_getIPCamIP() {
+const char*     ag_getCamIP() {
     AGS_RET(DEFAULT_IPCAM_IP, ipcam_ip);
+}
+int             ag_getCamPort() {
+    AGS_RET(DEFAULT_IPCAM_PORT, ipcam_port);
 }
 int ag_getIPCamProtocol() {
     AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
@@ -158,6 +171,32 @@ unsigned int    ag_getVidoeChunksAmount() {
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */
+void ag_saveClientIP(const char* ip_address) {
+    pthread_mutex_lock(&local_mutex);
+    strncpy(client_ip, ip_address, sizeof(client_ip)-1);
+    pthread_mutex_unlock(&local_mutex);
+}
+const char* ag_getClientIP(char* buf, size_t size) {
+    pthread_mutex_lock(&local_mutex);
+    strncpy(buf, client_ip, size-1);
+    pthread_mutex_unlock(&local_mutex);
+    return buf;
+}
+
+void ag_saveClientPort(int port) {
+    client_port = port;
+}
+int ag_getClientPort() {
+    return client_port;
+}
+
+void ag_saveServerPort(int port) {
+    server_port = port;
+}
+int ag_getServerPort() {
+    return server_port;
+}
+
 int ag_load_config(const char* cfg_file_name) {
     cJSON* cfg = NULL;
     assert(cfg_file_name);
@@ -185,6 +224,7 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getUintValue(cfg, AGENT_WATCHDOG_TO_SEC, &watchdog_to_sec))                             AGS_ERR;
 
     if(!getStrValue(cfg, AGENT_IPCAM_IP, ipcam_ip, sizeof(ipcam_ip)))                           AGS_ERR;
+    if(!getUintValue(cfg, AGENT_IPCAM_PORT, (unsigned int *)&ipcam_port))                        AGS_ERR;
 
     getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
 
@@ -215,6 +255,8 @@ static void initiate_defaults() {
 
     wud_port = DEFAULT_WUD_PORT;
     watchdog_to_sec = DEFAULT_WATCHDOG_TO_SEC;
+
+    ipcam_port = DEFAULT_IPCAM_PORT;
 
     strncpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
 }

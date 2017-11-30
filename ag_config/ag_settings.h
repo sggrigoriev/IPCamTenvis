@@ -50,7 +50,8 @@ unsigned int    ag_getAgentDeviceType();    /* Return GW/Agent "main" device typ
 unsigned int    ag_getWUDPort();            /* Return WUD communication port */
 unsigned int    ag_getAgentWDTO();          /* timeout for watchdog sending */
 
-const char*     ag_getIPCamIP();            /* IP Camera address */
+const char*     ag_getCamIP();            /* IP Camera address */
+int             ag_getCamPort();            /* IP Cam port */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
 unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
 
@@ -72,7 +73,7 @@ void ag_dropVideoConnectionData();
  * Save cloud connection parameters
  * @param con_data - pointer to cloud connection parameters to be saved
  */
-void ag_saveVideoConnectionData(const t_ao_in_video_params con_data);
+void ag_saveVideoConnectionData(t_ao_in_video_params con_data);
 /*********************************************************************
  * Save stream session sent by cloud
  * @param stream_details
@@ -84,16 +85,16 @@ void ag_dropStreamDetails();
    Return 1 if Ok, 0 if not
 */
 void ag_saveProxyID(const char* proxy_id);
-const char* ad_getProхyID();
+const char* ag_getProxyID();
 
-void ag_saveVideoServerIP(const char* ip_address);
-const char* ag_getVideoServerIP();
+void ag_saveClientIP(const char* ip_address);
+const char* ag_getClientIP(char* buf, size_t size);
 
-void ag_saveVideoServerPort(int port);
-int ag_getVideoServerPort();
+void ag_saveClientPort(int port);
+int ag_getClientPort();
 
-void ag_saveCamPort(int port);
-int ag_getCamPort();
+void ag_saveServerPort(int port);
+int ag_getServerPort();
 
 int ag_load_config(const char* cfg_file_name);
 

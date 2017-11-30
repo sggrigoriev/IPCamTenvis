@@ -21,10 +21,10 @@
 
 #include "ao_cmd_cloud.h"
 
-t_ao_cloud_msg_type ao_cloud_decode(const char* cloud_message, t_ao_cloud_msg* data) {
-    return AO_CLOUD_UNDEF;
+t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
+    return AO_UNDEF;
 }
 
-const char* ao_cloud_encode(const t_ao_cam_msg data, char* cloud_message, size_t msg_size) {
+const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size) {
     return NULL;
 }

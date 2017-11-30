@@ -21,6 +21,7 @@
 */
 #include <pthread.h>
 #include <malloc.h>
+#include <netinet/in.h>
 
 #include "pu_logger.h"
 
@@ -41,7 +42,7 @@
 static volatile int stop = 0;
 static volatile int stopped = 1;
 
-static int socket;
+static int sock;
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -53,8 +54,7 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_read() {
-
-    if((socket = ac_udp_client_connection(ag_getIPCamIP(), ag_getCamPort())) < 0) {
+    if((sock = ac_udp_server_connecion(ag_getCamIP(), ag_getCamPort())) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
@@ -94,7 +94,7 @@ static void* the_thread(void* params) {
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
             goto on_stop;
         }
-        ssize_t sz = ac_udp_read(socket, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
+        ssize_t sz = ac_udp_read(sock, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
         switch(sz) {
             case -1: goto on_stop;
             case 0: free(buf); continue;    /* Just timeout */
@@ -114,8 +114,8 @@ static void* the_thread(void* params) {
         }
     }
     on_stop:
-        ac_close_connection(socket);
-        socket = -1;
+        ac_close_connection(sock);
+        sock = -1;
         stopped = 1;
         pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
         pthread_exit(NULL);

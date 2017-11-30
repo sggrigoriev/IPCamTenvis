@@ -26,12 +26,12 @@
 
 #include "ac_tcp.h"
 
-const char* ac_tcp_read(int socket, char* buf, size_t size) {
+const char* ac_tcp_read(int sock, char* buf, size_t size) {
     ssize_t rc;
     int full_house = 0;
     char* addr = buf;
     do {
-        if ((rc = read(socket, addr, size)) <= 0) {
+        if ((rc = read(sock, addr, size)) <= 0) {
             pu_log(LL_ERROR, "%s: Read from TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
             return NULL;
         }
@@ -52,8 +52,8 @@ const char* ac_tcp_read(int socket, char* buf, size_t size) {
     } while(full_house);
     return buf;
 }
-int ac_tcp_write(int socket, const char* msg) {
-    if(write(socket, msg, strlen(msg)+1) < 0) {
+int ac_tcp_write(int sock, const char* msg) {
+    if(write(sock, msg, strlen(msg)+1) < 0) {
         pu_log(LL_ERROR, "%s: Write to TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return 0;
     }

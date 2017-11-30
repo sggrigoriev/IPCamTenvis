@@ -25,7 +25,6 @@
 #include "pu_logger.h"
 
 #include "aq_queues.h"
-#include "ac_http.h"
 #include "ao_cmd_cloud.h"
 #include "ao_cma_cam.h"
 
@@ -90,17 +89,19 @@ static void* cam_control(void* params) {
                 size_t len = sizeof(msg);    /* (re)set max message lenght */
                 char resp[LIB_HTTP_MAX_MSG_SIZE];
                 char to_cam_msg[LIB_HTTP_MAX_MSG_SIZE];
-                t_ao_cloud_msg data;
-                t_ao_cloud_msg_type msg_type;
+                t_ao_msg data;
+                t_ao_msg_type msg_type;
                 while (pu_queue_pop(to_cam_control, msg, &len)) {
                     switch(msg_type=ao_cloud_decode(msg, &data)) {
-                        case AO_CLOUD_PZT: {
+                        case AO_IN_PZT: {
                             if(!ao_cam_encode(data, to_cam_msg, sizeof(to_cam_msg))) {
                                 pu_log(LL_ERROR, "%s: can't convert %s to camera message. Ignored", AT_THREAD_NAME, msg);
                             }
+/*
                             else if(!ac_http_write(to_cam_msg, resp, sizeof(resp))) {
                                 pu_log(LL_ERROR, "%s, can't write %s to cam. Joppa.", AT_THREAD_NAME, to_cam_msg);
                             }
+*/
                             else if(strlen(resp)) {
                                 pu_queue_push(from_cam_control, resp, strlen(resp)+1);  /* Send answer anyway. Empty means no answer */
                             }

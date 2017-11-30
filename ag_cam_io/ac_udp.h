@@ -23,14 +23,17 @@
 #define IPCAMTENVIS_AC_UDP_H
 
 #include <stdio.h>
+#include <stdint.h>
+
+typedef struct sockaddr_in t_struct_sockaddr_in;
 
 /* Return -1 if error or opened socket if OK */
 int ac_udp_server_connecion(const char* ip, uint16_t port);
-int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin);
-void ac_close_connection(int socket);
+int ac_udp_client_connection(const char* ip, uint16_t port, t_struct_sockaddr_in* sin);
+void ac_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-ssize_t ac_udp_read(int socket, t_ab_byte* buf, size_t size, int to);
-int ac_udp_write(int socket, const t_ab_byte* buf, size_t size, const struct sockaddr_in* addr);
+ssize_t ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to);
+int ac_udp_write(int sock, const t_ab_byte* buf, size_t size, const t_struct_sockaddr_in* addr);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */
