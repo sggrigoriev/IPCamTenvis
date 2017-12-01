@@ -20,12 +20,17 @@
 */
 #include <pthread.h>
 #include <memory.h>
-#include <ag_cam_io/ac_rtsp.h>
+#include <errno.h>
+#include <ag_converter/ao_cma_cam.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
+#include "lib_tcp.h"
 
-#include "ac_rtsp.h"
+#include "ab_ring_bufer.h"
+#include "ao_cma_cam.h"
 #include "ac_tcp.h"
 #include "at_cam_video_read.h"
 #include "at_cam_video_write.h"
@@ -43,14 +48,22 @@ static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop;       /* Thread stop flag */
+
+static int init_proc();
+static void shutdown_proc();
+
 #ifndef LOCAL_TEST
-    static void* main_thread(void* params);
+    static void* vc_thread(void* params);
 #else
     static int vlc_connect();
+    static void vlc_disconnect(int write_socket);
+    static const char* remote_ip(int sock, char* buf, size_t size);
 #endif
 static void stop_streaming();
 static int video_server_connect();
+static void video_server_diconnect(int write_socket);
 static int cam_connect();
+static void cam_disconnect(int sock);
 
 static void say_cant_connect_to_vm();
 static void say_connected_to_vm();
@@ -83,22 +96,36 @@ static
 void* vc_thread(void* params) {
     int video_sock;
     int cam_sock;
-    int video_track_number;
-    int tear_down_in_progress;
+
+    int tracks_number;
+    int video_setup;
+    int tear_down;
     char msg[LIB_HTTP_MAX_MSG_SIZE] = {0};
     char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
 
     stop = 0;
 
+    if(!init_proc()) {
+        pu_log(LL_ERROR, "%s exiting by hard error", AT_THREAD_NAME);
+#ifndef LOCAL_TEST
+        pthread_exit(NULL);
+#else
+        return NULL;
+#endif
+    }
+
     on_reconnect:
         video_sock = -1;
         cam_sock = -1;
-        video_track_number = -1;
-        tear_down_in_progress = 0;
+        tracks_number = -1;
+        video_setup = 0;
+        tear_down = 0;
 
-        video_sock = video_server_connect();
-        cam_sock = cam_connect();
-        if((video_sock < 0) || (cam_sock < 0)) {
+        if((video_sock = video_server_connect()) < 0) {
+            say_cant_connect_to_vm();
+            goto on_error;
+        }
+        if((cam_sock = cam_connect()) < 0) {
             say_cant_connect_to_vm();
             goto on_error;
         }
@@ -106,70 +133,87 @@ void* vc_thread(void* params) {
     while(!stop) {
         t_ac_rtsp_msg data;
 
-        if(!ac_tcp_read(video_sock, msg, sizeof(msg))) goto on_error;
-        data = rtsp_parse(msg);
+        if(!ac_tcp_read(video_sock, msg, sizeof(msg), stop)) goto on_error;
+        data = ao_cam_decode_req(msg);
         pu_log(LL_DEBUG, "%s: %s - came from videoserver", AT_THREAD_NAME, msg);
 
         switch(data.msg_type) {
             case AC_DESCRIBE:
-                video_track_number = data.describe.video_track_number;
+                tracks_number = data.b.describe.video_tracks_number;
                 break;
             case AC_ANNOUNCE:
-                video_track_number = data.announce.video_track_number;
+                tracks_number = data.b.announce.video_track_number;
                 break;
             case AC_SETUP:
-                if (data.setup.track_number == video_track_number) {
-                    ag_saveClientPort(data.setup.client_port);
+                video_setup = (data.b.setup.track_number == 0);
+                if (video_setup) {
+                    ag_saveClientPort(data.b.setup.client_port);
                     if(!at_start_video_write()) goto on_error;              /* Start wideo writer - 1/2 of streaming */
                 }
+                 tracks_number++;
                 break;
             case AC_PLAY:
-                strncpy(session_id, data.play.session_id, sizeof(session_id)-1);
+                strncpy(session_id, data.b.play.session_id, sizeof(session_id)-1);
                 break;
-            case AC_TEARDOWN:
-                tear_down_in_progress = 1;
-                break;
-            case AC_UNDEFINED:
-                pu_log(LL_ERROR, "%s: %s - Unrecognized message from video server", AT_THREAD_NAME, msg);
-                break;
-            default:
+             default:
                 break;
         }
 
-        if(!ac_tcp_write(cam_sock, msg)) goto on_error;
-        if(!ac_tcp_read(cam_sock, msg, sizeof(msg))) goto on_error;
-        data = rtsp_parse(msg);
-        pu_log(LL_DEBUG, "%s: %s - came from camers", AT_THREAD_NAME, msg);
+        if(!ac_tcp_write(cam_sock, msg, stop)) goto on_error;
+        if(!ac_tcp_read(cam_sock, msg, sizeof(msg), stop)) goto on_error;
+        data = ao_cam_decode_ans(data.msg_type, data.number, msg);
+        pu_log(LL_DEBUG, "%s: %s - came from camera", AT_THREAD_NAME, msg);
 
         switch(data.msg_type) {
             case AC_SETUP:
-                if (data.setup.track_number == video_track_number) {
-                    ag_saveServerPort(data.setup.server_port);
+                if (video_setup) {
+                    ag_saveServerPort(data.b.setup.server_port);
                     if(!at_start_video_read()) goto on_error;               /* Start wideo reader - 2/2 of streaming */
                 }
-                break;
-            case AC_JUST_ANSWER:
-                if (tear_down_in_progress) {
-                    stop = 1;
-                    say_disconnected_to_vm();
+                else if(tracks_number > 1) {
+                    say_connected_to_vm();
                 }
+                break;
+            case AC_TEARDOWN:
+                tear_down = 1;
+                stop = 1;
+                say_disconnected_to_vm();
                 break;
             default:
                 break;
         }
+        if(!ac_tcp_write(video_sock, msg, stop)) goto on_error;
     }
     on_error:
         stop_streaming();
-        ac_rtsp_disconnect();
-        if(!tear_down_in_progress) {
+        video_server_diconnect(video_sock);
+        video_sock = -1;
+
+        cam_disconnect(cam_sock);
+        cam_sock = -1;
+
+        if(!tear_down) {
             pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
             goto on_reconnect;
         }
+        shutdown_proc();
 #ifndef LOCAL_TEST
     pthread_exit(NULL);
 #else
     return NULL;
 #endif
+}
+
+static int init_proc() {
+    /* Setup the ring buffer for video streaming */
+    if(!ab_init(ag_getVideoChunksAmount())) {
+        pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
+        return 0;
+    }
+    return 1;
+}
+static void shutdown_proc() {
+    ab_close();         /* Erase videostream buffer */
 }
 
 static void stop_streaming() {
@@ -180,6 +224,10 @@ static void stop_streaming() {
     if(at_is_video_write_run()) at_stop_video_write();
 }
 
+#ifdef LOCAL_TEST
+    int server_socket = -1;
+#endif
+
 static int video_server_connect() {
 #ifdef LOCAL_TEST
     return vlc_connect();
@@ -187,9 +235,60 @@ static int video_server_connect() {
 /* Here starts the correct connection to vidoe server */
     return -1;
 }
-static int cam_connect() {
-    return -1;
+static void video_server_diconnect(int write_socket) {
+#ifdef LOCAL_TEST
+    vlc_disconnect(write_socket);
+#endif
 }
+static int cam_connect() {
+    return ac_tcp_client_connect(ag_getCamIP(), ag_getCamPort());
+}
+static void cam_disconnect(int sock) {
+    if(sock >= 0) close(sock);
+}
+
+#ifdef LOCAL_TEST
+static int vlc_connect(){
+    server_socket = lib_tcp_get_server_socket(DEFAULT_LOCAL_AGENT_PORT);
+    if(server_socket < 0) {
+        pu_log(LL_ERROR, "%s: Open server TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return -1;
+    }
+
+    int conn_socket = lib_tcp_listen(server_socket, 3600);
+    if(conn_socket < 0) {
+        close(server_socket);
+        pu_log(LL_ERROR, "%s: Listen incoming TCP connection failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return -1;
+    }
+    char buf[INET6_ADDRSTRLEN+1];
+    ag_saveClientIP(remote_ip(conn_socket, buf, sizeof(buf)));
+    return conn_socket;
+
+}
+static void vlc_disconnect(int write_socket) {
+    if(write_socket >=0) close(write_socket);
+    if(server_socket >= 0) {
+        close(server_socket);
+        server_socket = -1;
+    }
+}
+static const char* remote_ip(int sock, char* buf, size_t size) {
+    socklen_t len;
+    struct sockaddr_storage addr;
+    int port;
+
+    len = sizeof addr;
+
+    getpeername(sock, (struct sockaddr*)&addr, &len);
+
+    struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+    port = ntohs(s->sin_port);
+    inet_ntop(AF_INET, &s->sin_addr, buf, size);
+    return buf;
+}
+#endif
+
 static void say_cant_connect_to_vm() {
     pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
 }
@@ -200,8 +299,4 @@ static void say_disconnected_to_vm() {
     pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
 }
 
-#ifdef LOCAL_TEST
-    static int vlc_connect(){
-        return -1;
-    }
-#endif
+

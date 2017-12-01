@@ -43,6 +43,7 @@ static volatile int stop = 0;
 static volatile int stopped = 1;
 
 static int sock;
+static struct sockaddr_in sin={0};
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -54,7 +55,7 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_read() {
-    if((sock = ac_udp_server_connecion(ag_getCamIP(), ag_getCamPort())) < 0) {
+    if((sock = ac_udp_client_connection(ag_getCamIP(), ag_getServerPort(), &sin)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
@@ -94,10 +95,13 @@ static void* the_thread(void* params) {
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
             goto on_stop;
         }
-        ssize_t sz = ac_udp_read(sock, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
+        ssize_t sz = 0;
+        while(!stop && !sz) {
+            sz = ac_udp_read(sock, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
+            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
+        }
         switch(sz) {
             case -1: goto on_stop;
-            case 0: free(buf); continue;    /* Just timeout */
             default: break;                 /* Got smth - continue processing */
         }
         t_ab_put_rc rc = ab_putBlock(sz, buf);

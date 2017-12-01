@@ -21,12 +21,6 @@
 
 #include "ac_rtsp.h"
 
-t_ac_rtsp_msg rtsp_parse(const char* rtsp_msg) {
-    t_ac_rtsp_msg ret;
-    ret.msg_type = AC_UNDEFINED;
-    return ret;
-}
 
-void ac_rtsp_disconnect() {
 
-}
+

@@ -26,61 +26,7 @@
 #ifndef IPCAMTENVIS_AC_RTSP_H
 #define IPCAMTENVIS_AC_RTSP_H
 
-typedef enum {
-    AC_UNDEFINED,
-    AC_DESCRIBE,
-    AC_ANNOUNCE,
-    AC_SETUP,
-    AC_PLAY,
-    AC_TEARDOWN,
-    AC_JUST_ANSWER
-} t_ac_rtsp_type;
-
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    int video_track_number;
-} t_ac_rtsp_describe;
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    int video_track_number;
-} t_ac_rtsp_announce;
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    int track_number;
-    int client_port;
-    int server_port;
-} t_ac_rtsp_setup;
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
-} t_ac_rtsp_play;
-typedef struct {
-    t_ac_rtsp_type msg_type;
-} t_ac_rtsp_teardown;
-typedef union {
-    t_ac_rtsp_type msg_type;
-    int answer;        /* 0 - request, 1 - answer */
-    int status;         /* 200 - OK, others - error code */
-    t_ac_rtsp_describe describe;
-    t_ac_rtsp_announce announce;
-    t_ac_rtsp_setup setup;
-    t_ac_rtsp_play play;
-    t_ac_rtsp_teardown reardown;
-} t_ac_rtsp_msg;
-
-t_ac_rtsp_msg rtsp_parse(const char* rtsp_msg);
-
-/*********************************************
- * Make internet connection
- * @param connection_params -  parameters to make connection
- * @return  connected socket or 01 if error
- */
-int ac_rtsp_connect(t_ao_in_video_params connection_params);
-
-/**********************************************
- * Disconnects from VS and from camera
- */
-void ac_rtsp_disconnect();
 
 
-#endif /* IPCAMTENVIS_AC_RSTP_H */
+
+#endif /* IPCAMTENVIS_AC_RTSP_H */

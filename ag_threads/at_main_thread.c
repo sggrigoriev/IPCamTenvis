@@ -27,7 +27,6 @@
 
 #include "aq_queues.h"
 #include "ag_settings.h"
-#include "ab_ring_bufer.h"
 
 #include "at_proxy_rw.h"
 #include "ao_cmd_cloud.h"
@@ -132,12 +131,6 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromCamControl);
     events = pu_add_queue_event(events, AQ_FromVideoMgr);
 
-/* Setup the ring buffer for video streaming */
-    if(!ab_init(ag_getVideoChunksAmount())) {
-        pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
-        return 0;
-    }
-
 /* Threads start */
     if(!at_start_proxy_rw()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "PROXY_RW", strerror(errno));
@@ -161,7 +154,6 @@ static void main_thread_shutdown() {
     at_stop_video_mgr();
 
     aq_erase_queues();
-    ab_close();         /* Erase videostream buffer */
 }
 static void process_proxy_message(char* msg) {
     t_ao_msg data;

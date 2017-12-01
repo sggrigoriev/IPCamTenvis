@@ -60,7 +60,7 @@ file (GLOB SOURCE_FILES
 file (GLOB SOURCE_FILES_AB_TEST
         ag_ring_buffer/*.c
         ${PROXY_LIBS_PATH}/pu_logger/*.c
-        )
+)
 
 #local_test
 file (GLOB SOURCE_FILES_LOCAL_TEST
@@ -80,7 +80,8 @@ file (GLOB SOURCE_FILES_LOCAL_TEST
         ${PROXY_LIBS_PATH}/libtimer/*.c
         ${PROXY_LIBS_PATH}/libtcp/*.c
         ${PROXY_LIBS_PATH}/json/*.c
-        )
+)
+
 add_executable(Tenvis ${SOURCE_FILES})
 target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 

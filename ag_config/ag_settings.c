@@ -162,7 +162,7 @@ int             ag_getCamPort() {
 int ag_getIPCamProtocol() {
     AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
 }
-unsigned int    ag_getVidoeChunksAmount() {
+unsigned int    ag_getVideoChunksAmount() {
     AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
 }
 /**************************************************************************************************************************
@@ -257,8 +257,8 @@ static void initiate_defaults() {
     watchdog_to_sec = DEFAULT_WATCHDOG_TO_SEC;
 
     ipcam_port = DEFAULT_IPCAM_PORT;
-
     strncpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
+    chunks_amount = DEFAULT_CHUNKS_AMOUNT;
 }
 
 /*

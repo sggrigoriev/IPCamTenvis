@@ -35,6 +35,8 @@ int ac_udp_server_connecion(const char* ip, uint16_t port) {
     int ret = -1;
     struct sockaddr_in sin={0};
 
+    pu_log(LL_DEBUG, "%s: ip = %s, port = %d", __FUNCTION__, ip, port);
+
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = inet_addr(ip);
     sin.sin_port=htons(port);
@@ -51,6 +53,8 @@ int ac_udp_server_connecion(const char* ip, uint16_t port) {
 }
 int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin) {
     int ret = -1;
+
+    pu_log(LL_DEBUG, "%s: ip = %s, port = %d", __FUNCTION__, ip, port);
 
     memset(sin, 0, sizeof(struct sockaddr_in));
 

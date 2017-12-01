@@ -48,11 +48,17 @@
 /* IP Cam settings */
 #define DEFAULT_IPCAM_IP        "127.0.0.1"
 #define DEFAULT_IPCAM_PORT      554
+#define IPCAM_HIRES             "11"
+#define IPCAP_LORES             "12"
 #define AG_VIDEO_RTMP           1
 #define AG_VIDEO_RTSP           0
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTSP
 #define DEFAULT_CHUNKS_AMOUNT   12
 #define DEFAULT_MAX_UDP_STREAM_BUFF_SIZE    1550    /* I had 1514 in trace and add a little...*/
+/**********************************************************
+ * Local test settings
+ */
+#define DEFAULT_LOCAL_AGENT_PORT    8889
 /************************************************************
     Non-configurable defaults
 */

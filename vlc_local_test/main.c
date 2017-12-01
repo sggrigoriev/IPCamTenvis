@@ -20,17 +20,17 @@
  Local test for video proxing. VLC used as viewer
 */
 
-#include <stdio.h>
 
 #include "ag_settings.h"
 #include "at_video_connector.h"
 
 int main() {
-    printf("Video test for video connector (VLC is used as client\n");
 
     if(!ag_load_config(ag_getCfgFileName())) exit(-1);    /* Run w/o input parameters */
 
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
+
+    pu_log(LL_INFO, "Video test for video connector (VLC is used as client)");
 
     void* par= NULL;
     vc_thread(par);   /*Main Agent'd work cycle is hear */

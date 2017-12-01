@@ -27,21 +27,47 @@
 
 #include "ao_cmd_data.h"
 
-/****************************************************************************
- * Convert cam message to internal structure
- * @param cam_message - zero terminated message from camera control flow
- * @param data - internal cam message presentation
- * @return - messahe type
- */
-t_ao_msg_type ao_cam_decode(const char* cam_message, t_ao_msg* data);
+typedef enum {
+    AC_UNDEFINED,
+    AC_DESCRIBE,
+    AC_ANNOUNCE,
+    AC_SETUP,
+    AC_PLAY,
+    AC_TEARDOWN,
+} t_ac_rtsp_type;
 
-/*************************************************************************************
- * Converts internal structure to camera message
- * @param data - internal presentation
- * @param cam_message - buffer for camera message
- * @param msg_size - max buffer size
- * @return
- */
-const char* ao_cam_encode(const t_ao_msg data, char* cam_message, size_t msg_size);
+typedef struct {
+    int video_tracks_number;
+} t_ac_rtsp_describe;
+typedef struct {
+    int video_track_number;
+} t_ac_rtsp_announce;
+typedef struct {
+    int track_number;
+    int client_port;
+    int server_port;
+} t_ac_rtsp_setup;
+typedef struct {
+    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
+} t_ac_rtsp_play;
+
+typedef union {
+    t_ac_rtsp_describe describe;
+    t_ac_rtsp_announce announce;
+    t_ac_rtsp_setup setup;
+    t_ac_rtsp_play play;
+} t_ac_rtsp_body;
+
+typedef struct {
+    t_ac_rtsp_type msg_type;
+    int number;
+    t_ac_rtsp_body b;
+}t_ac_rtsp_msg;
+
+t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message);
+t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const char* cam_message);
+const char* ao_cam_replace_addr(char* msg, size_t size);
+
+
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

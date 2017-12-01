@@ -21,21 +21,35 @@
 #include <unistd.h>
 #include <errno.h>
 #include <memory.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "pu_logger.h"
+#include "lib_tcp.h"
 
 #include "ac_tcp.h"
 
-const char* ac_tcp_read(int sock, char* buf, size_t size) {
-    ssize_t rc;
+const char* ac_tcp_read(int sock, char* buf, size_t size, int stop) {
+    ssize_t rc = 0;
     int full_house = 0;
     char* addr = buf;
     do {
-        if ((rc = read(sock, addr, size)) <= 0) {
+        while(!stop && !rc) {
+            rc = read(sock, addr, size);
+            if(!rc) sleep(1);   /* timeout */
+            if((rc < 0) && ((errno = EAGAIN) || (errno == EWOULDBLOCK))) {
+                rc = 0;
+                sleep(1);
+            }
+        }
+
+        if (rc <= 0) {
             pu_log(LL_ERROR, "%s: Read from TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
             return NULL;
         }
-        if (addr[rc-1]) {  /* Not the full string returned! - the last byte != '\0' */
+        if (addr[rc-1] != '\n') {  /* Not the full string returned! - the last byte != '\0' */
             pu_log(LL_WARNING, "%s: Piece of string passed. Read again.", __FUNCTION__);
             full_house = 0;
             addr += rc;
@@ -48,15 +62,70 @@ const char* ac_tcp_read(int sock, char* buf, size_t size) {
         }
         else {
             full_house = 1;
+            addr[rc] = '\0';
         }
-    } while(full_house);
+    } while(!full_house);
     return buf;
 }
-int ac_tcp_write(int sock, const char* msg) {
-    if(write(sock, msg, strlen(msg)+1) < 0) {
+
+int ac_tcp_write(int sock, const char* msg, int stop) {
+    int again = 1;
+    ssize_t rc = -1;
+    while(!stop && again) {
+        rc = write(sock, msg, strlen(msg));
+        again = (rc < 0) && ((errno = EAGAIN) || (errno == EWOULDBLOCK));
+    }
+    if(rc < 0) {
         pu_log(LL_ERROR, "%s: Write to TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return 0;
     }
     return 1;
+}
+
+int ac_tcp_client_connect(const char* ip, int port) {
+    int client_socket;
+/* Create socket */
+    if (client_socket = socket(AF_INET, SOCK_STREAM, 0), client_socket < 0) {
+        pu_log(LL_ERROR, "%s: Open TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return -1;
+    }
+
+    /*Set socket options */
+    int32_t on = 1;
+    /*use the socket even if the address is busy (by previously killed process for ex) */
+    if (setsockopt(client_socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)) < 0) {
+        pu_log(LL_ERROR, "%s: Open TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return -1;
+    }
+
+/*Make address */
+    struct sockaddr_in addr_struct;
+    memset(&addr_struct, 0, sizeof(addr_struct));
+    inet_pton(AF_INET, ip, &(addr_struct.sin_addr));
+
+    addr_struct.sin_family = AF_INET;
+    addr_struct.sin_port = htons(port);
+
+/*And connect to the remote socket */
+    unsigned rpt = LIB_TCP_BINGING_ATTEMPTS;
+    while(rpt) {
+        int ret = connect(client_socket, (struct sockaddr *)&addr_struct, sizeof(addr_struct));
+        if (ret < 0) {
+            rpt--;
+            sleep(1);   /*wait for a while */
+        }
+        else {
+            int sock_flags = fcntl(client_socket, F_GETFL);
+            if (sock_flags < 0) {
+                return -1;
+            }
+            if (fcntl(client_socket, F_SETFL, sock_flags|O_NONBLOCK) < 0) {
+                return -1;
+            }
+            return client_socket;
+        }
+    }
+    pu_log(LL_ERROR, "%s: Connect to TCP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+    return -1;
 }
 
