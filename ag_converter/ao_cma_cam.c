@@ -38,10 +38,17 @@
 #define AO_SESSION_ID       "Session:"
 
 #define AO_IP_START         "rtsp://"
-#define AO_PORT_START       ':'
+#define AO_PORT_DELIM       ':'
+
+typedef struct {
+    int found;
+    unsigned int start;
+    unsigned int len;
+} t_ao_pos;
 
 static t_ac_rtsp_type get_msg_type(const char* msg);
 static int calc_tracks(const char* msg);
+static const char* getIP_port(char* buf, size_t size, const char* msg);
 
 /* Find first occurence of digits from the start, return converted int. */
 static int getNumber(const char* msg);
@@ -49,12 +56,13 @@ static int getNumber(const char* msg);
 /* Copy to buf the furst numbers occuriencce */
 static const char* getStrNumber(char* buf, size_t size, const char* msg);
 
-/* Get the index of the first byte of IP address */
-static int getIP(const char* msg);
+/* Get the index of the first byte of IP:port address */
+static t_ao_pos findIP_port(const char* msg);
 
 static const char* strNCstr(const char* msg, const char* subs);
-
 static int findNCSubstr(const char* msg, const char* subs);
+static int findFirstDigit(const char* msg);
+static int findFirstNonDigit(const char* msg);
 static int findChar(const char* msg, char c);
 
 t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message) {
@@ -62,6 +70,8 @@ t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message) {
 
     ret.msg_type = get_msg_type(cam_message);
     ret.number = getNumber(strNCstr(cam_message, AO_RTSP_REQ_NUMBER));
+    getIP_port(ret.ip_port, sizeof(ret.ip_port), cam_message);
+
 
     switch(ret.msg_type) {
         case AC_DESCRIBE:
@@ -101,15 +111,33 @@ t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const c
     return ret;
 }
 
-const char* ao_cam_replace_addr(char* msg, size_t size) {
+const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port) {
     char* str = malloc(size);
-    int idx;
-    while(idx = getIP(msg), idx >= 0) {
-        memcpy(str, msg, idx);
-        str[idx] = '\0';
+    t_ao_pos pos;
+    unsigned int s_start = 0;
+    unsigned int m_start = 0;
 
+    memset(str, 0, size);
 
+    while(pos = findIP_port(msg+m_start), pos.found) {
+        memcpy(str+s_start, msg+m_start, pos.start); s_start += pos.start;                  /* Copy before IP */
+        memcpy(str+s_start, ip_port, strlen(ip_port)); s_start += strlen(ip_port);          /* put IP:port */
+
+        m_start += (pos.start+pos.len);
     }
+    if(m_start < strlen(msg)) {
+        memcpy(str+s_start, msg+m_start, strlen(msg) - m_start); s_start += (strlen(msg) - m_start);
+    }
+    str[s_start] = '\0';
+    strcpy(msg, str);
+    free(str);
+    return msg;
+}
+
+const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port) {
+    strcpy(buf, ip);
+    snprintf(buf+strlen(buf),size-strlen(buf), ":%d", port);
+    return buf;
 }
 
 static t_ac_rtsp_type get_msg_type(const char* msg) {
@@ -126,7 +154,13 @@ static int calc_tracks(const char* msg) {
     while(ptr=strNCstr(ptr, AO_TRACK_ID), ptr != NULL) ret++;
     return ret;
 }
-
+static const char* getIP_port(char* buf, size_t size, const char* msg) {
+    t_ao_pos pos = findIP_port(msg);
+    if(!pos.found) buf[0] = '\0';
+    memcpy(buf, msg+pos.start, pos.len);
+    buf[pos.len] = '\0';
+    return buf;
+}
 static int getNumber(const char* msg) {
     char buf[128];
     if(!msg) return 0;
@@ -161,16 +195,22 @@ static const char* strNCstr(const char* msg, const char* subs) {
     else
         return msg + a;
 }
-static int getIP(const char* msg) {
-    int i = findNCSubstr
+static t_ao_pos findIP_port(const char* msg) {  /* ip:port */
+    t_ao_pos ret = {0};
+    int start_ip_delim, start_addr, start_port_delim, start_non_addr;
 
-}
-static int findChar(const char* msg, char c) {
-    unsigned int i;
-    for(i = 0; i < strlen(msg), i++)
-        if(tolower(msg[i]) == tolower(c))
-            return i;
-    return -1;
+    start_ip_delim = findNCSubstr(msg, AO_IP_START);
+    if(start_ip_delim < 0) return ret;
+    if(start_addr = findFirstDigit(msg+start_ip_delim), start_addr < 0) return ret;
+    start_addr += start_ip_delim;                   /* got absolute index */
+    start_port_delim = findChar(msg+start_addr, AO_PORT_DELIM);
+    if(start_port_delim < 0) return ret;
+    start_port_delim += start_addr;
+    start_non_addr = findFirstNonDigit(msg+start_port_delim+1)+start_port_delim+1;
+    ret.found = 1;
+    ret.start = (unsigned int)start_addr;
+    ret.len = (unsigned int)(start_non_addr - start_addr);
+    return ret;
 }
 
 static int findNCSubstr(const char* msg, const char* subs) {
@@ -191,5 +231,26 @@ static int findNCSubstr(const char* msg, const char* subs) {
         }
         else return -1;
     }
+    return -1;
+}
+
+static int findFirstDigit(const char* msg) {
+    unsigned int i;
+    for(i = 0; i < strlen(msg); i++)
+        if(isdigit(msg[i])) return i;
+    return -1;
+}
+
+static int findFirstNonDigit(const char* msg) {
+    unsigned int i;
+    for(i = 0; i < strlen(msg); i++)
+        if(!isdigit(msg[i])) return i;
+    return (int)strlen(msg);
+}
+
+static int findChar(const char* msg, char c) {
+    unsigned int i;
+    for(i = 0; i < strlen(msg); i++)
+        if(tolower(msg[i]) == tolower(c)) return i;
     return -1;
 }

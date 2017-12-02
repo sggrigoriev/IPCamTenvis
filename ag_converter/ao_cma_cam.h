@@ -60,14 +60,15 @@ typedef union {
 
 typedef struct {
     t_ac_rtsp_type msg_type;
+    char ip_port[66];
     int number;
     t_ac_rtsp_body b;
 }t_ac_rtsp_msg;
 
 t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message);
 t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const char* cam_message);
-const char* ao_cam_replace_addr(char* msg, size_t size);
-
+const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port);
+const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port);
 
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

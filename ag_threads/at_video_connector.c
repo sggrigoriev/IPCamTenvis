@@ -131,29 +131,31 @@ void* vc_thread(void* params) {
         }
         say_connected_to_vm();
     while(!stop) {
-        t_ac_rtsp_msg data;
+        t_ac_rtsp_msg req_data, ans_data;
 
         if(!ac_tcp_read(video_sock, msg, sizeof(msg), stop)) goto on_error;
-        data = ao_cam_decode_req(msg);
+        req_data = ao_cam_decode_req(msg);
         pu_log(LL_DEBUG, "%s: %s - came from videoserver", AT_THREAD_NAME, msg);
-
-        switch(data.msg_type) {
+        char ip_port[40];
+        ao_cam_replace_addr(msg, sizeof(msg), ao_makeIPPort(ip_port, sizeof(ip_port),ag_getCamIP(), ag_getCamPort()));
+        pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+        switch(req_data.msg_type) {
             case AC_DESCRIBE:
-                tracks_number = data.b.describe.video_tracks_number;
+                tracks_number = req_data.b.describe.video_tracks_number;
                 break;
             case AC_ANNOUNCE:
-                tracks_number = data.b.announce.video_track_number;
+                tracks_number = req_data.b.announce.video_track_number;
                 break;
             case AC_SETUP:
-                video_setup = (data.b.setup.track_number == 0);
+                video_setup = (req_data.b.setup.track_number == 0);
                 if (video_setup) {
-                    ag_saveClientPort(data.b.setup.client_port);
+                    ag_saveClientPort(req_data.b.setup.client_port);
                     if(!at_start_video_write()) goto on_error;              /* Start wideo writer - 1/2 of streaming */
                 }
                  tracks_number++;
                 break;
             case AC_PLAY:
-                strncpy(session_id, data.b.play.session_id, sizeof(session_id)-1);
+                strncpy(session_id, req_data.b.play.session_id, sizeof(session_id)-1);
                 break;
              default:
                 break;
@@ -161,13 +163,19 @@ void* vc_thread(void* params) {
 
         if(!ac_tcp_write(cam_sock, msg, stop)) goto on_error;
         if(!ac_tcp_read(cam_sock, msg, sizeof(msg), stop)) goto on_error;
-        data = ao_cam_decode_ans(data.msg_type, data.number, msg);
-        pu_log(LL_DEBUG, "%s: %s - came from camera", AT_THREAD_NAME, msg);
 
-        switch(data.msg_type) {
+        ans_data = ao_cam_decode_ans(req_data.msg_type, req_data.number, msg);
+        pu_log(LL_DEBUG, "%s: %s - came from camera", AT_THREAD_NAME, msg);
+        if(ans_data.msg_type == AC_PLAY) {
+            pu_log(LL_DEBUG, "PLAY - answer");
+        }
+        ao_cam_replace_addr(msg, sizeof(msg), req_data.ip_port);            /* replace to videoserver ip:port */
+        pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+
+        switch(ans_data.msg_type) {
             case AC_SETUP:
                 if (video_setup) {
-                    ag_saveServerPort(data.b.setup.server_port);
+                    ag_saveServerPort(ans_data.b.setup.server_port);
                     if(!at_start_video_read()) goto on_error;               /* Start wideo reader - 2/2 of streaming */
                 }
                 else if(tracks_number > 1) {
@@ -276,14 +284,14 @@ static void vlc_disconnect(int write_socket) {
 static const char* remote_ip(int sock, char* buf, size_t size) {
     socklen_t len;
     struct sockaddr_storage addr;
-    int port;
+//    int port;
 
     len = sizeof addr;
 
     getpeername(sock, (struct sockaddr*)&addr, &len);
 
     struct sockaddr_in *s = (struct sockaddr_in *)&addr;
-    port = ntohs(s->sin_port);
+//    port = ntohs(s->sin_port);
     inet_ntop(AF_INET, &s->sin_addr, buf, size);
     return buf;
 }

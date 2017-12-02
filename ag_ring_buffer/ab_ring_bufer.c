@@ -108,8 +108,8 @@ int ab_init(size_t max_chunks) {
 void ab_close() {
     assert(buf_initialized);
     buf_initialized = 0;
-    size_t i;
-/*
+/*    size_t i;
+
     for(i = 0; i < buf_len; i++) {
         if(buffer[i].data) free(buffer[i].data);
     }
