@@ -132,13 +132,14 @@ void* vc_thread(void* params) {
         say_connected_to_vm();
     while(!stop) {
         t_ac_rtsp_msg req_data, ans_data;
+        char ip_port[40];
 
         if(!ac_tcp_read(video_sock, msg, sizeof(msg), stop)) goto on_error;
         req_data = ao_cam_decode_req(msg);
-        pu_log(LL_DEBUG, "%s: %s - came from videoserver", AT_THREAD_NAME, msg);
-        char ip_port[40];
+
         ao_cam_replace_addr(msg, sizeof(msg), ao_makeIPPort(ip_port, sizeof(ip_port),ag_getCamIP(), ag_getCamPort()));
         pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+
         switch(req_data.msg_type) {
             case AC_DESCRIBE:
                 tracks_number = req_data.b.describe.video_tracks_number;
@@ -163,14 +164,10 @@ void* vc_thread(void* params) {
 
         if(!ac_tcp_write(cam_sock, msg, stop)) goto on_error;
         if(!ac_tcp_read(cam_sock, msg, sizeof(msg), stop)) goto on_error;
-
-        ans_data = ao_cam_decode_ans(req_data.msg_type, req_data.number, msg);
-        pu_log(LL_DEBUG, "%s: %s - came from camera", AT_THREAD_NAME, msg);
-        if(ans_data.msg_type == AC_PLAY) {
-            pu_log(LL_DEBUG, "PLAY - answer");
-        }
         ao_cam_replace_addr(msg, sizeof(msg), req_data.ip_port);            /* replace to videoserver ip:port */
         pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+
+        ans_data = ao_cam_decode_ans(req_data.msg_type, req_data.number, msg);
 
         switch(ans_data.msg_type) {
             case AC_SETUP:
