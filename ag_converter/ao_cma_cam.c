@@ -140,6 +140,10 @@ const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port) {
     return buf;
 }
 
+int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size) {
+    return 0;
+}
+
 static t_ac_rtsp_type get_msg_type(const char* msg) {
     if(strNCstr(msg, AO_RTSP_DESCRIBE)) return AC_DESCRIBE;
     if(strNCstr(msg, AO_RTSP_ANNOUNCE)) return AC_ANNOUNCE;

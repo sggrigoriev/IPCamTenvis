@@ -58,7 +58,7 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "\tAgent name: %s", ag_getAgentName());
     pu_log(LL_INFO, "\tAgent watchdog sending interval in seconds: %d", ag_getAgentWDTO());
     pu_log(LL_INFO, "\tAgent device type: %d", ag_getAgentDeviceType());
-    pu_log(LL_INFO, "\tCam IP: %s", ag_getIPCamIP());
+    pu_log(LL_INFO, "\tCam IP: %s", ag_getCamIP());
     pu_log(LL_INFO, "\tStreaming protocol: %d", ag_getIPCamProtocol());
-    pu_log(LL_INFO, "\tBuffer chunks amount: %d", ag_getVidoeChunksAmount());
+    pu_log(LL_INFO, "\tBuffer chunks amount: %d", ag_getVideoChunksAmount());
 }

@@ -77,12 +77,20 @@ void ac_close_connection(int sock) {
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
 ssize_t ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) {
-    struct pollfd fd;
     ssize_t res;
+    if((res = recv(sock, buf, sizeof(buf), 0) < 0)) {  /* implies (fd.revents & POLLIN) != 0 */
+        pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+    }
+    if(res == size) {
+        pu_log(LL_WARNING, "%s: Read buffer too small - data truncated!", __FUNCTION__);
+    }
+    return res;
+    struct pollfd fd;
+
 
     fd.fd = sock;
-    fd.events = POLLIN;
-    res = poll(&fd, 1, to*1000); /* timeout in ms */
+    fd.events = POLLIN | POLLPRI;
+    res = poll(&fd, 1, /*to*1000*/-1); /* timeout in ms */
 
     if (res == 0) {
         return 0;

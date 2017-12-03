@@ -55,9 +55,9 @@ int             ag_getCamPort();            /* IP Cam port */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
 unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
 
-time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
 time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
 time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
+time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
 /**************************************************************************************************************************
     Thread-protected functions
 */

@@ -24,6 +24,7 @@
 #include <memory.h>
 
 #include <cJSON.h>
+#include <ag_cam_io/ac_rtsp.h>
 #include "pu_logger.h"
 #include "pc_config.h"
 #include "pr_commands.h"
@@ -159,11 +160,24 @@ const char*     ag_getCamIP() {
 int             ag_getCamPort() {
     AGS_RET(DEFAULT_IPCAM_PORT, ipcam_port);
 }
-int ag_getIPCamProtocol() {
+int             ag_getIPCamProtocol() {
     AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
 }
 unsigned int    ag_getVideoChunksAmount() {
     AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
+}
+
+time_t    ag_getConnectRespTO() {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return 1;
+}
+time_t    ag_getDisconnectRespTO() {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return 1;
+}
+time_t    ag_getSessionIdTO() {        /* TO to wait session info form cloud */
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return 1;
 }
 /**************************************************************************************************************************
     Thread-protected functions
@@ -171,6 +185,13 @@ unsigned int    ag_getVideoChunksAmount() {
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */
+void ag_saveProxyID(const char* proxy_id) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+}
+const char* ag_getProxyID() {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
+}
 void ag_saveClientIP(const char* ip_address) {
     pthread_mutex_lock(&local_mutex);
     strncpy(client_ip, ip_address, sizeof(client_ip)-1);
@@ -196,6 +217,28 @@ void ag_saveServerPort(int port) {
 int ag_getServerPort() {
     return server_port;
 }
+
+const t_ao_in_video_params ag_getVideoConnectionData() {
+    t_ao_in_video_params ret;
+    ret.msg_type = AO_UNDEF;
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return ret;
+}
+void ag_dropVideoConnectionData() {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+}
+void ag_saveVideoConnectionData(t_ao_in_video_params data) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+}
+
+void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+}
+void ag_dropStreamDetails() {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+}
+
+
 
 int ag_load_config(const char* cfg_file_name) {
     cJSON* cfg = NULL;

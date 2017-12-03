@@ -237,7 +237,7 @@ static int processOwnInfo(const char* in, char* out, size_t size) { /* Connectio
             return SM_NOEXTIT;
         case AO_IN_START_STREAM_0:  /* Connect request from cloud */
             prepare_sesson_details_request(out, size);
-            lib_timer_init(&session_id_to, ag_getSessionIdTO);
+            lib_timer_init(&session_id_to, /*ag_getSessionIdTO*/ 1);
             session_id_to_up = 1;
             own_status = AT_SESSION_ID_AWAITING;
             pu_log(LL_INFO, "%s %s - Video connect requested. Waiting for stream details", AT_THREAD_NAME, in);
@@ -407,4 +407,26 @@ static void resend_request_to_cloud() {
         pu_queue_push(to_agent, buffered_responce, strlen(buffered_responce)+1);
 
     }
+}
+
+static const char* prepare_sesson_details_request(char* msg, size_t size) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
+}
+static const char* prepare_unsucc_cam_connection(char* msg, size_t size) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
+
+}
+static const char* prepare_cam_connected(char* msg, size_t size) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
+}
+static const char* prepare_cam_disconnection(char* msg, size_t size) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
+}
+static const char* prepare_bad_cam_disconnection(char* msg, size_t size) {
+    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
+    return NULL;
 }

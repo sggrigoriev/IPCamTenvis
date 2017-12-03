@@ -70,5 +70,7 @@ t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const c
 const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port);
 const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port);
 
+int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size);
+
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */
