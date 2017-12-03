@@ -84,40 +84,25 @@ static void* main_thread(void* params) {
     while(!stop) {
         int read_socket = -1;
         int write_socket = -1;
-        int server_socket = -1;
         chids_stop = 0;
 
-        if(server_socket = lib_tcp_get_server_socket(ag_getProxyPort()), server_socket < 0) {
-            pu_log(LL_ERROR, "%s: unable to bind to the port %d. %d %s. Exiting.", AT_THREAD_NAME, ag_getProxyPort(), errno, strerror(errno));
-            stop = 1;
-            break;
+        while(read_socket = lib_tcp_get_client_socket(ag_getProxyPort(), 1), read_socket <= 0) {
+            pu_log(LL_ERROR, "%s: connection error to Proxy %d %s", AT_THREAD_NAME, errno, strerror(errno));
+            sleep(1);
         }
-        do {
-            if (read_socket = lib_tcp_listen(server_socket, 1), read_socket < 0) {
-                pu_log(LL_ERROR, "%s: listen error. %d %s. Exiting", AT_THREAD_NAME, errno, strerror(errno));
-                lib_tcp_client_close(server_socket);
-                server_socket = -1;
-                break;      /* Go to bing again */
-            }
-            if (!read_socket) {    /* timeout */
-                continue;
-            }
-        }
-        while (!read_socket);  /* until the timeout */
-
         write_socket = dup(read_socket);
-
+/* Connecting to proxy */
         if(!at_start_proxy_read(read_socket)) {
-            pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "AGENT_READ", strerror(errno));
+            pu_log(LL_ERROR, "%s: Creating read thread failed: %s", AT_THREAD_NAME, strerror(errno));
             break;
         }
-        pu_log(LL_INFO, "%s: started", "AGENT_READ");
+        pu_log(LL_INFO, "%s: read started.", AT_THREAD_NAME);
 
         if(!at_start_proxy_write(write_socket)) {
-            pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "AGENT_WRITE", strerror(errno));
+            pu_log(LL_ERROR, "%s: Creating write thread failed: %s", AT_THREAD_NAME, strerror(errno));
             break;
         }
-        pu_log(LL_INFO, "%s: started", "AGENT_WRITE");
+        pu_log(LL_INFO, "%s: write started.", AT_THREAD_NAME);
 
 /* It is hanging on the join inside of stop_agent_read function */
         at_stop_proxy_read();
@@ -125,8 +110,6 @@ static void* main_thread(void* params) {
         at_stop_proxy_write();
 
 /* Chilren are dead if we're here */
-/* Read & write sockets will be closed inside the agent_read & agent_write */
-        lib_tcp_client_close(server_socket);
         pu_log(LL_WARNING, "Agent read/write threads restart");
     }
     pthread_exit(NULL);
