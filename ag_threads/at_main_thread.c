@@ -142,7 +142,7 @@ static int main_thread_startup() {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "VIDEO_MANAGER", strerror(errno));
         return 0;
     }
-    pu_log(LL_INFO, "%s: started", "VIDEO_MANAGER");
+    pu_log(LL_INFO, "%s: started", "VIDEO_MANAGERRR");
 
     return 1;
 }
