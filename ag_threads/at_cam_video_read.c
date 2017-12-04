@@ -55,7 +55,7 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_read() {
-    if((sock = ac_udp_client_connection(ag_getCamIP(), ag_getServerPort(), &sin)) < 0) {
+    if((sock = ac_udp_client_connection(ag_getCamIP(), ag_getServerPort(), &sin, 0)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
@@ -98,14 +98,16 @@ static void* the_thread(void* params) {
         ssize_t sz = 0;
         while(!stop && !sz) {
             sz = ac_udp_read(sock, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
-            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
+//            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
         }
         switch(sz) {
-            case -1: goto on_stop;
+            case 0:                        /* Timeout + stop */
+            case -1:
+                free(buf);
+                goto on_stop;
             default: break;                 /* Got smth - continue processing */
         }
-        t_ab_put_rc rc = ab_putBlock(sz, buf);
-        free(buf);
+        t_ab_put_rc rc = ab_putBlock(sz, buf);  /* The buffer will be freed on reader size - video_write thread */
         switch (rc) {
             case AB_OK:
                 break;

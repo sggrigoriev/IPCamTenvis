@@ -28,8 +28,7 @@
 typedef struct sockaddr_in t_struct_sockaddr_in;
 
 /* Return -1 if error or opened socket if OK */
-int ac_udp_server_connecion(const char* ip, uint16_t port);
-int ac_udp_client_connection(const char* ip, uint16_t port, t_struct_sockaddr_in* sin);
+int ac_udp_client_connection(const char* ip, uint16_t port, t_struct_sockaddr_in* sin, int async);
 void ac_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */

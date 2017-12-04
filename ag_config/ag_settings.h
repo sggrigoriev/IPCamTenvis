@@ -58,34 +58,18 @@ unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video trans
 time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
 time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
 time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
+
+void ag_saveProxyID(const char* proxy_id);
+const char* ag_getProxyID();
 /**************************************************************************************************************************
     Thread-protected functions
 */
-/*****************************************
- * @return NULL if no string or connection string
- */
-const t_ao_in_video_params ag_getVideoConnectionData();
-/*****************************************
- * Erase connection data to NULL
- */
+const t_ao_in_video_params ag_getVideoConnectionData(); /* Return undefined message type if was not initiated */
 void ag_dropVideoConnectionData();
-/******************************************
- * Save cloud connection parameters
- * @param con_data - pointer to cloud connection parameters to be saved
- */
 void ag_saveVideoConnectionData(t_ao_in_video_params con_data);
-/*********************************************************************
- * Save stream session sent by cloud
- * @param stream_details
- */
-void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details);
-void ag_dropStreamDetails();
 
-/* Initiate the configuration service. Load data from configuration port; Initiates default values
-   Return 1 if Ok, 0 if not
-*/
-void ag_saveProxyID(const char* proxy_id);
-const char* ag_getProxyID();
+void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details);  /* Save stream session sent by cloud */
+void ag_dropStreamDetails();
 
 void ag_saveClientIP(const char* ip_address);
 const char* ag_getClientIP(char* buf, size_t size);

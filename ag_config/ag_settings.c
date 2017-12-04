@@ -76,6 +76,8 @@ static unsigned int log_rec_amt;
 static log_level_t  log_level;
 
 static unsigned int proxy_port;
+static char         proxyID[LIB_HTTP_DEVICE_ID_SIZE] = {0};
+
 static unsigned int queue_rec_amt;
 static unsigned int agent_device_type;
 static unsigned int wud_port;
@@ -179,19 +181,20 @@ time_t    ag_getSessionIdTO() {        /* TO to wait session info form cloud */
     pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
     return 1;
 }
+
+void ag_saveProxyID(const char* proxy_id) {
+    strncpy(proxyID, proxy_id, sizeof(proxyID)-1);
+}
+const char* ag_getProxyID() {
+    return proxyID;
+}
 /**************************************************************************************************************************
     Thread-protected functions
 */
 /* Initiate the configuration service. Load data from configuration port; Initiates default values
    Return 1 if Ok, 0 if not
 */
-void ag_saveProxyID(const char* proxy_id) {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-}
-const char* ag_getProxyID() {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-    return NULL;
-}
+
 void ag_saveClientIP(const char* ip_address) {
     pthread_mutex_lock(&local_mutex);
     strncpy(client_ip, ip_address, sizeof(client_ip)-1);

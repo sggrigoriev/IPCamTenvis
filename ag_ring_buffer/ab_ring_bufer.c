@@ -108,12 +108,13 @@ int ab_init(size_t max_chunks) {
 void ab_close() {
     assert(buf_initialized);
     buf_initialized = 0;
-/*    size_t i;
 
-    for(i = 0; i < buf_len; i++) {
-        if(buffer[i].data) free(buffer[i].data);
+    while(read_index != write_index) {
+        free(buffer[read_index].data);
+        buffer[read_index] = zero_elem;
+        read_index = shift(read_index);
     }
-*/
+
     free(buffer);
     buffer = NULL;
 }

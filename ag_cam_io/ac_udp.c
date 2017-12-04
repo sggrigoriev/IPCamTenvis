@@ -20,10 +20,11 @@
 */
 #include <memory.h>
 #include <errno.h>
-#include<sys/poll.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<arpa/inet.h>
+#include <fcntl.h>
+#include <sys/select.h>
 
 #include "pu_logger.h"
 
@@ -31,27 +32,7 @@
 
 #include "ac_udp.h"
 
-int ac_udp_server_connecion(const char* ip, uint16_t port) {
-    int ret = -1;
-    struct sockaddr_in sin={0};
-
-    pu_log(LL_DEBUG, "%s: ip = %s, port = %d", __FUNCTION__, ip, port);
-
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = inet_addr(ip);
-    sin.sin_port=htons(port);
-
-    if((ret=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        pu_log(LL_ERROR, "%s: Open UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
-    }
-    if(bind(ret,(struct sockaddr*)&sin,sizeof(sin))==-1) {
-        pu_log(LL_ERROR, "%s: UDP socket bind failed: RC = %d - %s",  __FUNCTION__, errno, strerror(errno));
-        return -1;
-    }
-    return ret;
-}
-int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin) {
+int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin, int async) {
     int ret = -1;
 
     pu_log(LL_DEBUG, "%s: ip = %s, port = %d", __FUNCTION__, ip, port);
@@ -66,6 +47,15 @@ int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* 
         pu_log(LL_ERROR, "%s: Open UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return -1;
     }
+    if(async) {
+        int sock_flags = fcntl(ret, F_GETFL);
+        if (sock_flags < 0) {
+            return -1;
+        }
+        if (fcntl(ret, F_SETFL, sock_flags | O_NONBLOCK) < 0) {
+            return -1;
+        }
+    }
     return ret;
 }
 void ac_close_connection(int sock) {
@@ -78,28 +68,26 @@ void ac_close_connection(int sock) {
 /* Return -1 if error, 0 if timeout, >0 if read smth */
 ssize_t ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) {
     ssize_t res;
-    if((res = recv(sock, buf, sizeof(buf), 0) < 0)) {  /* implies (fd.revents & POLLIN) != 0 */
-        pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-    }
-    if(res == size) {
-        pu_log(LL_WARNING, "%s: Read buffer too small - data truncated!", __FUNCTION__);
-    }
-    return res;
-    struct pollfd fd;
 
+/*Build set for select */
+    struct timeval tv = {to, 0};
+    fd_set readset;
+    FD_ZERO(&readset);
 
-    fd.fd = sock;
-    fd.events = POLLIN | POLLPRI;
-    res = poll(&fd, 1, /*to*1000*/-1); /* timeout in ms */
+    FD_SET(sock, &readset);
 
-    if (res == 0) {
-        return 0;
-    }
-    else if (res == -1) {
-        pu_log(LL_ERROR, "%s: Polling UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+    if(sock < 0) {
+        pu_log(LL_ERROR, "%s: FD_SET error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return -1;
     }
-    else if((res = recv(sock, buf, sizeof(buf), 0) < 0)) {  /* implies (fd.revents & POLLIN) != 0 */
+    res = select(sock + 1, &readset, NULL, NULL, &tv);
+    if(res < 0) {    /* Error. nothing to read */
+        pu_log(LL_ERROR, "%s: select error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return -1;
+    }
+    if(res == 0) return 0;   /*timeout */
+
+    if((res = recv(sock, buf, sizeof(buf), 0) < 0)) {
         pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
     }
     if(res == size) {

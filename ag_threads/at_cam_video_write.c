@@ -54,7 +54,7 @@ static void* the_thread(void* params);
 
 int at_start_video_write() {
     char ip[LIB_HTTP_MAX_IPADDRES_SIZE];
-    if((sock = ac_udp_client_connection(ag_getClientIP(ip, sizeof(ip)), ag_getClientPort(), &sin)) < 0) {
+    if((sock = ac_udp_client_connection(ag_getClientIP(ip, sizeof(ip)), ag_getClientPort(), &sin, 0)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         stopped = 1;
         return 0;
@@ -94,10 +94,11 @@ static void* the_thread(void* params) {
     while(!stop) {
         const t_ab_block ret = ab_getBlock(1);
         if(!ret.ls_size) {
-            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
+//            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
             continue;
         }
         if(!ac_udp_write(sock, ret.data, ret.ls_size, &sin)) {
+            free(ret.data);
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
             break;
         }
