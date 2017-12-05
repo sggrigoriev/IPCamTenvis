@@ -26,6 +26,7 @@
 
 #include "pu_logger.h"
 
+#include "ao_cma_cam.h"
 #include "ao_cmd_data.h"
 
 /*
@@ -54,6 +55,11 @@ const char*     ag_getCamIP();            /* IP Camera address */
 int             ag_getCamPort();            /* IP Cam port */
 int             ag_getIPCamProtocol();      /* RTMP or RTSP */
 unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
+t_ao_cam_res    ag_getCamResolution();
+unsigned int    ag_getStreamBufferSize();
+const char*     ag_getCamLogin();
+const char*     ag_getCamPassword();
+
 
 time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
 time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */

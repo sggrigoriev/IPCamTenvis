@@ -86,7 +86,7 @@ void at_set_stop_video_write() {
 /********************************************************
  * Local functions declaration
  * All connections are open and ready for use if we're here.
- * The goal is permanent write until the stop or commection lost
+ * The goal is permanent write until the stop or connection lost
  */
 
 static void* the_thread(void* params) {

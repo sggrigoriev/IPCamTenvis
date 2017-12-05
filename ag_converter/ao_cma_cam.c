@@ -37,8 +37,12 @@
 #define AO_SERVER_PORT      "server_port"
 #define AO_SESSION_ID       "Session:"
 
-#define AO_IP_START         "rtsp://"
+#define AO_URI_START         "rtsp://"
 #define AO_PORT_DELIM       ':'
+#define AO_DELIMS           " \r\n"
+
+#define AO_LOW_RES          "11"
+#define AO_HI_RES           "12"
 
 typedef struct {
     int found;
@@ -46,9 +50,6 @@ typedef struct {
     unsigned int len;
 } t_ao_pos;
 
-static t_ac_rtsp_type get_msg_type(const char* msg);
-static int calc_tracks(const char* msg);
-static const char* getIP_port(char* buf, size_t size, const char* msg);
 
 /* Find first occurence of digits from the start, return converted int. */
 static int getNumber(const char* msg);
@@ -57,61 +58,54 @@ static int getNumber(const char* msg);
 static const char* getStrNumber(char* buf, size_t size, const char* msg);
 
 /* Get the index of the first byte of IP:port address */
-static t_ao_pos findIP_port(const char* msg);
+static t_ao_pos findURI(const char* msg);
 
 static const char* strNCstr(const char* msg, const char* subs);
 static int findNCSubstr(const char* msg, const char* subs);
-static int findFirstDigit(const char* msg);
-static int findFirstNonDigit(const char* msg);
-static int findChar(const char* msg, char c);
+static int findOneOfChars(const char* msg, const char* set);
+static int max(int a, int b);
+static int min(int a, int b);
+static int get_min(int a, int b);
 
-t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message) {
-    t_ac_rtsp_msg ret;
+/* [login:password@]ip:port/resolution/ */
+const char* ao_makeURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution) {
+    char s_port[20];
+    sprintf(s_port, "%d", port);
 
-    ret.msg_type = get_msg_type(cam_message);
-    ret.number = getNumber(strNCstr(cam_message, AO_RTSP_REQ_NUMBER));
-    getIP_port(ret.ip_port, sizeof(ret.ip_port), cam_message);
-
-
-    switch(ret.msg_type) {
-        case AC_DESCRIBE:
-            ret.b.describe.video_tracks_number = calc_tracks(cam_message);
+    if(strlen(login) && strlen(pwd)) {
+        strcpy(uri, login);
+        strcat(uri, ":");
+        strcat(uri, pwd);
+        strcat(uri, "@");
+        strcat(uri, ip);
+    }
+    else {
+        strcpy(uri, ip);
+    }
+    strcat(uri, ":");
+    strcat(uri, s_port);
+    strcat(uri, "/");
+    switch (resolution) {
+        case AO_RES_LO:
+            strcat(uri, AO_LOW_RES);
             break;
-        case AC_ANNOUNCE:
-            ret.b.describe.video_tracks_number = calc_tracks(cam_message);
-            break;
-        case AC_SETUP:
-            ret.b.setup.track_number = getNumber(strNCstr(cam_message, AO_TRACK_ID));
-            ret.b.setup.client_port = getNumber(strNCstr(cam_message, AO_CLIENT_PORT));
-            break;
-        case AC_PLAY:
-            getStrNumber(ret.b.play.session_id, sizeof(ret.b.play.session_id), strNCstr(cam_message, AO_SESSION_ID));
+        case AO_RES_HI:
+            strcat(uri, AO_HI_RES);
             break;
         default:
             break;
     }
-    return ret;
+    strcat(uri, "/");
+    return uri;
 }
-
-t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const char* cam_message) {
-    t_ac_rtsp_msg ret;
-
-    ret.msg_type = req_type;
-    ret.number = getNumber(strNCstr(cam_message, AO_RTSP_REQ_NUMBER));
-    if(ret.number != req_number) {
-        pu_log(LL_WARNING, "%s: Cam answer got different #! Request# = %d, Response# = %d in message %s", __FUNCTION__, req_number, ret.number, cam_message);
-    }
-    switch(ret.msg_type) {
-        case AC_SETUP:
-            ret.b.setup.server_port = getNumber(strNCstr(cam_message, AO_SERVER_PORT));
-            break;
-        default:
-            break;
-    }
-    return ret;
+void ao_get_uri(char* uri, size_t size, const char* msg) {
+    uri[0] = '\0';
+    t_ao_pos pos = findURI(msg);
+    if(!pos.found) return;
+    memcpy(uri, msg+pos.start, pos.len);
+    uri[pos.len] ='\0';
 }
-
-const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port) {
+void ao_cam_replace_uri(char* msg, size_t size, const char* new_uri) {
     char* str = malloc(size);
     t_ao_pos pos;
     unsigned int s_start = 0;
@@ -119,10 +113,9 @@ const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port) {
 
     memset(str, 0, size);
 
-    while(pos = findIP_port(msg+m_start), pos.found) {
-        memcpy(str+s_start, msg+m_start, pos.start); s_start += pos.start;                  /* Copy before IP */
-        memcpy(str+s_start, ip_port, strlen(ip_port)); s_start += strlen(ip_port);          /* put IP:port */
-
+    while(pos = findURI(msg+m_start), pos.found) {
+        memcpy(str+s_start, msg+m_start, pos.start); s_start += pos.start;                  /* Copy before URI */
+        memcpy(str+s_start, new_uri, strlen(new_uri)); s_start += strlen(new_uri);          /* put IP:port */
         m_start += (pos.start+pos.len);
     }
     if(m_start < strlen(msg)) {
@@ -131,40 +124,32 @@ const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port) {
     str[s_start] = '\0';
     strcpy(msg, str);
     free(str);
-    return msg;
 }
 
-const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port) {
-    strcpy(buf, ip);
-    snprintf(buf+strlen(buf),size-strlen(buf), ":%d", port);
-    return buf;
-}
-
-int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size) {
-    return 0;
-}
-
-static t_ac_rtsp_type get_msg_type(const char* msg) {
+t_ac_rtsp_type ao_get_msg_type(const char* msg) {
     if(strNCstr(msg, AO_RTSP_DESCRIBE)) return AC_DESCRIBE;
     if(strNCstr(msg, AO_RTSP_ANNOUNCE)) return AC_ANNOUNCE;
     if(strNCstr(msg, AO_RTSP_SETUP)) return AC_SETUP;
     if(strNCstr(msg, AO_RTSP_PLAY)) return AC_PLAY;
     if(strNCstr(msg, AO_RTSP_TEARDOWN)) return AC_TEARDOWN;
     return AC_UNDEFINED;
+
 }
-static int calc_tracks(const char* msg) {
-    int ret = 0;
-    const char* ptr = msg;
-    while(ptr=strNCstr(ptr, AO_TRACK_ID), ptr != NULL) ret++;
-    return ret;
+int ao_get_msg_number(const char* msg) {
+    return getNumber(strNCstr(msg, AO_RTSP_REQ_NUMBER));
 }
-static const char* getIP_port(char* buf, size_t size, const char* msg) {
-    t_ao_pos pos = findIP_port(msg);
-    if(!pos.found) buf[0] = '\0';
-    memcpy(buf, msg+pos.start, pos.len);
-    buf[pos.len] = '\0';
-    return buf;
+int ao_get_client_port(const char* msg) {
+    return getNumber(strNCstr(msg, AO_CLIENT_PORT));
 }
+int ao_get_server_port(const char* msg) {
+    return getNumber(strNCstr(msg, AO_SERVER_PORT));
+}
+
+int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size) {
+    return 0;
+}
+
+
 static int getNumber(const char* msg) {
     char buf[128];
     if(!msg) return 0;
@@ -199,21 +184,19 @@ static const char* strNCstr(const char* msg, const char* subs) {
     else
         return msg + a;
 }
-static t_ao_pos findIP_port(const char* msg) {  /* ip:port */
-    t_ao_pos ret = {0};
-    int start_ip_delim, start_addr, start_port_delim, start_non_addr;
 
-    start_ip_delim = findNCSubstr(msg, AO_IP_START);
-    if(start_ip_delim < 0) return ret;
-    if(start_addr = findFirstDigit(msg+start_ip_delim), start_addr < 0) return ret;
-    start_addr += start_ip_delim;                   /* got absolute index */
-    start_port_delim = findChar(msg+start_addr, AO_PORT_DELIM);
-    if(start_port_delim < 0) return ret;
-    start_port_delim += start_addr;
-    start_non_addr = findFirstNonDigit(msg+start_port_delim+1)+start_port_delim+1;
+static t_ao_pos findURI(const char* msg) {
+    t_ao_pos ret = {0};
+
+    int start_pos = findNCSubstr(msg, AO_URI_START);
+    if (start_pos < 0) return ret;
+    ret.start = (unsigned int) start_pos + (unsigned int) strlen(AO_URI_START);
+    int length1 = findOneOfChars(msg + ret.start, AO_DELIMS);
+    int length2 = findNCSubstr(msg + ret.start, AO_TRACK_ID);
+    int length = get_min(length1, length2);
+    if(length < 0) return ret;
     ret.found = 1;
-    ret.start = (unsigned int)start_addr;
-    ret.len = (unsigned int)(start_non_addr - start_addr);
+    ret.len = (unsigned int)length;
     return ret;
 }
 
@@ -238,23 +221,25 @@ static int findNCSubstr(const char* msg, const char* subs) {
     return -1;
 }
 
-static int findFirstDigit(const char* msg) {
-    unsigned int i;
-    for(i = 0; i < strlen(msg); i++)
-        if(isdigit(msg[i])) return i;
+static int findOneOfChars(const char* msg, const char* set) {
+    int i;
+    for(i = 0; i < strlen(msg); i++) {
+        unsigned int j;
+        for(j = 0; j < strlen(set); j++) {
+            if(tolower(msg[i]) == tolower(set[j])) return i;
+        }
+    }
     return -1;
 }
 
-static int findFirstNonDigit(const char* msg) {
-    unsigned int i;
-    for(i = 0; i < strlen(msg); i++)
-        if(!isdigit(msg[i])) return i;
-    return (int)strlen(msg);
+static int max(int a, int b) {
+    return (a > b)?a:b;
 }
-
-static int findChar(const char* msg, char c) {
-    unsigned int i;
-    for(i = 0; i < strlen(msg); i++)
-        if(tolower(msg[i]) == tolower(c)) return i;
-    return -1;
+static int min(int a, int b) {
+    return (a > b)?b:a;
+}
+static int get_min(int a, int b) {
+    if(max(a,b) < 0 ) return -1;
+    if(min(a,b) < 0) return max(a,b);
+    return min(a,b);
 }

@@ -44,6 +44,13 @@
  */
 #define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
+typedef enum {
+    AT_UNRECOGNIZE,
+    AT_CONTINUE,
+    AT_QUIT,
+    AT_ERROR
+} t_process_msg_rc;
+
 static pthread_t id;
 static pthread_attr_t attr;
 
@@ -97,11 +104,9 @@ void* vc_thread(void* params) {
     int video_sock;
     int cam_sock;
 
-    int tracks_number;
-    int video_setup;
     int tear_down;
     char msg[LIB_HTTP_MAX_MSG_SIZE] = {0};
-    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
+    char cam_uri[LIB_HTTP_MAX_URL_SIZE] = {0};
 
     stop = 0;
 
@@ -117,9 +122,9 @@ void* vc_thread(void* params) {
     on_reconnect:
         video_sock = -1;
         cam_sock = -1;
-        tracks_number = -1;
-        video_setup = 0;
         tear_down = 0;
+
+        ao_makeURI(cam_uri, sizeof(cam_uri), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution());
 
         if((video_sock = video_server_connect()) < 0) {
             say_cant_connect_to_vm();
@@ -131,77 +136,67 @@ void* vc_thread(void* params) {
         }
         say_connected_to_vm();
     while(!stop) {
-        t_ac_rtsp_msg req_data, ans_data;
-        char ip_port[40];
+        t_ac_rtsp_msg data;
 
         if(!ac_tcp_read(video_sock, msg, sizeof(msg), stop)) goto on_error;
-        req_data = ao_cam_decode_req(msg);
 
-        ao_cam_replace_addr(msg, sizeof(msg), ao_makeIPPort(ip_port, sizeof(ip_port),ag_getCamIP(), ag_getCamPort()));
-        pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+        data.msg_type = ao_get_msg_type(msg);
+        data.number = ao_get_msg_number(msg);
+        ao_get_uri(data.uri, sizeof(data.uri), msg);
+        ao_cam_replace_uri(msg, sizeof(msg), cam_uri);
 
-        switch(req_data.msg_type) {
-            case AC_DESCRIBE:
-                tracks_number = req_data.b.describe.video_tracks_number;
-                break;
-            case AC_ANNOUNCE:
-                tracks_number = req_data.b.announce.video_track_number;
-                break;
-            case AC_SETUP:
-                video_setup = (req_data.b.setup.track_number == 0);
-                if (video_setup) {
-                    ag_saveClientPort(req_data.b.setup.client_port);
-                    if(!at_start_video_write()) goto on_error;              /* Start wideo writer - 1/2 of streaming */
-                }
-                 tracks_number++;
-                break;
-            case AC_PLAY:
-                strncpy(session_id, req_data.b.play.session_id, sizeof(session_id)-1);
-                break;
-             default:
-                break;
-        }
+        pu_log(LL_DEBUG, "%s: Request to cam: %s", AT_THREAD_NAME, msg);
 
         if(!ac_tcp_write(cam_sock, msg, stop)) goto on_error;
         if(!ac_tcp_read(cam_sock, msg, sizeof(msg), stop)) goto on_error;
-        ao_cam_replace_addr(msg, sizeof(msg), req_data.ip_port);            /* replace to videoserver ip:port */
-        pu_log(LL_DEBUG, "%s: %s - IP converted", AT_THREAD_NAME, msg);
+if(data.msg_type == AC_PLAY) {
+    pu_log(LL_DEBUG, "%s PLAY - answer",AT_THREAD_NAME);
+}
+        ao_cam_replace_uri(msg, sizeof(msg), data.uri);
 
-        ans_data = ao_cam_decode_ans(req_data.msg_type, req_data.number, msg);
-
-        switch(ans_data.msg_type) {
+        if(data.number != ao_get_msg_number(msg)) {
+            pu_log(LL_ERROR, "%s: Cam answer got different CSeq! Request = %d, Response = %d in message %s", AT_THREAD_NAME, data.number, ao_get_msg_number(msg), msg);
+            goto on_error;
+        }
+        switch(data.msg_type) {
             case AC_SETUP:
-                if (video_setup) {
-                    ag_saveServerPort(ans_data.b.setup.server_port);
-                    if(!at_start_video_read()) goto on_error;               /* Start wideo reader - 2/2 of streaming */
+                if (data.b.setup.track_number == 0) {
+                    ag_saveClientPort(ao_get_client_port(msg));
+                    ag_saveServerPort(ao_get_server_port(msg));
+                    if(!at_start_video_write()) goto on_error;
+                    if(!at_start_video_read()) goto on_error;
                 }
-                else if(tracks_number > 1) {
-                    say_connected_to_vm();
-                }
+                break;
+            case AC_PLAY:
+                say_connected_to_vm();
                 break;
             case AC_TEARDOWN:
                 tear_down = 1;
                 stop = 1;
                 say_disconnected_to_vm();
+                continue;
+            case AC_UNDEFINED:
+                pu_log(LL_WARNING, "%s: Unrecognized request from Video Server", AT_THREAD_NAME);
                 break;
             default:
                 break;
         }
+        pu_log(LL_DEBUG, "%s: Answer to video server: %s", AT_THREAD_NAME, msg);
         if(!ac_tcp_write(video_sock, msg, stop)) goto on_error;
     }
     on_error:
-        stop_streaming();
-        video_server_diconnect(video_sock);
-        video_sock = -1;
+    stop_streaming();
+    video_server_diconnect(video_sock);
+    video_sock = -1;
 
-        cam_disconnect(cam_sock);
-        cam_sock = -1;
+    cam_disconnect(cam_sock);
+    cam_sock = -1;
 
-        if(!tear_down) {
-            pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
-            goto on_reconnect;
-        }
-        shutdown_proc();
+    if(!tear_down) {
+        pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
+        goto on_reconnect;
+    }
+    shutdown_proc();
 #ifndef LOCAL_TEST
     pthread_exit(NULL);
 #else

@@ -55,6 +55,9 @@
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTSP
 #define DEFAULT_CHUNKS_AMOUNT   12
 #define DEFAULT_MAX_UDP_STREAM_BUFF_SIZE    8192    /* I had 1514 in trace and add a little...*/
+#define DEFAULT_IPCAM_RESOLUTION            AO_RES_HI
+#define DEFAULT_IPCAM_LOGIN     ""
+#define DEFAULT_IPCAM_PASSWORD  ""
 /**********************************************************
  * Local test settings
  */

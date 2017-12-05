@@ -24,13 +24,13 @@
 #include <memory.h>
 
 #include <cJSON.h>
-#include <ag_cam_io/ac_rtsp.h>
 #include "pu_logger.h"
 #include "pc_config.h"
 #include "pr_commands.h"
 
 #include "ag_defaults.h"
-
+#include "ac_rtsp.h"
+#include "ao_cma_cam.h"
 #include "ag_settings.h"
 
 /************************************************************************
@@ -59,6 +59,12 @@
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
 #define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
+#define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
+#define IPCAM_RESOLUTION            "IPCAM_RESOLUTION"
+    #define IR_LOW_RES              "LO"
+    #define IR_HI_RES               "HI"
+#define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
+#define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
 
 /*************************************************************************
     Some macros
@@ -87,6 +93,10 @@ static char         ipcam_ip[LIB_HTTP_MAX_IPADDRES_SIZE];
 static int          ipcam_port;
 static int          video_protocol;
 static unsigned int chunks_amount;
+static unsigned int streaming_buffer_size;
+static t_ao_cam_res ipcam_resolution;
+static char         cam_login[129];
+static char         cam_password[129];
 
 /****************************************************
  * Non- configurable but saved & updates persistent params
@@ -116,6 +126,7 @@ static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_set
  * @param prot_val - setting value converted to int (see ad_defaults.h)
  */
 static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val);
+static void getCamResValue(cJSON* cfg, const char* field_name, t_ao_cam_res* cam_res);
 
 /*************************************************************************
     Set of "get" functions to make an access to settings for Presto modules
@@ -156,6 +167,7 @@ unsigned int    ag_getWUDPort() {
 unsigned int    ag_getAgentWDTO() {
     AGS_RET(DEFAULT_WATCHDOG_TO_SEC, watchdog_to_sec);
 }
+
 const char*     ag_getCamIP() {
     AGS_RET(DEFAULT_IPCAM_IP, ipcam_ip);
 }
@@ -167,6 +179,18 @@ int             ag_getIPCamProtocol() {
 }
 unsigned int    ag_getVideoChunksAmount() {
     AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
+}
+t_ao_cam_res    ag_getCamResolution() {
+    AGS_RET(DEFAULT_IPCAM_RESOLUTION, ipcam_resolution);
+}
+unsigned int   ag_getStreamBufferSize() {
+    AGS_RET(DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, streaming_buffer_size);
+}
+const char*     ag_getCamLogin() {
+    AGS_RET(DEFAULT_IPCAM_LOGIN, cam_login);
+}
+const char*     ag_getCamPassword() {
+    AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
 
 time_t    ag_getConnectRespTO() {
@@ -242,7 +266,6 @@ void ag_dropStreamDetails() {
 }
 
 
-
 int ag_load_config(const char* cfg_file_name) {
     cJSON* cfg = NULL;
     assert(cfg_file_name);
@@ -270,11 +293,16 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getUintValue(cfg, AGENT_WATCHDOG_TO_SEC, &watchdog_to_sec))                             AGS_ERR;
 
     if(!getStrValue(cfg, AGENT_IPCAM_IP, ipcam_ip, sizeof(ipcam_ip)))                           AGS_ERR;
-    if(!getUintValue(cfg, AGENT_IPCAM_PORT, (unsigned int *)&ipcam_port))                        AGS_ERR;
+    if(!getUintValue(cfg, AGENT_IPCAM_PORT, (unsigned int *)&ipcam_port))                       AGS_ERR;
 
     getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
+    getCamResValue(cfg, IPCAM_RESOLUTION, &ipcam_resolution);
+
+    if(!getUintValue(cfg, STREAMING_BUFFER_SIZE, &streaming_buffer_size))                       AGS_ERR;
 
     if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                                 AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
 
     cJSON_Delete(cfg);
 
@@ -305,6 +333,11 @@ static void initiate_defaults() {
     ipcam_port = DEFAULT_IPCAM_PORT;
     strncpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
     chunks_amount = DEFAULT_CHUNKS_AMOUNT;
+    streaming_buffer_size = DEFAULT_MAX_UDP_STREAM_BUFF_SIZE;
+    ipcam_resolution = DEFAULT_IPCAM_RESOLUTION;
+
+    strncpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
+    strncpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
 }
 
 /*
@@ -342,4 +375,18 @@ static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val) 
         fprintf(stderr, "Setting %s = %s. Posssible values are %s or %s. Default will be used instead\n",
                 field_name, buf, AGENT_IC_RTMP, AGENT_IC_RTSP
         );
+}
+static void getCamResValue(cJSON* cfg, const char* field_name, t_ao_cam_res* cam_res) {
+    char buf[10];
+    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
+        fprintf(stderr, "Default will be used instead.\n");
+    else if(!strcmp(buf, IR_LOW_RES))
+        *cam_res = AO_RES_LO;
+    else if(!strcmp(buf, IR_HI_RES))
+        *cam_res = AO_RES_HI;
+    else
+        fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
+                field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
+        );
+
 }

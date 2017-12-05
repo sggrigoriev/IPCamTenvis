@@ -90,7 +90,7 @@ void at_set_stop_video_read() {
 static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
     while(!stop) {
-        t_ab_byte* buf = malloc(DEFAULT_MAX_UDP_STREAM_BUFF_SIZE);
+        t_ab_byte* buf = malloc(ag_getStreamBufferSize());
         if(!buf) {
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
             goto on_stop;

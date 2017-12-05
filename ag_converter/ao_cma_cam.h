@@ -28,6 +28,12 @@
 #include "ao_cmd_data.h"
 
 typedef enum {
+    AO_RES_UNDEF,
+    AO_RES_LO,
+    AO_RES_HI
+} t_ao_cam_res;
+
+typedef enum {
     AC_UNDEFINED,
     AC_DESCRIBE,
     AC_ANNOUNCE,
@@ -60,15 +66,19 @@ typedef union {
 
 typedef struct {
     t_ac_rtsp_type msg_type;
-    char ip_port[66];
+    char uri[LIB_HTTP_MAX_URL_SIZE];
     int number;
     t_ac_rtsp_body b;
 }t_ac_rtsp_msg;
 
-t_ac_rtsp_msg ao_cam_decode_req(const char* cam_message);
-t_ac_rtsp_msg ao_cam_decode_ans(t_ac_rtsp_type req_type, int req_number, const char* cam_message);
-const char* ao_cam_replace_addr(char* msg, size_t size, const char* ip_port);
-const char* ao_makeIPPort(char* buf, size_t size, const char* ip, int port);
+const char* ao_makeURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
+
+t_ac_rtsp_type ao_get_msg_type(const char* msg);
+int ao_get_msg_number(const char* msg);
+void ao_get_uri(char* uri, size_t size, const char* msg);
+void ao_cam_replace_uri(char* msg, size_t size, const char* new_uri);
+int ao_get_client_port(const char* msg);
+int ao_get_server_port(const char* msg);
 
 int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size);
 
