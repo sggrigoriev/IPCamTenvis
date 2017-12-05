@@ -61,11 +61,19 @@ static void shutdown_proc();
 
 #ifndef LOCAL_TEST
     static void* vc_thread(void* params);
-#else
+#elif defined(LOCAL_TEST) && !defined(PPC_LOCAL_TEST)
     static int vlc_connect();
     static void vlc_disconnect(int write_socket);
-    static const char* remote_ip(int sock, char* buf, size_t size);
 #endif
+#ifdef PPC_LOCAL_TEST
+    static char* ppc_ip = "rtsp://..."; /* Set IP before use! */
+    static int ppc_port = -1;           /* Set port before use! */
+
+    static int ppc_connect();
+    static void ppc_disconnect(int write_socket);
+#endif
+static const char* remote_ip(int sock, char* buf, size_t size);
+
 static void stop_streaming();
 static int video_server_connect();
 static void video_server_diconnect(int write_socket);
@@ -230,14 +238,22 @@ static void stop_streaming() {
 
 static int video_server_connect() {
 #ifdef LOCAL_TEST
-    return vlc_connect();
+    #ifdef PPC_LOCAL_TEST
+        return ppc_connect();
+    #else
+        return vlc_connect();
+    #endif
 #endif
 /* Here starts the correct connection to vidoe server */
     return -1;
 }
 static void video_server_diconnect(int write_socket) {
 #ifdef LOCAL_TEST
-    vlc_disconnect(write_socket);
+    #ifdef PPC_LOCAL_TEST
+        ppc_disconnect(write_socket);
+    #else
+        vlc_disconnect(write_socket);
+    #endif
 #endif
 }
 static int cam_connect() {
@@ -247,7 +263,7 @@ static void cam_disconnect(int sock) {
     if(sock >= 0) close(sock);
 }
 
-#ifdef LOCAL_TEST
+#if defined(LOCAL_TEST) && !defined(PPC_LOCAL_TEST)
 static int vlc_connect(){
     server_socket = lib_tcp_get_server_socket(DEFAULT_LOCAL_AGENT_PORT);
     if(server_socket < 0) {
@@ -273,6 +289,28 @@ static void vlc_disconnect(int write_socket) {
         server_socket = -1;
     }
 }
+#endif
+
+#ifdef PPC_LOCAL_TEST
+static int ppc_connect() {
+    int conn_socket;
+
+    if(conn_socket = ac_tcp_client_connect(ppc_ip, ppc_port), conn_socket < 0) return -1;
+
+    char buf[INET6_ADDRSTRLEN+1];
+    ag_saveClientIP(remote_ip(conn_socket, buf, sizeof(buf)));
+    return conn_socket;
+
+}
+static void ppc_disconnect(int write_socket) {
+    if(write_socket >=0) close(write_socket);
+    if(server_socket >= 0) {
+        close(server_socket);
+        server_socket = -1;
+    }
+}
+#endif
+
 static const char* remote_ip(int sock, char* buf, size_t size) {
     socklen_t len;
     struct sockaddr_storage addr;
@@ -287,7 +325,6 @@ static const char* remote_ip(int sock, char* buf, size_t size) {
     inet_ntop(AF_INET, &s->sin_addr, buf, size);
     return buf;
 }
-#endif
 
 static void say_cant_connect_to_vm() {
     pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
