@@ -76,6 +76,7 @@ void ac_close_cam_session();
 int ac_req_cam_options(char* head, size_t h_size, char* body, size_t b_size);
 int ac_req_cam_setup(char* head, size_t h_size, char* body, size_t b_size, int cient_port);
 int ac_req_cam_play(char* head, size_t h_size, char* body, size_t b_size);
+int ac_req_cam_teardown(char* head, size_t h_size, char* body, size_t b_size);
 
 /* [login:password@]ip:port/resolution/ */
 const char* ao_makeCamURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);

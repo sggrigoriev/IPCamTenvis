@@ -297,4 +297,16 @@ int ac_req_cam_play(char* head, size_t h_size, char* body, size_t b_size) {
 on_error:
     ERR_REPORT;
 }
+int ac_req_cam_teardown(char* head, size_t h_size, char* body, size_t b_size) {
+    CURLcode res = CURLE_OK;
+
+    if (res = curl_easy_setopt(curl, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_TEARDOWN), res != CURLE_OK) return res;
+    res = curl_easy_perform(curl);
+    if (res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp), res != CURLE_OK) return res;
+
+    copy_result(cam, head, h_size, body, b_size);
+    return 1;
+on_error:
+    ERR_REPORT;
+}
 
