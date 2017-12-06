@@ -41,9 +41,6 @@
 #define AO_PORT_DELIM       ':'
 #define AO_DELIMS           " \r\n"
 
-#define AO_LOW_RES          "11"
-#define AO_HI_RES           "12"
-
 typedef struct {
     int found;
     unsigned int start;
@@ -67,37 +64,6 @@ static int max(int a, int b);
 static int min(int a, int b);
 static int get_min(int a, int b);
 
-/* [login:password@]ip:port/resolution/ */
-const char* ao_makeURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution) {
-    char s_port[20];
-    sprintf(s_port, "%d", port);
-
-    if(strlen(login) && strlen(pwd)) {
-        strcpy(uri, login);
-        strcat(uri, ":");
-        strcat(uri, pwd);
-        strcat(uri, "@");
-        strcat(uri, ip);
-    }
-    else {
-        strcpy(uri, ip);
-    }
-    strcat(uri, ":");
-    strcat(uri, s_port);
-    strcat(uri, "/");
-    switch (resolution) {
-        case AO_RES_LO:
-            strcat(uri, AO_LOW_RES);
-            break;
-        case AO_RES_HI:
-            strcat(uri, AO_HI_RES);
-            break;
-        default:
-            break;
-    }
-    strcat(uri, "/");
-    return uri;
-}
 void ao_get_uri(char* uri, size_t size, const char* msg) {
     uri[0] = '\0';
     t_ao_pos pos = findURI(msg);

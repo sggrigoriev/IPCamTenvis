@@ -24,6 +24,7 @@
 #include <ag_converter/ao_cma_cam.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ag_cam_io/ac_rtsp.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
@@ -44,13 +45,6 @@
  */
 #define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
-typedef enum {
-    AT_UNRECOGNIZE,
-    AT_CONTINUE,
-    AT_QUIT,
-    AT_ERROR
-} t_process_msg_rc;
-
 static pthread_t id;
 static pthread_attr_t attr;
 
@@ -66,7 +60,7 @@ static void shutdown_proc();
     static void vlc_disconnect(int write_socket);
 #endif
 #ifdef PPC_LOCAL_TEST
-    static char* ppc_ip = "rtsp://..."; /* Set IP before use! */
+    static char* ppc_ip = "ххх.ххх..."; /* Set IP before use! */
     static int ppc_port = -1;           /* Set port before use! */
 
     static int ppc_connect();

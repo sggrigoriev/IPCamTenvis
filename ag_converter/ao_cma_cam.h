@@ -25,6 +25,7 @@
 
 #include <stddef.h>
 
+//#include "ac_rtsp.h"
 #include "ao_cmd_data.h"
 
 typedef enum {
@@ -32,46 +33,6 @@ typedef enum {
     AO_RES_LO,
     AO_RES_HI
 } t_ao_cam_res;
-
-typedef enum {
-    AC_UNDEFINED,
-    AC_DESCRIBE,
-    AC_ANNOUNCE,
-    AC_SETUP,
-    AC_PLAY,
-    AC_TEARDOWN,
-} t_ac_rtsp_type;
-
-typedef struct {
-    int video_tracks_number;
-} t_ac_rtsp_describe;
-typedef struct {
-    int video_track_number;
-} t_ac_rtsp_announce;
-typedef struct {
-    int track_number;
-    int client_port;
-    int server_port;
-} t_ac_rtsp_setup;
-typedef struct {
-    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
-} t_ac_rtsp_play;
-
-typedef union {
-    t_ac_rtsp_describe describe;
-    t_ac_rtsp_announce announce;
-    t_ac_rtsp_setup setup;
-    t_ac_rtsp_play play;
-} t_ac_rtsp_body;
-
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    char uri[LIB_HTTP_MAX_URL_SIZE];
-    int number;
-    t_ac_rtsp_body b;
-}t_ac_rtsp_msg;
-
-const char* ao_makeURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
 
 t_ac_rtsp_type ao_get_msg_type(const char* msg);
 int ao_get_msg_number(const char* msg);
