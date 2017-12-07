@@ -82,7 +82,6 @@ static unsigned int log_rec_amt;
 static log_level_t  log_level;
 
 static unsigned int proxy_port;
-static char         proxyID[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 
 static unsigned int queue_rec_amt;
 static unsigned int agent_device_type;
@@ -97,6 +96,9 @@ static unsigned int streaming_buffer_size;
 static t_ao_cam_res ipcam_resolution;
 static char         cam_login[129];
 static char         cam_password[129];
+
+static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
+static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 
 /****************************************************
  * Non- configurable but saved & updates persistent params
@@ -206,11 +208,19 @@ time_t    ag_getSessionIdTO() {        /* TO to wait session info form cloud */
     return 1;
 }
 
-void ag_saveProxyID(const char* proxy_id) {
-    strncpy(proxyID, proxy_id, sizeof(proxyID)-1);
+void ag_saveProxyAuthToken(const char* token) {
+    if(token) strncpy(proxy_auth_token, token, sizeof(proxy_auth_token));
+}
+const char* ag_getProxyAuthToken() {
+    return proxy_auth_token;
+}
+
+
+void ag_saveProxyID(const char* proxyID) {
+    strncpy(proxy_id, proxy_id, sizeof(proxy_id)-1);
 }
 const char* ag_getProxyID() {
-    return proxyID;
+    return proxy_id;
 }
 /**************************************************************************************************************************
     Thread-protected functions

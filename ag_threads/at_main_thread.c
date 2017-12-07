@@ -88,13 +88,6 @@ void at_main_thread() {
             case AQ_FromCamControl:
                 pu_log(LL_ERROR, "%s: %s Camera control is not omplemented yet", AT_THREAD_NAME, mt_msg);
                 break;
-            case AQ_FromVideoMgr:
-                while(pu_queue_pop(from_video_mgr, mt_msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from the Video Manager %s", AT_THREAD_NAME, mt_msg);
-                    pu_queue_push(to_proxy, mt_msg, strlen(mt_msg)+1);
-                    len = sizeof(mt_msg);
-                }
-                break;
             case AQ_Timeout:
                 break;
             case AQ_STOP:
@@ -124,12 +117,11 @@ static int main_thread_startup() {
     to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
 //    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
 //    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
-    from_video_mgr = aq_get_gueue(AQ_FromVideoMgr);      /* video manager -> main_thread */
+
     to_video_mgr = aq_get_gueue(AQ_ToVideoMgr);        /* main_thread -> video manager */
 
     events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
     events = pu_add_queue_event(events, AQ_FromCamControl);
-    events = pu_add_queue_event(events, AQ_FromVideoMgr);
 
 /* Threads start */
     if(!at_start_proxy_rw()) {
@@ -138,7 +130,9 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "PROXY_RW");
 
-    if(!at_start_video_mgr()) {
+/* should be moved on online proxy status processing! */
+/* NB! add auth string sending! */
+    if(!at_start_video_mgr(NULL, -1, NULL, ag_getProxyID(), ag_getProxyAuthToken())) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "VIDEO_MANAGER", strerror(errno));
         return 0;
     }

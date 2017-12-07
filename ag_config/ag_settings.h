@@ -65,8 +65,11 @@ time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation f
 time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
 time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
 
-void ag_saveProxyID(const char* proxy_id);
+void ag_saveProxyID(const char* proxyID);
 const char* ag_getProxyID();
+
+void ag_saveProxyAuthToken(const char* token);
+const char* ag_getProxyAuthToken();
 /**************************************************************************************************************************
     Thread-protected functions
 */

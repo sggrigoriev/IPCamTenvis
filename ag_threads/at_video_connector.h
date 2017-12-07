@@ -38,8 +38,4 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
  */
 int at_stop_video_connector();
 
-#ifdef LOCAL_TEST
-    void* vc_thread(void* params);
-#endif
-
 #endif /* IPCAMTENVIS_AT_VIDEO_CONNECTOR_H */

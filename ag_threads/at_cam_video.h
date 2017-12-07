@@ -29,7 +29,7 @@
  * @param params - camera start parameters
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_mgr();
+int at_start_video_mgr(const char* host, int port, const char* session_id, const char* proxy_id, const char* proxy_auth);
 /*****************************************************
  * Stop video translation
  * @param params - camera stop parameters

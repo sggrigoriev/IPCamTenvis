@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 90)
 set(GCC_STANDARD $ENV{STANDARD})
 
 #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
-add_definitions( -DPPC_LOCAL_TEST)
+add_definitions( -DLOCAL_TEST)
 
 #PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")
@@ -16,6 +16,7 @@ set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../../Presto_new/lib)
 set(REQUIRED_LIBRARIES
         m
         pthread
+        nopoll
         curl
 )
 
@@ -36,6 +37,7 @@ include_directories(
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
+        /usr/local/include/nopoll
 )
 
 #Agent
@@ -71,6 +73,8 @@ file (GLOB SOURCE_FILES_LOCAL_TEST
         ag_threads/at_cam_video_read.c
         ag_threads/at_cam_video_write.c
         ag_threads/at_video_connector.c
+        ag_threads/at_cam_video.c
+        ag_threads/at_ws.c
         ag_queues/*.c
         ag_ring_buffer/ab_ring_bufer.c
         ${PROXY_LIBS_PATH}/pc_config/pc_config.c

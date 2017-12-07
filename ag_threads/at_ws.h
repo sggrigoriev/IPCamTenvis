@@ -16,19 +16,16 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
+ Created by gsg on 07/12/17.
 */
 
-#include "ao_cmd_cloud.h"
+#ifndef IPCAMTENVIS_AT_WS_H
+#define IPCAMTENVIS_AT_WS_H
 
-t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
-    return AO_UNDEF;
-}
+int start_ws(const char *host, int port ,const char *path, const char *session_id);
 
-const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size) {
-    return NULL;
-}
+int is_ws_run();
 
-t_ao_msg_type ao_agent_decode(const char* msg, t_ao_msg* data) {
-    return AO_UNDEF;
-}
+void stop_ws();
+
+#endif /* IPCAMTENVIS_AT_WS_H */

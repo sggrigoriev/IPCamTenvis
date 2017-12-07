@@ -34,6 +34,7 @@ typedef enum {
     AO_UNDEF,                       /* Can't understand the command */
 /*------ To Agent from Cloud/Proxy */
     AO_IN_PROXY_ID,              /* Proxy device ID */
+    AO_IN_PROXY_AUTH,
     AO_IN_CONNECTION_STATE,      /* Off line or on line */
 
     AO_IN_VIDEO_PARAMS,          /* Video-server connection parameters */
@@ -57,6 +58,11 @@ typedef struct{
     char proxy_device_id[LIB_HTTP_DEVICE_ID_SIZE];
 } t_ao_in_proxy_id;
 
+/* AO_IN_PROXY_AUTH */
+typedef struct{
+    t_ao_msg_type   msg_type;
+    char            proxy_auth[LIB_HTTP_AUTHENTICATION_STRING_SIZE];
+} t_ao_in_proxy_auth;
 /* AO_IN_CONNECTION_STATE */
 typedef struct {
     t_ao_msg_type    msg_type;
@@ -129,6 +135,7 @@ typedef struct {
 typedef union {
     t_ao_msg_type           command_type;
     t_ao_in_proxy_id            in_proxy_id;
+    t_ao_in_proxy_auth          in_proxy_auth;
     t_ao_in_connection_state    in_connection_state;
 
     t_ao_in_video_params        in_video_params;
