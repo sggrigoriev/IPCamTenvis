@@ -22,7 +22,7 @@
 #ifndef IPCAMTENVIS_AT_WS_H
 #define IPCAMTENVIS_AT_WS_H
 
-int start_ws(const char *host, int port ,const char *path, const char *session_id);
+int start_ws(const char *host, int port, const char *path, const char *session_id);
 
 int is_ws_run();
 

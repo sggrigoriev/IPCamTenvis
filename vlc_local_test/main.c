@@ -32,9 +32,6 @@ char session_id[500] = {0};
 char proxy_id[500] = {0};
 char proxy_auth[500] = {0};
 
-static pu_queue_t* from_ws;
-static pu_queue_event_t events;
-
 static void get_params(int argc, char* argv[]) {
     if(argc != 6) {
         printf("Usage: host port session_id proxy_id proxy_auth.");
@@ -62,10 +59,6 @@ int main(int argc, char* argv[]) {
     if(!ag_load_config(ag_getCfgFileName())) exit(-1);    /* Run w/o input parameters */
 
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
-
-    aq_init_queues();
-    from_ws = aq_get_gueue(AQ_FromWS);
-    events = pu_add_queue_event(pu_create_event_set(), AQ_FromWS);
 
     pu_log(LL_INFO, "Video test for video manager ");
 
