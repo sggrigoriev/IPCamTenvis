@@ -28,6 +28,10 @@
 #ifndef IPCAMTENVIS_AC_RTSP_H
 #define IPCAMTENVIS_AC_RTSP_H
 
+typedef enum {
+    AC_CAMERA,
+    AC_WOWZA
+} t_ac_rtsp_device;
 
 typedef enum {
     AC_UNDEFINED,
@@ -70,15 +74,25 @@ typedef struct {
 int ac_rtsp_init();
 void ac_rtsp_down();
 
-int ac_open_cam_session(const char* cam_uri);
-void ac_close_cam_session();
+int ac_open_session(t_ac_rtsp_device device_type, const char* url);
+void ac_close_session(t_ac_rtsp_device device_type);
+int ac_req_options(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
+int ac_req_setup(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size, int cient_port);
+int ac_req_play(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
+int ac_req_teardown(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
 
-int ac_req_cam_options(char* head, size_t h_size, char* body, size_t b_size);
-int ac_req_cam_setup(char* head, size_t h_size, char* body, size_t b_size, int cient_port);
-int ac_req_cam_play(char* head, size_t h_size, char* body, size_t b_size);
-int ac_req_cam_teardown(char* head, size_t h_size, char* body, size_t b_size);
+
+int ac_req_cam_describe(char* head, size_t h_size, char* body, size_t b_size);
 
 /* [login:password@]ip:port/resolution/ */
-const char* ao_makeCamURI(char *uri, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
+const char* ac_makeCamURL(char *url, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
+
+/******************************************** Video Server part *******************************************************/
+
+int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char* body, size_t b_size);
+int ac_req_vs_announce2(char* head, size_t h_size, char* body, size_t b_size);
+/* <vs_url>:<port>/ppcvideoserver/<vs_session_id> */
+const char* ac_makeVSURL(char *url, size_t size, const char* vs_url, int port, const char* vs_session_id);
+
 
 #endif /* IPCAMTENVIS_AC_RTSP_H */

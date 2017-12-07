@@ -30,7 +30,7 @@
  * @param params - camera start parameters
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_connector();
+int at_start_video_connector(const char* host, int port, const char* session_id);
 /*****************************************************
  * Stop video translation
  * @param params - camera stop parameters

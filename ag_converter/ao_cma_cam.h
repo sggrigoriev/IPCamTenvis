@@ -34,7 +34,9 @@ typedef enum {
     AO_RES_HI
 } t_ao_cam_res;
 
-t_ac_rtsp_type ao_get_msg_type(const char* msg);
+
+
+int ao_get_msg_type(const char* msg);
 int ao_get_msg_number(const char* msg);
 void ao_get_uri(char* uri, size_t size, const char* msg);
 void ao_cam_replace_uri(char* msg, size_t size, const char* new_uri);

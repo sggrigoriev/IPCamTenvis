@@ -262,10 +262,14 @@ static int processSessionIdAwaiting(const char* in, char* out, size_t size) {
         case AO_IN_STREAM_SESS_DETAILS:  /* Cloud provides stream session details */
             session_id_to_up = 0;   /* Dpop timeout - got the reapond */
             ag_saveStreamDetails(data.in_stream_sess_details);
-        case AO_CAM_DISCONNECTED:   /* Reconnection case */
-            at_start_video_connector();     /* start VC to connect */
+        case AO_CAM_DISCONNECTED: {  /* Reconnection case */
+            char host[5000] = {0};
+            int port;
+            char session[1000] = {0};
+            at_start_video_connector(host, port, session);     /* start VC to connect */
             own_status = AT_CONNECTING;
             pu_log(LL_INFO, "%s %s - Got session details, start connection process", AT_THREAD_NAME, in);
+        }
             break;
         default:
             pu_log(LL_ERROR, "%s %s - Can't process the message in SessionIdAwaiting state. Session details expected", AT_THREAD_NAME, in);

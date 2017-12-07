@@ -6,8 +6,7 @@ set(CMAKE_C_STANDARD 90)
 set(GCC_STANDARD $ENV{STANDARD})
 
 #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
-add_definitions( -DLOCAL_TEST)
-add_definitions( -DPPC_LOCAL_TEST)          # NB! Will not work w/o LOCAL_TEST DEFINED!!!
+add_definitions( -DPPC_LOCAL_TEST)
 
 #PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")

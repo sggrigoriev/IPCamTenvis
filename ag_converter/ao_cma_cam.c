@@ -23,6 +23,8 @@
 
 #include "pu_logger.h"
 
+#include "ac_rtsp.h"
+
 #include "ao_cma_cam.h"
 
 #define AO_RTSP_DESCRIBE    "DESCRIBE"
@@ -92,7 +94,7 @@ void ao_cam_replace_uri(char* msg, size_t size, const char* new_uri) {
     free(str);
 }
 
-t_ac_rtsp_type ao_get_msg_type(const char* msg) {
+int ao_get_msg_type(const char* msg) {
     if(strNCstr(msg, AO_RTSP_DESCRIBE)) return AC_DESCRIBE;
     if(strNCstr(msg, AO_RTSP_ANNOUNCE)) return AC_ANNOUNCE;
     if(strNCstr(msg, AO_RTSP_SETUP)) return AC_SETUP;

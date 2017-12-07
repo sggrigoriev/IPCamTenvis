@@ -72,4 +72,6 @@
 
 #define DEFAULT_CAM_RSTP_SESSION_ID_LEN  20
 
+#define DEFAULT_PPC_VIDEO_FOLDER        "ppcvideoserver"
+
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */
