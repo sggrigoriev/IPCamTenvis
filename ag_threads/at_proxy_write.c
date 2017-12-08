@@ -38,10 +38,8 @@
 /*********************************************************************
  * Local data
  */
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
-
-static volatile int stop;   /* one stop for write and read agent threads */
 
 static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* buffer for write into the socket */
 
@@ -49,23 +47,6 @@ static int write_socket;                /* writable socket */
 static pu_queue_t* from_main;           /* queue - the source of info to be written into the socket */
 
 /* Thread function: get info from main thread, write it into the socket */
-static void* proxy_write(void* params);
-
-int at_start_proxy_write(int socket) {
-    write_socket = socket;
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &proxy_write, NULL)) return 0;
-    return 1;
-}
-
-void at_stop_proxy_write() {
-    void *ret;
-    pthread_join(id, &ret);
-    pthread_attr_destroy(&attr);
-
-    at_set_stop_proxy_rw_children();
-}
-
 static void* proxy_write(void* params) {
     from_main = aq_get_gueue(AQ_ToProxyQueue);
 
@@ -112,4 +93,26 @@ static void* proxy_write(void* params) {
     lib_tcp_client_close(write_socket);
     pthread_exit(NULL);
 }
+static int is_proxy_write_run() {
+    return id > 0;
+}
+
+int at_start_proxy_write(int socket) {
+    if(is_proxy_write_run()) return 1;
+    write_socket = socket;
+    if(pthread_attr_init(&attr)) return 0;
+    if(pthread_create(&id, &attr, &proxy_write, NULL)) return 0;
+    return 1;
+}
+
+void at_stop_proxy_write() {
+    void *ret;
+    if(!is_proxy_write_run()) return;
+    pthread_join(id, &ret);
+    pthread_attr_destroy(&attr);
+
+    at_set_stop_proxy_rw_children();
+}
+
+
 

@@ -38,4 +38,5 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
  */
 int at_stop_video_connector();
 
+int is_video_connector_run();
 #endif /* IPCAMTENVIS_AT_VIDEO_CONNECTOR_H */

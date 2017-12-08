@@ -36,10 +36,10 @@
 /************************************************************************************
  * Local data
  */
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
 
-static volatile int stop;       /* Thread stop flag */
+static volatile int stop = 1;           /* Thread stop flag */
 
 static pu_queue_event_t events;         /* the thread events set */
 static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
@@ -55,14 +55,16 @@ static void* cam_control(void* params);
  * Public functione definition
  */
 int at_start_cam_control() {
+    if(is_cam_control_run()) return 1;
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &cam_control, NULL)) return 0;
-     return 1;
+    stop = 0;
+    return 1;
 }
 
 void at_stop_cam_control() {
     void *ret;
-
+    if(!is_cam_control_run()) return;
     at_set_stop_cam_control();
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
@@ -70,6 +72,10 @@ void at_stop_cam_control() {
 
 void at_set_stop_cam_control() {
     stop = 1;
+}
+
+int is_cam_control_run() {
+    return id > 0;
 }
 /***********************************************************/
 static void* cam_control(void* params) {

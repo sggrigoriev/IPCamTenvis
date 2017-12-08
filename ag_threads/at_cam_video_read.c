@@ -39,13 +39,12 @@
 /********************************************
  * Local data
  */
-static volatile int stop = 0;
-static volatile int stopped = 1;
+static volatile int stop = 1;
 
 static int sock;
 static struct sockaddr_in sin={0};
 
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
 
 static void* the_thread(void* params);
@@ -55,29 +54,30 @@ static void* the_thread(void* params);
  */
 
 int at_start_video_read() {
+    if(at_is_video_read_run()) return 1;
     if((sock = ac_udp_client_connection(ag_getCamIP(), ag_getServerPort(), &sin, 0)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &the_thread, NULL)) return 0;
-    stopped = 0;
+    stop = 0;
     return 1;
 }
 
 void at_stop_video_read() {
     void *ret;
 
-    if(stopped) return;
+    if(!at_is_video_read_run()) return;
 
     at_set_stop_video_read();
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
-    stopped = 1;
+    stop = 1;
 }
 
 int at_is_video_read_run() {
-    return !stopped;
+    return id > 0;
 }
 
 void at_set_stop_video_read() {
@@ -122,7 +122,6 @@ static void* the_thread(void* params) {
     on_stop:
         ac_close_connection(sock);
         sock = -1;
-        stopped = 1;
         pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
         pthread_exit(NULL);
 }

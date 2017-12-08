@@ -29,7 +29,7 @@
  * @param params - camera start parameters
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_mgr(const char* host, int port, const char* session_id, const char* proxy_id, const char* proxy_auth);
+int at_start_video_mgr();
 /*****************************************************
  * Stop video translation
  * @param params - camera stop parameters
@@ -40,6 +40,8 @@ int at_stop_video_mgr();
  * Set stop flag to 1
  */
 void at_set_stop_video_mgr();
+
+int is_video_mgr_run();
 
 
 #endif /* IPCAMTENVIS_AT_CAM_VIDEO_H */

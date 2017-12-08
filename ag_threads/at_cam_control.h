@@ -39,5 +39,7 @@ void at_stop_cam_control();
  */
 void at_set_stop_cam_control();
 
+int is_cam_control_run();
+
 
 #endif /* IPCAMTENVIS_AT_CAM_CONTROL_H */

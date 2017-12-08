@@ -51,10 +51,10 @@ typedef enum {
     AT_STATE_ON_ERROR
 } t_at_states;
 
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
 
-static volatile int stop;       /* Thread stop flag */
+static volatile int stop = 1;       /* Thread stop flag */
 
 /***********
  * Local connection data. To be replaced later
@@ -271,6 +271,11 @@ on_reconnect:
  * Global functions definition
  */
 int at_start_video_connector(const char* host, int port, const char* session_id) {
+    if(is_video_connector_run()) {
+        pu_log(LL_WARNING, "%s: Vidoe connector already run. Start ignored", __FUNCTION__);
+        return 1;
+    }
+
     pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, video_port, vs_session_id);
     strncpy(video_host, host, sizeof(video_host));
     strncpy(vs_session_id, session_id, sizeof(vs_session_id));
@@ -290,12 +295,20 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
 }
 int at_stop_video_connector() {
     void* ret;
+    if(!is_video_connector_run()) {
+        pu_log(LL_WARNING, "%s - %s: The tread already stop. Stop ignored", AT_THREAD_NAME, __FUNCTION__);
+        return 1;
+    }
 
     stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
 
     return 1;
+}
+
+int is_video_connector_run() {
+    return !stop;
 }
 
 

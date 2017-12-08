@@ -35,7 +35,7 @@
 /***************************************************************************************************
  * Local data
  */
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
 
 static char out_buf[LIB_HTTP_MAX_MSG_SIZE] = {0};   /* buffer to receive the data */
@@ -44,24 +44,6 @@ int read_socket;                            /* socket to read from  */
 static pu_queue_t* from_proxy;             /* main queue pointer - local transport */
 
 /* Thread function. Reads info, assemble it to the buffer and forward to the main thread by queue */
-static void* proxy_read(void* params);
-
-int at_start_proxy_read(int socket) {
-    read_socket = socket;
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &proxy_read, &read_socket)) return 0;
-    return 1;
-}
-
-void at_stop_proxy_read() {
-    void *ret;
-
-    pthread_join(id, &ret);
-    pthread_attr_destroy(&attr);
-
-    at_set_stop_proxy_rw_children();
-}
-
 static void* proxy_read(void* params) {
 
     from_proxy = aq_get_gueue(AQ_FromProxyQueue);
@@ -113,3 +95,26 @@ static void* proxy_read(void* params) {
     pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
+
+static int is_proxy_read_run() {
+    return id > 0;
+}
+
+int at_start_proxy_read(int socket) {
+    if(is_proxy_read_run()) return 1;
+    read_socket = socket;
+    if(pthread_attr_init(&attr)) return 0;
+    if(pthread_create(&id, &attr, &proxy_read, &read_socket)) return 0;
+    return 1;
+}
+
+void at_stop_proxy_read() {
+    void *ret;
+    if(!is_proxy_read_run()) return;
+    pthread_join(id, &ret);
+    pthread_attr_destroy(&attr);
+
+    at_set_stop_proxy_rw_children();
+}
+
+

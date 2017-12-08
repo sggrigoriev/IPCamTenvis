@@ -40,16 +40,18 @@
  * Local data
  */
 
-static pthread_t id;
+static pthread_t id = 0;
 static pthread_attr_t attr;
 
-static volatile int stop;       /* Thread stop flag */
+static volatile int stop = 1;       /* Thread stop flag */
 
 typedef enum {
+    AT_ERROR,
     AT_INITIAL,                 /* No connection info */
     AT_GOT_PROXY_INFO,              /* Got proxy/auth info - could start params */
     AT_GOT_VIDEO_CONN_INFO,         /* Got parameters! */
-    AT_READY
+    AT_READY,
+    AT_PLAY
 } t_mgr_state;
 
 static t_mgr_state own_status = AT_INITIAL;
@@ -64,16 +66,31 @@ static char vs_session_id[100] = {0};
 /*******************************************************************
 * Local functions implementation
 */
-
-/* Get video params params from cloud: 3 steps from https://presence.atlassian.net/wiki/spaces/EM/pages/164823041/Setup+IP+Camera+connection */
-static int get_vs_conn_params(const char* cloud_conn_sring, char* video_host, size_t vh_size, int* video_port, char* video_session, size_t vs_size) {
-    return 1;
+static t_mgr_state start_ws_thread() {
+    if(!start_ws(vs_host, vs_port, "/streaming/camera", vs_session_id)) {
+        pu_log(LL_ERROR, "%s - %s: Error start WEB socket connector, exit.", AT_THREAD_NAME, __FUNCTION__);
+        return AT_ERROR;
+    }
+    return AT_READY;
 }
-static void process_agent_message(const char* msg) {
+static t_mgr_state start_vc_therad() {
+    if(own_status !AT_READY)
+    if (!at_start_video_connector(vs_host, vs_port, vs_session_id)) {
+        pu_log(LL_ERROR, "%s - %s: Error start video connector, exit.", AT_THREAD_NAME, __FUNCTION__);
+        return AT_ERROR;
+    }
+    return AT_PLAY;
+}
+/* Get video params params from cloud: 3 steps from https://presence.atlassian.net/wiki/spaces/EM/pages/164823041/Setup+IP+Camera+connection */
+static t_mgr_state get_vs_conn_params(const char* cloud_conn_sring, char* video_host, size_t vh_size, int* video_port, char* video_session, size_t vs_size) {
+    /* should be AT_GOT_VIDEO_CONN_INFO */
+    return AT_ERROR;
+}
+static t_mgr_state process_agent_message(const char* msg) {
     t_ao_msg data;
     if(own_status != AT_INITIAL) {
         pu_log(LL_ERROR, "%s - %s: Bad status = %d! Sould be %d", AT_THREAD_NAME, __FUNCTION__, own_status, AT_INITIAL);
-        return;
+        return AT_ERROR;
     }
     t_ao_msg_type rc = ao_agent_decode(msg, &data);
     switch (rc) {
@@ -87,89 +104,59 @@ static void process_agent_message(const char* msg) {
             pu_log(LL_ERROR, "%s: Unrecognized message type %d from Agent. Ignored", AT_THREAD_NAME, rc);
             break;
     }
-    if(strlen(ag_getProxyID()) && strlen(ag_getProxyAuthToken())) own_status = AT_GOT_PROXY_INFO;
+    if(strlen(ag_getProxyID()) && strlen(ag_getProxyAuthToken())) return AT_GOT_PROXY_INFO;
+    return own_status;
 }
-static void process_ws_message(const char* msg) {
+static t_mgr_state process_ws_message(const char* msg) {
     if(own_status != AT_READY) {
         pu_log(LL_ERROR, "%s - %s: Bad status = %d! Sould be %d", AT_THREAD_NAME, __FUNCTION__, own_status, AT_READY);
-        return;
+        return AT_ERROR;
     }
-    if(!strcmp(msg, DEFAULT_WC_START_PLAY)) {
-        if(!at_start_video_connector(vs_host, vs_port, vs_session_id)) {
-            pu_log(LL_ERROR, "%s - %s: Error start video connector, exit.", AT_THREAD_NAME, __FUNCTION__);
-            stop = 1;
-        }
-        return;
-    }
+    if(!strcmp(msg, DEFAULT_WC_START_PLAY)) return start_vc_therad();
+
     if(!strcmp(msg, DEFAULT_WC_STOP_PLAY)) {
         at_stop_video_connector();
         pu_log(LL_INFO, "%s: Video connector stop", AT_THREAD_NAME);
+        return AT_READY;
     }
-    return;
+    return own_status;
 }
-#ifdef LOCAL_TEST
-static void main_thread()
-#else
-static void* main_thread(void* params)
-#endif
-{
-    stop = 0;
+
+static void* main_thread(void* params) {
 
     unsigned int events_timeout = 1; /* Wait 1 second - timeouts for respond from cloud should be enabled! */
-    pu_queue_event_t events;
     pu_queue_msg_t msg[LIB_HTTP_MAX_MSG_SIZE] = {0};    /* The only main thread's buffer! */
+
+    pu_queue_event_t events;
+    events = pu_add_queue_event(pu_create_event_set(), AQ_FromWS);
+    events = pu_add_queue_event(events, AQ_ToVideoMgr);
+
     from_agent = aq_get_gueue(AQ_ToVideoMgr);
     from_ws = aq_get_gueue(AQ_FromWS);
-    events = pu_add_queue_event(pu_create_event_set(), AQ_FromWS);
-#ifndef LOCAL_TEST
-    events = pu_add_queue_event(events, AQ_ToVideoMgr);
-#endif
 
-#ifdef LOCAL_TEST
-    own_status = AT_GOT_VIDEO_CONN_INFO;
-#endif
+    own_status = AT_INITIAL;
 
     while(!stop) {
         size_t len = sizeof(msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
 
         switch (ev=pu_wait_for_queues(events, events_timeout)) {
-            case AQ_ToVideoMgr:
+            case AQ_ToVideoMgr:     /* Messages from Agent Main */
                 while(pu_queue_pop(from_agent, msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Agent main %s", AT_THREAD_NAME, msg);
-                    process_agent_message(msg);
+                    own_status = process_agent_message(msg);
                     len = sizeof(msg);
                 }
-#ifndef LOCAL_TEST
-                if(own_status == AT_GOT_PROXY_INFO) {
-                    if(!get_vs_conn_params(DEFAULT_CLOUD_CONN_STRING, vs_host, sizeof(vs_host), &vs_port, vs_session_id, sizeof(vs_session_id))) {
-                        stop = 1;
-                    }
-                    own_status = AT_GOT_VIDEO_CONN_INFO;
-                    if(!start_ws(vs_host, vs_port, "/streaming/camera", vs_session_id)) {
-                        stop = 1;
-                    }
-                    own_status = AT_READY;
-                }
-#endif
                 break;
             case AQ_FromWS:
                 while(pu_queue_pop(from_ws, msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Web socket thread %s", AT_THREAD_NAME, msg);
-                    process_ws_message(msg);
+                    own_status = process_ws_message(msg);
                     len = sizeof(msg);
                 }
                 break;
             case AQ_Timeout:
-#ifdef LOCAL_TEST
-                    if(own_status != AT_READY) {
-                        if (!start_ws(vs_host, vs_port, "/streaming/camera", vs_session_id)) {
-                            stop = 1;
-                        }
-                        own_status = AT_READY;
-                    }
- #endif
-                 break;
+                break;
             case AQ_STOP:
                 stop = 1;
                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
@@ -178,13 +165,36 @@ static void* main_thread(void* params)
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
                 break;
         }
+        switch(own_status) {        /* State machine */
+            case AT_GOT_PROXY_INFO:
+                own_status = get_vs_conn_params(DEFAULT_CLOUD_CONN_STRING, vs_host, sizeof(vs_host), &vs_port, vs_session_id, sizeof(vs_session_id)))
+                break;
+            case AT_GOT_VIDEO_CONN_INFO:
+                own_status = start_ws_thread(); /* -> READY */
+                break;
+            case AT_READY:
+                if(!is_ws_run()) {
+                    pu_log(LL_WARNING, "%s: Wideo socket tread restart", AT_THREAD_NAME);
+                    own_status = start_ws_thread();
+                }
+                break;
+            case AT_PLAY:
+                if(!is_ws_run()) {
+                    pu_log(LL_WARNING, "%s: Video connector thread restart", AT_THREAD_NAME);
+                    own_status = start_ws_thread();
+                }
+                break;
+            case AT_ERROR:
+                stop = 1;
+            default:
+                break;
+        }
+        break;
+
     }
 /* shutdown procedure */
     at_stop_video_connector();
     stop_ws();
-#ifdef LOCAL_TEST
-    return;
-#else
     pthread_exit(NULL);
 #endif
 }
@@ -193,23 +203,23 @@ static void* main_thread(void* params)
  * Public functions
  */
 
-int at_start_video_mgr(const char* host, int port, const char* session_id, const char* proxy_id, const char* proxy_auth) {
-    if(host) strncpy(vs_host, host, sizeof(vs_host)-1);
-    if(port >=0) vs_port = port;
-    if(session_id) strncpy(vs_session_id, session_id, sizeof(vs_session_id)-1);
-    if(proxy_id) ag_saveProxyID(proxy_id);
-    if(proxy_auth) ag_saveProxyAuthToken(proxy_auth);
-#ifdef LOCAL_TEST
-    main_thread();
-#else
+int at_start_video_mgr() {
+    if(is_video_mgr_run() ) {
+        pu_log(LL_WARNING, "%s - %s The thread is already runninng", AT_THREAD_NAME, __FUNCTION__);
+        return 1;
+    }
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &main_thread, NULL)) return 0;
-#endif
+
+    stop = 0;
     return 1;
 }
 int at_stop_video_mgr() {
     void* ret;
-
+    if(!is_video_mgr_run() ) {
+        pu_log(LL_WARNING, "%s - %s: The thread is already stop. Stop ignored", AT_THREAD_NAME, __FUNCTION__);
+        return 1;
+    }
     stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
@@ -219,4 +229,6 @@ int at_stop_video_mgr() {
 void at_set_stop_video_mgr() {
     stop = 1;
 }
-
+int is_video_mgr_run() {
+    return id > 0;
+}
