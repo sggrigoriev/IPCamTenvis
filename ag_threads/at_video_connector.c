@@ -271,7 +271,7 @@ on_reconnect:
  * Global functions definition
  */
 int at_start_video_connector(const char* host, int port, const char* session_id) {
-    pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, por = %d, vs_session_id = %s", host, video_port, vs_session_id);
+    pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, video_port, vs_session_id);
     strncpy(video_host, host, sizeof(video_host));
     strncpy(vs_session_id, session_id, sizeof(vs_session_id));
 

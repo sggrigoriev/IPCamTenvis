@@ -62,6 +62,8 @@ int main(int argc, char* argv[]) {
 
     pu_log(LL_INFO, "Video test for video manager ");
 
+    aq_init_queues();
+
     at_start_video_mgr(host, port, session_id, proxy_id, proxy_auth);
 
     pu_stop_logger();

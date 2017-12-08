@@ -140,6 +140,7 @@ static void* main_thread(void* params)
                     process_agent_message(msg);
                     len = sizeof(msg);
                 }
+#ifndef LOCAL_TEST
                 if(own_status == AT_GOT_PROXY_INFO) {
                     if(!get_vs_conn_params(DEFAULT_CLOUD_CONN_STRING, vs_host, sizeof(vs_host), &vs_port, vs_session_id, sizeof(vs_session_id))) {
                         stop = 1;
@@ -150,6 +151,7 @@ static void* main_thread(void* params)
                     }
                     own_status = AT_READY;
                 }
+#endif
                 break;
             case AQ_FromWS:
                 while(pu_queue_pop(from_ws, msg, &len)) {
@@ -160,10 +162,12 @@ static void* main_thread(void* params)
                 break;
             case AQ_Timeout:
 #ifdef LOCAL_TEST
-                    if(!start_ws(vs_host, vs_port, "/streaming/camera", vs_session_id)) {
-                        stop = 1;
+                    if(own_status != AT_READY) {
+                        if (!start_ws(vs_host, vs_port, "/streaming/camera", vs_session_id)) {
+                            stop = 1;
+                        }
+                        own_status = AT_READY;
                     }
-                    own_status = AT_READY;
  #endif
                  break;
             case AQ_STOP:
