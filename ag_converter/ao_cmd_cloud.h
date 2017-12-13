@@ -41,8 +41,6 @@ t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data);
  * @param msg_size - buffer size
  * @return - pointer to the buffer
  */
-const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size);
-
-t_ao_msg_type ao_agent_decode(const char* msg, t_ao_msg* data);
+const char* ao_cloud_encode(t_ao_msg data, char* cloud_message, size_t msg_size);
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

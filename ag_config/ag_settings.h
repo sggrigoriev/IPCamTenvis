@@ -70,15 +70,12 @@ const char* ag_getProxyID();
 
 void ag_saveProxyAuthToken(const char* token);
 const char* ag_getProxyAuthToken();
+
+void ag_saveMainURL(const char* mu);
+const char* ag_getMainURL();
 /**************************************************************************************************************************
     Thread-protected functions
 */
-const t_ao_in_video_params ag_getVideoConnectionData(); /* Return undefined message type if was not initiated */
-void ag_dropVideoConnectionData();
-void ag_saveVideoConnectionData(t_ao_in_video_params con_data);
-
-void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details);  /* Save stream session sent by cloud */
-void ag_dropStreamDetails();
 
 void ag_saveClientIP(const char* ip_address);
 const char* ag_getClientIP(char* buf, size_t size);

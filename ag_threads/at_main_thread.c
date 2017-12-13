@@ -21,6 +21,7 @@
 
 #include <memory.h>
 #include <errno.h>
+#include <ag_converter/ao_cmd_data.h>
 
 #include "pu_queue.h"
 #include "pu_logger.h"
@@ -28,21 +29,16 @@
 #include "aq_queues.h"
 #include "ag_settings.h"
 
+#include "ao_cmd_data.h"
+#include "ao_cmd_proxy.h"
+
 #include "at_proxy_rw.h"
-#include "ao_cmd_cloud.h"
 #include "at_cam_video.h"
 
 
 #include "at_main_thread.h"
 
 #define AT_THREAD_NAME  "IPCamTenvis"
-/****************************************************************************************
-    Local functione declaration
-*/
-static int main_thread_startup();
-static void main_thread_shutdown();
-static void process_proxy_message(char* msg);
-static void send_disconnect_to_video_mgr();
 
 /****************************************************************************************
     Main thread global variables
@@ -53,12 +49,87 @@ static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;            /* main_thread -> proxy_write */
 //static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
 //static pu_queue_t* to_cam_control;      /* main_thread -> cam_control */
-static pu_queue_t* from_video_mgr;      /* video manager -> main_thread */
 static pu_queue_t* to_video_mgr;        /* main_thread -> video manager */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
 static volatile int gw_is_online;       /* 1 if there is a connection to the cloud; 0 if not */
+
+static int video_on;                        /* 1 if video nmanager runs */
+
+/*****************************************************************************************
+    Local functions deinition
+*/
+static int main_thread_startup() {
+    gw_is_online = 0;       /* Initial state = off */
+/* Queues initiation */
+    aq_init_queues();
+
+    from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
+    to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
+//    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
+//    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
+
+    to_video_mgr = aq_get_gueue(AQ_ToVideoMgr);        /* main_thread -> video manager */
+
+    events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
+    events = pu_add_queue_event(events, AQ_FromCamControl);
+
+/* Threads start */
+    if(!at_start_proxy_rw()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "PROXY_RW", strerror(errno));
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "PROXY_RW");
+
+    return 1;
+}
+static void main_thread_shutdown() {
+    at_set_stop_proxy_rw();
+
+    if(is_video_mgr_run()) at_set_stop_video_mgr();
+
+    at_stop_proxy_rw();
+    at_stop_video_mgr();
+
+    aq_erase_queues();
+}
+static void process_proxy_message(char* msg) {
+    t_ao_msg data;
+    t_ao_msg_type msg_type;
+
+    switch(msg_type=ao_proxy_decode(msg, &data)) {
+        case AO_IN_PROXY_ID:                         /* Stay here for comatibility with M3 Agent */
+            break;
+        case AO_IN_CONNECTION_STATE:                 /* save proxy device ID & auth string*/
+            if(gw_is_online && data.in_connection_state.is_online) {
+                ag_saveProxyID(data.in_connection_state.proxy_device_id);
+                ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
+                ag_saveMainURL(data.in_connection_state.main_url);
+                if (!at_start_video_mgr()) {
+                    video_on = 0;
+                    pu_log(LL_ERROR, "%s: Video Manager start failed. No video - get clean-up your room!", AT_THREAD_NAME);
+                } else {
+                    video_on = 1;
+                }
+            }
+            else {  /* Proxy is ofline */
+                video_on = 0;
+                at_stop_video_mgr();
+                pu_log(LL_ERROR, "%s: Video Manager stop due to offline status", AT_THREAD_NAME);
+            }
+            break;
+        case AO_IN_PZT:
+            pu_log(LL_ERROR, "%s: %s PZ commands not implemented yet",AT_THREAD_NAME, msg);
+            break;
+        case AO_UNDEF:
+            pu_log(LL_ERROR, "%s: undefined message type from Proxy. Type = %d. Message ignored", AT_THREAD_NAME, msg_type);
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: undefined message type from Proxy. Type = %d. Message ignored", AT_THREAD_NAME, msg_type);
+            break;
+    }
+}
 
 /****************************************************************************************
     Global function definition
@@ -72,7 +143,7 @@ void at_main_thread() {
     }
 
     unsigned int events_timeout = 0; /* Wait until the end of univerce */
-
+    video_on = 0;
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
@@ -99,84 +170,13 @@ void at_main_thread() {
                 break;
 
         }
+        if(video_on && !is_video_mgr_run()) {
+            pu_log(LL_INFO, "%s Video Manager is off. Restart it.", AT_THREAD_NAME);
+            video_on = at_start_video_mgr();
+        }
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
-/*****************************************************************************************
-    Local functions deinition
-*/
 
-static int main_thread_startup() {
-    gw_is_online = 0;       /* Initial state = off */
-/* Queues initiation */
-    aq_init_queues();
-
-    from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
-    to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
-//    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
-//    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
-
-    to_video_mgr = aq_get_gueue(AQ_ToVideoMgr);        /* main_thread -> video manager */
-
-    events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
-    events = pu_add_queue_event(events, AQ_FromCamControl);
-
-/* Threads start */
-    if(!at_start_proxy_rw()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "PROXY_RW", strerror(errno));
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: started", "PROXY_RW");
-
-/* should be moved on online proxy status processing! */
-/* NB! add auth string sending! */
-    if(!at_start_video_mgr(NULL, -1, NULL, ag_getProxyID(), ag_getProxyAuthToken())) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "VIDEO_MANAGER", strerror(errno));
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: started", "VIDEO_MANAGERRR");
-
-    return 1;
-}
-static void main_thread_shutdown() {
-    at_set_stop_proxy_rw();
-    at_set_stop_video_mgr();
-
-    at_stop_proxy_rw();
-    at_stop_video_mgr();
-
-    aq_erase_queues();
-}
-static void process_proxy_message(char* msg) {
-    t_ao_msg data;
-    t_ao_msg_type msg_type;
-
-    switch(msg_type=ao_cloud_decode(msg, &data)) {
-        case AO_IN_PROXY_ID:                         /* Don't know waht to do with it */
-            ag_saveProxyID(data.in_proxy_id.proxy_device_id);
-            break;
-        case AO_IN_CONNECTION_STATE:                 /* reconnection case - someone should send to us new conn prams*/
-            if(gw_is_online && data.in_connection_state.is_online)
-                send_disconnect_to_video_mgr();             /* so we have to disconnect anyway */
-            break;
-        case AO_IN_VIDEO_PARAMS:        /* Video server connection parameters */
-        case AO_IN_START_STREAM_0:      /* Start connection */
-        case AO_IN_STREAM_SESS_DETAILS: /* Cloud provides session details */
-        case AO_IN_SS_TO_1_RESP:        /* Answer from cloud - they reflected the sccesful connection from Cam */
-        case AO_IN_SS_TO_0_RESP:        /* Answer from cloud - they reflected Cam vidoe disconnection from Wowza */
-            pu_queue_push(to_video_mgr, msg, strlen(msg)+1);
-            break;
-        case AO_IN_PZT:
-            pu_log(LL_ERROR, "%s: %s PZ commands not implemented yet",AT_THREAD_NAME, msg);
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: undefined message type from Proxy. Type = %d. Message ignored", AT_THREAD_NAME, msg_type);
-            break;
-    }
-}
-
-static void send_disconnect_to_video_mgr() {
-
-}

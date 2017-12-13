@@ -99,6 +99,7 @@ static char         cam_password[129];
 
 static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
+static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
 
 /****************************************************
  * Non- configurable but saved & updates persistent params
@@ -185,7 +186,7 @@ unsigned int    ag_getVideoChunksAmount() {
 t_ao_cam_res    ag_getCamResolution() {
     AGS_RET(DEFAULT_IPCAM_RESOLUTION, ipcam_resolution);
 }
-unsigned int   ag_getStreamBufferSize() {
+unsigned int    ag_getStreamBufferSize() {
     AGS_RET(DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, streaming_buffer_size);
 }
 const char*     ag_getCamLogin() {
@@ -195,19 +196,6 @@ const char*     ag_getCamPassword() {
     AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
 
-time_t    ag_getConnectRespTO() {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-    return 1;
-}
-time_t    ag_getDisconnectRespTO() {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-    return 1;
-}
-time_t    ag_getSessionIdTO() {        /* TO to wait session info form cloud */
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-    return 1;
-}
-
 void ag_saveProxyAuthToken(const char* token) {
     if(token) strncpy(proxy_auth_token, token, sizeof(proxy_auth_token));
 }
@@ -215,12 +203,18 @@ const char* ag_getProxyAuthToken() {
     return proxy_auth_token;
 }
 
-
 void ag_saveProxyID(const char* proxyID) {
-    strncpy(proxy_id, proxy_id, sizeof(proxy_id)-1);
+    strncpy(proxy_id, proxyID, sizeof(proxyID)-1);
 }
 const char* ag_getProxyID() {
     return proxy_id;
+}
+
+void ag_saveMainURL(const char* mu) {
+    strncpy(main_url, mu, sizeof(mu)-1);
+}
+const char* ag_getMainURL() {
+    return main_url;
 }
 /**************************************************************************************************************************
     Thread-protected functions
@@ -254,27 +248,6 @@ void ag_saveServerPort(int port) {
 int ag_getServerPort() {
     return server_port;
 }
-
-const t_ao_in_video_params ag_getVideoConnectionData() {
-    t_ao_in_video_params ret;
-    ret.msg_type = AO_UNDEF;
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-    return ret;
-}
-void ag_dropVideoConnectionData() {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-}
-void ag_saveVideoConnectionData(t_ao_in_video_params data) {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-}
-
-void ag_saveStreamDetails(t_ao_in_stream_sess_details stream_details) {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-}
-void ag_dropStreamDetails() {
-    pu_log(LL_ERROR, "%s: not implemented", __FUNCTION__);
-}
-
 
 int ag_load_config(const char* cfg_file_name) {
     cJSON* cfg = NULL;

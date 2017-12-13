@@ -16,17 +16,15 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
+ Created by gsg on 09/12/17.
+ Decode messages from Proxy process
 */
 
-#include "ao_cmd_cloud.h"
+#ifndef IPCAMTENVIS_AO_CMD_PROXY_H
+#define IPCAMTENVIS_AO_CMD_PROXY_H
 
-t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
-    return AO_UNDEF;
-}
+#include "ao_cmd_data.h"
 
-const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size) {
-    return NULL;
-}
+t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data);
 
-
+#endif /* IPCAMTENVIS_AO_CMD_PROXY_H */

@@ -16,17 +16,15 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
+ Created by gsg on 12/12/17.
+ Suppor all HTTP Cam's negotiations with the cloud
 */
 
-#include "ao_cmd_cloud.h"
+#ifndef IPCAMTENVIS_AC_CLOUD_H
+#define IPCAMTENVIS_AC_CLOUD_H
 
-t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
-    return AO_UNDEF;
-}
+#include <stdlib.h>
 
-const char* ao_cloud_encode(const t_ao_msg data, char* cloud_message, size_t msg_size) {
-    return NULL;
-}
+int ac_cloud_get_params(char* v_url, size_t v_size, int v_port, char* v_sess, size_t vs_size, char* w_url, size_t w_size, int w_port, char* w_sess, size_t ws_size);
 
-
+#endif /* IPCAMTENVIS_AC_CLOUD_H */

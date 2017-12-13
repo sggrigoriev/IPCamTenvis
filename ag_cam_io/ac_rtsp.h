@@ -22,11 +22,11 @@
  Contains RTSP protocol support
 */
 
-#include "ao_cma_cam.h"
-#include "ao_cmd_data.h"
-
 #ifndef IPCAMTENVIS_AC_RTSP_H
 #define IPCAMTENVIS_AC_RTSP_H
+
+#include "ao_cma_cam.h"
+#include "ao_cmd_data.h"
 
 typedef enum {
     AC_CAMERA,

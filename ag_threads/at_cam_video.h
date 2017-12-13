@@ -19,10 +19,10 @@
  Created by gsg on 17/10/17.
  This is an API to handle videostreaming outside - (re)start and stop
 */
-#include "ao_cmd_data.h"
-
 #ifndef IPCAMTENVIS_AT_CAM_VIDEO_H
 #define IPCAMTENVIS_AT_CAM_VIDEO_H
+
+#include "ao_cmd_data.h"
 
 /**************************************************
  * Start IPCam thread. Connection parameters will come later
