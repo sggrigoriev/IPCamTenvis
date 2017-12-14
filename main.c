@@ -35,7 +35,7 @@ static void print_Agent_start_params();
 int main() {
     printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
 
-    if(!ag_load_config(ag_getCfgFileName())) exit(-1);    /* Run w/o input parameters */
+    if(!ag_load_config(ag_getCfgFileName())) exit(-1);
 
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
     print_Agent_start_params();
@@ -49,16 +49,28 @@ int main() {
 static void print_Agent_start_params() {
     pu_log(LL_INFO, "Agent start parameters:");
     pu_log(LL_INFO, "\tConfiguration file name: %s", ag_getCfgFileName());
+
+    pu_log(LL_INFO, "\tAgent process name: %s", ag_getAgentName());
+
     pu_log(LL_INFO, "\tLog file name: %s", ag_getLogFileName());
-    pu_log(LL_INFO, "\tMax records in queue: %d", ag_getQueuesRecAmt());
-    pu_log(LL_INFO, "\t\tRecords amount in log file: %d", ag_getLogRecordsAmt());
+    pu_log(LL_INFO, "\t\tLog records amount: %d", ag_getLogRecordsAmt());
     pu_log(LL_INFO, "\t\tLog level: %d", ag_getLogVevel());
+
+    pu_log(LL_INFO, "\tMax records in queue: %d", ag_getQueuesRecAmt());
+
     pu_log(LL_INFO, "\tAgent-Proxy communication port: %d", ag_getProxyPort());
     pu_log(LL_INFO, "\tAgent-WUD communication port: %d", ag_getWUDPort());
-    pu_log(LL_INFO, "\tAgent name: %s", ag_getAgentName());
-    pu_log(LL_INFO, "\tAgent watchdog sending interval in seconds: %d", ag_getAgentWDTO());
-    pu_log(LL_INFO, "\tAgent device type: %d", ag_getAgentDeviceType());
+    pu_log(LL_INFO, "\tWatchdog TO sec: %d", ag_getAgentWDTO());
+
+    pu_log(LL_INFO, "\tAgent Device Type: %d", ag_getAgentDeviceType());
+
     pu_log(LL_INFO, "\tCam IP: %s", ag_getCamIP());
-    pu_log(LL_INFO, "\tStreaming protocol: %d", ag_getIPCamProtocol());
-    pu_log(LL_INFO, "\tBuffer chunks amount: %d", ag_getVideoChunksAmount());
+    pu_log(LL_INFO, "\tCam port: %d", ag_getCamPort());
+    pu_log(LL_INFO, "\tCam Resolution: %d", ag_getCamResolution());
+    pu_log(LL_INFO, "\tCam Login: %s", ag_getCamLogin());
+    pu_log(LL_INFO, "\tCam Password: %s", ag_getCamPassword());
+    pu_log(LL_INFO, "\tCam Protocol: %d", ag_getIPCamProtocol());
+
+    pu_log(LL_INFO, "\tStreaming buffers amount: %d", ag_getVideoChunksAmount());
+    pu_log(LL_INFO, "\tStreaming buffer size: %d", ag_getStreamBufferSize());
 }

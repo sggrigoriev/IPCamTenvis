@@ -91,8 +91,8 @@ static const char* getStrNumber(char* buf, size_t size, const char* msg) {
 static int get_cloud_settings(const char* conn, const char* auth, char* answer, size_t size) {
 
     t_ac_http_handler* h = ac_http_prepare_get_conn(conn, auth);
-    if(!h) return 0;
 
+    if(!h) return 0;
     int ret = 0;
     int rpt = AC_HTTP_REPEATS;
     while(rpt) {
@@ -106,13 +106,16 @@ static int get_cloud_settings(const char* conn, const char* auth, char* answer, 
                 break;
             case 0:         /* Error */
                 ret = 0;
+                rpt = 0;
                 break;
              case 1:        /* Success */
                 ret = 1;
+                rpt = 0;
                 break;
              default:
                  pu_log(LL_ERROR, "%s: Unsupported RC = %d from ac_perform_get_conn()", __FUNCTION__, rc);
                 ret = 0;
+                rpt = 0;
                 break;
         }
      }
@@ -143,6 +146,10 @@ static int parse_url_head(const char* url, char* head, size_t h_size, char* rest
 static const char* create_conn_string(char* str, size_t size, const int* ssl, const char* url, const char* port, const char* pref1, const char* pref2, const char* dev_id, const char* posfix) {
     if(!url) {
         pu_log(LL_ERROR, "%s: URL field is NULL. Exiting", __FUNCTION__);
+        return NULL;
+    }
+    if(!str) {
+        pu_log(LL_ERROR, "%s: out buffer is NULL. Exiting", __FUNCTION__);
         return NULL;
     }
 
@@ -275,7 +282,6 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int v_port, char* v_sess, si
 
     if(!create_conn_string(conn, sizeof(conn), NULL, ag_getMainURL(), NULL, AC_HTTP_MAIN_STREAMING_INTERFACE1, NULL, ag_getProxyID(), AC_HTTP_MAIN_STREAMING_POSTFIX1)) goto on_error;
     if(!create_auth_string(auth, sizeof(auth), AC_HTTP_CLOUD_AUTH_PREFIX,  ag_getProxyAuthToken())) goto on_error;
-
     if(!get_cloud_settings(conn, auth, answer, sizeof(answer))) goto on_error;
     if(!parse_cloud_settings(answer, host2, sizeof(host2), port2, sizeof(port2), path2, sizeof(path2),&ssl)) goto on_error;
 
@@ -284,11 +290,13 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int v_port, char* v_sess, si
     if(!get_cloud_settings(conn, auth, answer, sizeof(answer))) goto on_error;
     if(!parse_video_settings(answer, &rc, &ssl, v_url, v_size, port2, sizeof(port2), v_sess, vs_size)) goto on_error;
     strncpy(w_sess, v_sess, ws_size-1);
+
     v_port = atoi(port2);
 
     if(!create_conn_string(conn, sizeof(conn), &ssl, ag_getMainURL(), NULL, AC_HTTP_MAIN_STREAMING_INTERFACE3, NULL, ag_getProxyID(), NULL)) goto on_error;
     if(!get_cloud_settings(conn, NULL, answer, sizeof(answer))) goto on_error;
     if(!parst_ws_settings(answer, w_url, w_size, port2, sizeof(port2))) goto on_error;
+
     w_port = atoi(port2);
 
     ret = 1;

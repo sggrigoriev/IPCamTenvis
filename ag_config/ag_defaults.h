@@ -78,4 +78,6 @@
 #define DEFAULT_WC_STOP_PLAY            "STOP"
 #define DEFAULT_CLOUD_CONN_STRING       "https://sbox.presencepro.com/cloud/json/settingsServer/streaming"
 
+#define AG_DBG  pu_log(LL_DEBUG, "%s: %d", __FUNCTION__, __LINE__)
+
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

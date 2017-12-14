@@ -53,15 +53,12 @@ static pu_queue_t* to_video_mgr;        /* main_thread -> video manager */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
-static volatile int gw_is_online;       /* 1 if there is a connection to the cloud; 0 if not */
-
 static int video_on;                        /* 1 if video nmanager runs */
 
 /*****************************************************************************************
     Local functions deinition
 */
 static int main_thread_startup() {
-    gw_is_online = 0;       /* Initial state = off */
 /* Queues initiation */
     aq_init_queues();
 
@@ -102,7 +99,7 @@ static void process_proxy_message(char* msg) {
         case AO_IN_PROXY_ID:                         /* Stay here for comatibility with M3 Agent */
             break;
         case AO_IN_CONNECTION_STATE:                 /* save proxy device ID & auth string*/
-            if(gw_is_online && data.in_connection_state.is_online) {
+            if(data.in_connection_state.is_online) {
                 ag_saveProxyID(data.in_connection_state.proxy_device_id);
                 ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
                 ag_saveMainURL(data.in_connection_state.main_url);
@@ -142,7 +139,7 @@ void at_main_thread() {
         main_finish = 1;
     }
 
-    unsigned int events_timeout = 0; /* Wait until the end of univerce */
+    unsigned int events_timeout = 1; /* Wait until the end of univerce */
     video_on = 0;
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
@@ -160,6 +157,7 @@ void at_main_thread() {
                 pu_log(LL_ERROR, "%s: %s Camera control is not omplemented yet", AT_THREAD_NAME, mt_msg);
                 break;
             case AQ_Timeout:
+//                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
                 break;
             case AQ_STOP:
                 main_finish = 1;

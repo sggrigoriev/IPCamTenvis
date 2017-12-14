@@ -35,7 +35,7 @@
 /***************************************************************************************************
  * Local data
  */
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static char out_buf[LIB_HTTP_MAX_MSG_SIZE] = {0};   /* buffer to receive the data */
@@ -45,7 +45,7 @@ static pu_queue_t* from_proxy;             /* main queue pointer - local transpo
 
 /* Thread function. Reads info, assemble it to the buffer and forward to the main thread by queue */
 static void* proxy_read(void* params) {
-
+    pu_log(LL_INFO, "%s started", AT_THREAD_NAME);
     from_proxy = aq_get_gueue(AQ_FromProxyQueue);
 
     lib_tcp_conn_t* all_conns = lib_tcp_init_conns(1, LIB_HTTP_MAX_MSG_SIZE-LIB_HTTP_HEADER_SIZE);
@@ -73,6 +73,7 @@ static void* proxy_read(void* params) {
             break;
         }
         if (conn == LIB_TCP_READ_TIMEOUT) {
+//            pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
             continue;   /* timeout */
         }
         if (conn == LIB_TCP_READ_MSG_TOO_LONG) {
@@ -87,21 +88,18 @@ static void* proxy_read(void* params) {
         while (lib_tcp_assemble(conn, out_buf, sizeof(out_buf))) {     /* Read all fully incoming messages */
             pu_queue_push(from_proxy, out_buf, strlen(out_buf) + 1);
 
-            pu_log(LL_INFO, "%s: message sent: %s", AT_THREAD_NAME, out_buf);
+            pu_log(LL_INFO, "%s: message received: %s", AT_THREAD_NAME, out_buf);
         }
     }
     allez:
+    at_set_stop_proxy_rw_children();
     lib_tcp_destroy_conns(all_conns);
     pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
 
-static int is_proxy_read_run() {
-    return id > 0;
-}
 
 int at_start_proxy_read(int socket) {
-    if(is_proxy_read_run()) return 1;
     read_socket = socket;
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &proxy_read, &read_socket)) return 0;
@@ -110,10 +108,9 @@ int at_start_proxy_read(int socket) {
 
 void at_stop_proxy_read() {
     void *ret;
-    if(!is_proxy_read_run()) return;
+
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
-
     at_set_stop_proxy_rw_children();
 }
 

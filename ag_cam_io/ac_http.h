@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
     CURLSH* h;
     t_ac_callback_buf wr_buf;
+    char err_buf[CURL_ERROR_SIZE];
     struct curl_slist* slist;
 } t_ac_http_handler;
 

@@ -25,6 +25,7 @@
 #include "lib_http.h"
 #include "pu_logger.h"
 
+#include "ag_defaults.h"
 #include "ac_http.h"
 
 
@@ -47,10 +48,6 @@ static size_t writer(void *ptr, size_t size, size_t nmemb, void *userp) {
                __FUNCTION__, strlen(dataToRead->buf), (size * nmemb), dataToRead->sz);
         return 0;
     }
-    else
-    {
-
-    }
     strncat(dataToRead->buf, data, (size * nmemb));
     return (size * nmemb);
 }
@@ -69,7 +66,6 @@ void ac_http_close() {
 
 t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* auth_string) {
     CURLcode curlResult = CURLE_OK;
-    char err_buf[CURL_ERROR_SIZE];
 
     t_ac_http_handler* h = NULL;
 
@@ -84,23 +80,23 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
     h->wr_buf.sz = LIB_HTTP_MAX_MSG_SIZE;
 
     if(h->h = curl_easy_init(), !h->h) {
-        pu_log(LL_ERROR, "%s: cURL handler creation failed.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Error on get cURL handler", __FUNCTION__);
         goto out;
     }
 
+    if(curlResult = curl_easy_setopt(h->h, CURLOPT_URL, url_string), curlResult != CURLE_OK) goto out;
     if(auth_string) {  /* Have to add auth token */
         h->slist = curl_slist_append(h->slist, auth_string);
         if(curlResult = curl_easy_setopt(h->h, CURLOPT_HTTPHEADER, h->slist), curlResult != CURLE_OK) goto out;
     }
-
-    if(curlResult = curl_easy_setopt(h->h, CURLOPT_URL, url_string), curlResult != CURLE_OK) goto out;
-    if(curlResult = curl_easy_setopt(h->h, CURLOPT_ERRORBUFFER, err_buf), curlResult != CURLE_OK) goto out;
+    if(curlResult = curl_easy_setopt(h->h, CURLOPT_ERRORBUFFER, h->err_buf), curlResult != CURLE_OK) goto out;
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_WRITEFUNCTION, writer), curlResult != CURLE_OK) goto out;
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &h->wr_buf), curlResult != CURLE_OK) goto out;
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_BUFFERSIZE, sizeof(h->wr_buf.buf)), curlResult != CURLE_OK) goto out;
 
 out:
     if(curlResult != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: %s", __FUNCTION__, curl_easy_strerror(curlResult));
         ac_http_close_conn(h);
         return NULL;
     }
@@ -116,10 +112,14 @@ int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size) {
     int ret;
 
     if(!h) return 0;
+    if(!h->h) return 0;
+    if(!answer) {
+        pu_log(LL_ERROR, "%s: output buffer is NULL. Exiting", __FUNCTION__);
+        return 0;
+    }
     answer[0] = '\0';
 
     curlResult = curl_easy_perform(h->h);
-
     curl_easy_getinfo(h->h, CURLINFO_RESPONSE_CODE, &httpResponseCode );
     curl_easy_getinfo(h->h, CURLINFO_HTTP_CONNECTCODE, &httpConnectCode );
 
@@ -128,7 +128,6 @@ int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size) {
         curlErrno = EHOSTUNREACH;
         goto out;
     }
-
     if (curlResult != CURLE_OK) {
         if (curlResult == CURLE_ABORTED_BY_CALLBACK) {
             curlErrno = EAGAIN;
@@ -169,7 +168,7 @@ out:
 void ac_http_close_conn(t_ac_http_handler* h) {
     if(h) {
         if (h->slist) curl_slist_free_all(h->slist);
-        if (h->h) (curl_easy_cleanup(h), h->h = NULL);
+        if (h->h) (curl_easy_cleanup(h->h), h->h = NULL);
         if (h->wr_buf.buf) free(h->wr_buf.buf);
         free(h);
         h = NULL;

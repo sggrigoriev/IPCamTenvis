@@ -58,18 +58,18 @@
 #define AGENT_IPCAM_PROTOCOL        "IPCAM_PROTOCOL"
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
-#define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
-#define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
 #define IPCAM_RESOLUTION            "IPCAM_RESOLUTION"
-    #define IR_LOW_RES              "LO"
-    #define IR_HI_RES               "HI"
+#define IR_LOW_RES                  "LO"
+#define IR_HI_RES                   "HI"
 #define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
 #define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
+#define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
+#define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
 
 /*************************************************************************
     Some macros
 */
-#define AGS_ERR fprintf(stderr, "Default value will be used instead\n")
+#define AGS_ERR fprintf(stderr, "AGENT: Default value will be used instead\n")
 #define AGS_RET(a,b) return (!initiated)?(a):(b)
 /*************************************************************************
     Config values saved in memory
@@ -204,14 +204,14 @@ const char* ag_getProxyAuthToken() {
 }
 
 void ag_saveProxyID(const char* proxyID) {
-    strncpy(proxy_id, proxyID, sizeof(proxyID)-1);
+    strncpy(proxy_id, proxyID, sizeof(proxy_id)-1);
 }
 const char* ag_getProxyID() {
     return proxy_id;
 }
 
 void ag_saveMainURL(const char* mu) {
-    strncpy(main_url, mu, sizeof(mu)-1);
+    strncpy(main_url, mu, sizeof(main_url)-1);
 }
 const char* ag_getMainURL() {
     return main_url;

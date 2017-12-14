@@ -51,7 +51,7 @@ typedef enum {
     AT_STATE_ON_ERROR
 } t_at_states;
 
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop = 1;       /* Thread stop flag */
@@ -286,10 +286,11 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
         return -1;
     }
     ag_saveClientIP(hn->h_addr);
-
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &vc_thread, NULL)) return 0;
     stop = 0;
+
+    if(pthread_attr_init(&attr)) {stop = 1; return 0;}
+    if(pthread_create(&id, &attr, &vc_thread, NULL)) {stop = 1; return 0;}
+
 
     return 1;
 }

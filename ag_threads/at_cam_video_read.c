@@ -44,7 +44,7 @@ static volatile int stop = 1;
 static int sock;
 static struct sockaddr_in sin={0};
 
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static void* the_thread(void* params);
@@ -59,9 +59,10 @@ int at_start_video_read() {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &the_thread, NULL)) return 0;
     stop = 0;
+    if(pthread_attr_init(&attr)) {stop = 1; return 0;}
+    if(pthread_create(&id, &attr, &the_thread, NULL)) {stop = 1; return 0;}
+
     return 1;
 }
 
@@ -73,11 +74,10 @@ void at_stop_video_read() {
     at_set_stop_video_read();
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
-    stop = 1;
 }
 
 int at_is_video_read_run() {
-    return id > 0;
+    return !stop;
 }
 
 void at_set_stop_video_read() {

@@ -38,7 +38,7 @@
 /*********************************************************************
  * Local data
  */
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* buffer for write into the socket */
@@ -48,6 +48,7 @@ static pu_queue_t* from_main;           /* queue - the source of info to be writ
 
 /* Thread function: get info from main thread, write it into the socket */
 static void* proxy_write(void* params) {
+    pu_log(LL_INFO, "%s: started", AT_THREAD_NAME);
     from_main = aq_get_gueue(AQ_ToProxyQueue);
 
 /* Queue events init */
@@ -58,7 +59,7 @@ static void* proxy_write(void* params) {
     while(!at_are_childs_stop()) {
         pu_queue_event_t ev;
 
-        switch(ev=pu_wait_for_queues(events, DEFAULT_PROXY_WRITE_THREAD_TO_SEC)) {
+        switch(ev=pu_wait_for_queues(events, 1)) {
             case AQ_ToProxyQueue: {
                 size_t len = sizeof(out_buf);
                 while (pu_queue_pop(from_main, out_buf, &len)) {
@@ -73,7 +74,7 @@ static void* proxy_write(void* params) {
                         at_set_stop_proxy_rw_children();
                         break;
                     }
-                    pu_log(LL_DEBUG, "%s: written: %s", AT_THREAD_NAME, out_buf);
+                    pu_log(LL_DEBUG, "%s: sent: %s", AT_THREAD_NAME, out_buf);
                     len = sizeof(out_buf);
                 }
                 break;
@@ -90,15 +91,12 @@ static void* proxy_write(void* params) {
         }
     }
     pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
+    at_set_stop_proxy_rw_children();
     lib_tcp_client_close(write_socket);
     pthread_exit(NULL);
 }
-static int is_proxy_write_run() {
-    return id > 0;
-}
 
 int at_start_proxy_write(int socket) {
-    if(is_proxy_write_run()) return 1;
     write_socket = socket;
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &proxy_write, NULL)) return 0;
@@ -107,7 +105,7 @@ int at_start_proxy_write(int socket) {
 
 void at_stop_proxy_write() {
     void *ret;
-    if(!is_proxy_write_run()) return;
+
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
 

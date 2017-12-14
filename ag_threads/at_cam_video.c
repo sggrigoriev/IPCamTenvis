@@ -42,7 +42,7 @@
  * Local data
  */
 
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop = 1;       /* Thread stop flag */
@@ -105,7 +105,6 @@ static t_mgr_state process_ws_message(const char* msg) {
 
 static void* main_thread(void* params) {
 
-    unsigned int events_timeout = 1; /* Wait 1 second - timeouts for respond from cloud should be enabled! */
     pu_queue_msg_t msg[LIB_HTTP_MAX_MSG_SIZE] = {0};    /* The only main thread's buffer! */
 
     pu_queue_event_t events;
@@ -118,7 +117,7 @@ static void* main_thread(void* params) {
         size_t len = sizeof(msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
 
-        switch (ev=pu_wait_for_queues(events, events_timeout)) {
+        switch (ev=pu_wait_for_queues(events, 1)) {
              case AQ_FromWS:
                 while(pu_queue_pop(from_ws, msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Web socket thread %s", AT_THREAD_NAME, msg);
@@ -127,6 +126,7 @@ static void* main_thread(void* params) {
                 }
                 break;
             case AQ_Timeout:
+//                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
                 break;
             case AQ_STOP:
                 stop = 1;
@@ -156,6 +156,7 @@ static void* main_thread(void* params) {
                 }
                 break;
             case AT_ERROR:
+                pu_log(LL_DEBUG, "%s: Error. Stop the thread", AT_THREAD_NAME);
                 stop = 1;
             default:
                 break;
@@ -164,8 +165,8 @@ static void* main_thread(void* params) {
 
     }
 /* shutdown procedure */
-    at_stop_video_connector();
-    stop_ws();
+    if(is_video_connector_run()) at_stop_video_connector();
+    if(is_ws_run()) stop_ws();
     pthread_exit(NULL);
 }
 
@@ -178,10 +179,11 @@ int at_start_video_mgr() {
         pu_log(LL_WARNING, "%s - %s The thread is already runninng", AT_THREAD_NAME, __FUNCTION__);
         return 1;
     }
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &main_thread, NULL)) return 0;
-
     stop = 0;
+    if(pthread_attr_init(&attr)) { stop = 1;return 0;}
+    if(pthread_create(&id, &attr, &main_thread, NULL)) { stop = 1; return 0;}
+
+    pu_log(LL_INFO, "%s started", AT_THREAD_NAME);
     return 1;
 }
 int at_stop_video_mgr() {
@@ -200,5 +202,5 @@ void at_set_stop_video_mgr() {
     stop = 1;
 }
 int is_video_mgr_run() {
-    return id > 0;
+    return !stop;
 }

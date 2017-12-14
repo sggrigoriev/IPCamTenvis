@@ -36,7 +36,7 @@
 /*************************************************************************
  * Local data
  */
-static pthread_t id = 0;
+static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop = 1;       /* Thread stop flag */
@@ -44,7 +44,6 @@ static volatile int chids_stop; /* Children (read/write) stop flag */
 
 /* Tread function: creates server socket, listen for Proxy connection; duplicate and have the writable socket; wait until children dead*/
 static void* main_thread(void* params) {
-    stop = 0;
 
     while(!stop) {
         int read_socket = -1;
@@ -79,25 +78,21 @@ static void* main_thread(void* params) {
     }
     pthread_exit(NULL);
 }
-static int is_main_thread_run() {
-    return id > 0;
-}
 
 /*********************************************************************************
  * Public functions
 */
 
 int at_start_proxy_rw() {
-    if(is_main_thread_run()) return 1;
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &main_thread, NULL)) return 0;
     stop = 0;
+    if(pthread_attr_init(&attr)) {stop = 1; return 0;}
+    if(pthread_create(&id, &attr, &main_thread, NULL)) {stop = 1; return 0;}
+
     return 1;
 }
 
 void at_stop_proxy_rw() {
     void *ret;
-    if(!is_main_thread_run()) return;
     at_set_stop_proxy_rw();
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
