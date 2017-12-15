@@ -27,6 +27,8 @@
 #define AC_HTTP_RC_OK       1
 #define AC_HTTP_REPEATS     3
 
+#define AC_HTTP_UNAUTH      401
+
 #include <curl/curl.h>
 
 typedef struct {
@@ -49,5 +51,8 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
 int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size);
 
 void ac_http_close_conn(t_ac_http_handler* h);
+
+/* return CurlErro */
+long ac_http_analyze_perform(CURLcode perform_rc, CURLSH* handler, const char* function);
 
 #endif /* IPCAMTENVIS_AC_HTTP_H */

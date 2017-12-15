@@ -26,6 +26,7 @@
 #include "pu_logger.h"
 
 #include "ag_defaults.h"
+#include "ac_http.h"
 
 #include "ac_rtsp.h"
 
@@ -43,12 +44,7 @@
 #define AC_PLAY_RANGE       "npt=0.000-"
 #define AC_VIDEO_TRACK      0
 #define AC_STREAMING_TCP    0
-
-
-typedef struct {
-    char *buf;
-    size_t sz;
-} t_ac_callback_buf;
+#define AC_RTSP_HEAD        "rtsp://"
 
 typedef struct {
     CURL* h;
@@ -179,7 +175,7 @@ static char* get_sesion_id(const char* src, char* buf, size_t size) {
 }
 
 int ac_rtsp_init() {
-    CURLcode res;;
+    CURLcode res;
 
     if(res = curl_global_init(CURL_GLOBAL_ALL), res != CURLE_OK) {
         pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", res);
@@ -195,23 +191,26 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
     t_handler* h = get_handler(device_type);
     if(!h) return -1;
 
+    memset(h, 0, sizeof(t_handler));
+
     h->slist = NULL;
 
     if(!url || !strlen(url)) {
         pu_log(LL_ERROR, "%s: Device URL is NULL or empty");
         return 0;
     }
-    if(h->req_body.buf = malloc(AC_RTSP_BODY_SIZE), !h->req_body.buf) {
+    if(h->req_body.buf = calloc(1, AC_RTSP_BODY_SIZE), !h->req_body.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         return 0;
     }
 
-    if(h->ans_hdr.buf = malloc(AC_RTSP_HEADER_SIZE), !h->ans_hdr.buf) {
+    if(h->ans_hdr.buf = calloc(1, AC_RTSP_HEADER_SIZE), !h->ans_hdr.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         free(h->req_body.buf);
         return 0;
     }
-    if(h->ans_body.buf = malloc(AC_RTSP_BODY_SIZE), !h->ans_body.buf) {
+
+    if(h->ans_body.buf = calloc(1, AC_RTSP_BODY_SIZE), !h->ans_body.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         free(h->req_body.buf);
         free(h->ans_hdr.buf);
@@ -220,6 +219,8 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
     h->ans_hdr.sz = AC_RTSP_HEADER_SIZE;
     h->ans_body.sz = AC_RTSP_BODY_SIZE;
     h->req_body.sz = AC_RTSP_BODY_SIZE;
+    strncpy(h->url, AC_RTSP_HEAD, sizeof(h->url));
+    strncat(h->url, url, sizeof(h->url)-strlen(h->url)-1);
 
     if(h->h = curl_easy_init(), !h->h) {
         pu_log(LL_ERROR, "%s: curl_easy_init.");
@@ -227,7 +228,7 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
     }
 
     CURLcode res;
-    if(res = curl_easy_setopt(h->h, CURLOPT_URL, url), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(h->h, CURLOPT_URL, h->url), res != CURLE_OK) goto on_error;
 
     if(res = curl_easy_setopt(h->h, CURLOPT_HTTPAUTH, 0L), res != CURLE_OK) goto on_error;
 
@@ -258,6 +259,7 @@ void ac_close_session(t_ac_rtsp_device device_type) {
     free(h->req_body.buf);
     if(h->slist) curl_slist_free_all(h->slist);
 }
+
 int ac_req_options(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size) {
     CURLcode res = CURLE_OK;
 
@@ -268,6 +270,8 @@ int ac_req_options(t_ac_rtsp_device device_type, char* head, size_t h_size, char
     if(res = curl_easy_setopt(h->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_OPTIONS), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(h->h);
+    if(ac_http_analyze_perform(res, h->h,  __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &h->ans_body), res != CURLE_OK) goto on_error;
 
     copy_result(*h, head, h_size, body, b_size);
@@ -296,6 +300,8 @@ int ac_req_setup(t_ac_rtsp_device device_type, char* head, size_t h_size, char* 
     if(res = curl_easy_setopt(h->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_SETUP), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(h->h);
+    if(ac_http_analyze_perform(res, h->h, __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &cam.ans_body), res != CURLE_OK) goto on_error;
 
     get_sesion_id(h->ans_hdr.buf, cam.session_id, AC_RTSP_SESSION_ID_SIZE);    /* Save session_id to use in PLAY command */
@@ -321,6 +327,8 @@ int ac_req_play(t_ac_rtsp_device device_type, char* head, size_t h_size, char* b
     if(res = curl_easy_setopt(h->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_PLAY), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(h->h);
+    if(ac_http_analyze_perform(res, h->h,  __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &h->ans_body), res != CURLE_OK) goto on_error;
     curl_easy_setopt(h->h, CURLOPT_RANGE, NULL);
 
@@ -337,6 +345,8 @@ int ac_req_teardown(t_ac_rtsp_device device_type, char* head, size_t h_size, cha
 
     if (res = curl_easy_setopt(h->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_TEARDOWN), res != CURLE_OK) goto on_error;
     res = curl_easy_perform(h->h);
+    if(ac_http_analyze_perform(res, h->h, __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &h->ans_body), res != CURLE_OK) goto on_error;
 
     copy_result(cam, head, h_size, body, b_size);
@@ -351,6 +361,8 @@ int ac_req_cam_describe(char* head, size_t h_size, char* body, size_t b_size) {
     if(res = curl_easy_setopt(cam.h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_DESCRIBE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(cam.h);
+    if(ac_http_analyze_perform(res, cam.h, __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(cam.h, CURLOPT_WRITEDATA, &cam.ans_body), res != CURLE_OK) goto on_error;
 
     copy_result(cam, head, h_size, body, b_size);
@@ -410,6 +422,8 @@ int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char
     if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_ANNOUNCE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(vs.h);
+    if(res = ac_http_analyze_perform(res, vs.h, __FUNCTION__), ((res != CURLE_OK) && (res != AC_HTTP_UNAUTH))) goto on_error;
+
     if (res = curl_easy_setopt(vs.h, CURLOPT_WRITEDATA, &vs.ans_body), res != CURLE_OK) goto on_error;
 
     get_sesion_id(vs.ans_hdr.buf, vs.session_id, AC_RTSP_SESSION_ID_SIZE);    /* Save session_id to use in ANNOUNCE2 command */
@@ -424,9 +438,12 @@ int ac_req_vs_announce2(char* head, size_t h_size, char* body, size_t b_size) {
 
     if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_SESSION_ID, vs.session_id), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST), res != CURLE_OK) goto on_error;
-    if(res = curl_easy_setopt(vs.h, CURLOPT_USERNAME,vs.session_id), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(vs.h, CURLOPT_USERNAME, vs.session_id), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(vs.h, CURLOPT_USERPWD, vs.session_id), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(vs.h);
+    if(ac_http_analyze_perform(res, vs.h, __FUNCTION__) != CURLE_OK) goto on_error;
+
     if (res = curl_easy_setopt(vs.h, CURLOPT_WRITEDATA, &vs.ans_body), res != CURLE_OK) goto on_error;
 
     copy_result(vs, head, h_size, body, b_size);
@@ -441,6 +458,6 @@ const char* ac_makeVSURL(char *url, size_t size, const char* vs_url, int port, c
     strcpy(vs.vs_session_id, vs_session_id);
     url[0] = '\0';
 
-    sprintf(url, "%s:%s/%s/%s", vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
+    sprintf(url, "%s:%s@%s:%s/%s/%s", vs_session_id, vs_session_id, vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
     return url;
 }

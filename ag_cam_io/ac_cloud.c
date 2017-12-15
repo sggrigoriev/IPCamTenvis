@@ -30,7 +30,7 @@
 
 #include "ac_cloud.h"
 
-#define AC_HTTP_MAIN_STREAMING_INTERFACE1   "/cloud/json/settingsServer/streaming?"
+#define AC_HTTP_MAIN_STREAMING_INTERFACE1   "/cloud/json/settingsServer/streaming?deviceId="
 #define AC_HTTP_MAIN_STREAMING_POSTFIX1     "&connected=false"
 #define AC_HTTP_CLOUD_AUTH_PREFIX           "PPCAuthorization: esp token="
 #define AC_HTTP_MAIN_STREAMING_INTERFACE2   "/session?deviceId="
@@ -44,10 +44,13 @@ static const char* F_PATH = "path";
 static const char* F_PORT = "port";
 static const char* F_SSL = "ssl";
 
+static const char* F_SERVER = "server";
 static const char* F_RES_CODE = "resultCode";
 static const char* F_VS_SSL = "videoServerSsl";
 static const char* F_VS_HOST = "videoServer";
 static const char* F_SESS_ID = "sessionId";
+
+static const char* F_WS_HEAD = "ws://";
 
 
 static int findNCSubstr(const char* msg, const char* subs) {
@@ -90,6 +93,8 @@ static const char* getStrNumber(char* buf, size_t size, const char* msg) {
 
 static int get_cloud_settings(const char* conn, const char* auth, char* answer, size_t size) {
 
+    pu_log(LL_DEBUG, "%s: URL = '%s', auth = '%s'", __FUNCTION__, conn, (auth)?auth:"N/A");
+
     t_ac_http_handler* h = ac_http_prepare_get_conn(conn, auth);
 
     if(!h) return 0;
@@ -120,6 +125,7 @@ static int get_cloud_settings(const char* conn, const char* auth, char* answer, 
         }
      }
     ac_http_close_conn(h);
+    pu_log(LL_DEBUG, "%s: Answer = '%s'", __FUNCTION__, answer);
     return ret;
 }
 
@@ -127,12 +133,12 @@ static int parse_url_head(const char* url, char* head, size_t h_size, char* rest
     int i;
     if(i = findNCSubstr(url, AC_HTTP_HTTPS), i == 0) {
         strncpy(head, AC_HTTP_HTTPS, h_size);
-        strncpy(rest, url+sizeof(AC_HTTP_HTTPS), r_size);
+        strncpy(rest, url+strlen(AC_HTTP_HTTPS), r_size);
         return 1;
     }
     if(i = findNCSubstr(url, AC_HTTP_HTTP), i == 0) {
         strncpy(head, AC_HTTP_HTTP, h_size);
-        strncpy(rest, url+sizeof(AC_HTTP_HTTP), r_size);
+        strncpy(rest, url+strlen(AC_HTTP_HTTP), r_size);
         return 1;
     }
     if(i < 0) { /* No head on URL */
@@ -188,33 +194,38 @@ static const char* create_auth_string(char* str, size_t size, const char* auth_p
     return str;
 }
 
+/*{"resultCode":0,"server":{"type":"streaming","host":"sbox1.presencepro.com","path":"/streaming","port":8443,"ssl":true,"altPort":8080,"altSsl":false}}*/
 static int parse_cloud_settings(const char* answer, char* host, size_t h_size, char* port, size_t p_size, char* path, size_t pth_size, int* ssl) {
     cJSON* obj = NULL;
+    cJSON* map = NULL;
     cJSON* item;
     int ret = 0;
 
     if(obj = cJSON_Parse(answer), !obj) goto on_error;
 
-    if(item = cJSON_GetObjectItem(obj, F_HOST), !item) goto on_error;
+    if(map = cJSON_GetObjectItem(obj, F_SERVER), !map) goto on_error;
+
+    if(item = cJSON_GetObjectItem(map, F_HOST), !item) goto on_error;
     strncpy(host, item->valuestring, h_size);
 
-    if(item = cJSON_GetObjectItem(obj, F_PORT), !item) goto on_error;
-    strncpy(port, item->valuestring, p_size);
+    if(item = cJSON_GetObjectItem(map, F_PORT), !item) goto on_error;
+    snprintf(port, p_size, "%d", item->valueint);
 
-    if(item = cJSON_GetObjectItem(obj, F_PATH), !item) goto on_error;
+    if(item = cJSON_GetObjectItem(map, F_PATH), !item) goto on_error;
     strncpy(path, item->valuestring, pth_size);
 
-    if(item = cJSON_GetObjectItem(obj, F_SSL), !item) goto on_error;
+    if(item = cJSON_GetObjectItem(map, F_SSL), !item) goto on_error;
     *ssl = (item->type == cJSON_True)?1:0;
 
     ret = 1;
 
 on_error:
-    if(!ret) pu_log(LL_ERROR, "%s: Error parsing the loud answer %s", __FUNCTION__, answer);
+    if(!ret) pu_log(LL_ERROR, "%s: Error parsing the cloud answer %s", __FUNCTION__, answer);
     if(obj) cJSON_Delete(obj);
     return ret;
 }
 
+/* {"resultCode":0,"apiServerSsl":false,"videoServer":"stream.presencepro.com:443","videoServerSsl":true,"sessionId":"2b1jnQsKKDaYWuGSmD3HzOnXu"} */
 static int parse_video_settings(const char* answer, int* rc, int* ssl, char* host, size_t h_size, char* port, size_t p_size, char* sess, size_t s_size) {
     cJSON* obj = NULL;
     cJSON* item;
@@ -228,11 +239,11 @@ static int parse_video_settings(const char* answer, int* rc, int* ssl, char* hos
     if(item = cJSON_GetObjectItem(obj, F_VS_SSL), !item) goto on_error;
     *ssl = (item->type == cJSON_True)?1:0;
 
-    if(item = cJSON_GetObjectItem(obj, F_PORT), !item) goto on_error;
-    strncpy(host, item->string, h_size);
+    if(item = cJSON_GetObjectItem(obj, F_VS_HOST), !item) goto on_error;
+    strncpy(host, item->valuestring, h_size);
     int i = findNCSubstr(host, ":");
     if(i < 0) {
-        pu_log(LL_ERROR, "s: port is not found in %s - %s", __FUNCTION__, F_VS_HOST, host);
+        pu_log(LL_ERROR, "%s: video server host is not found in %s - %s", __FUNCTION__, F_VS_HOST, host);
         goto on_error;
     }
     else {
@@ -241,24 +252,26 @@ static int parse_video_settings(const char* answer, int* rc, int* ssl, char* hos
     }
 
     if(item = cJSON_GetObjectItem(obj, F_SESS_ID), !item) goto on_error;
-    strncpy(sess, item->string, s_size);
+    strncpy(sess, item->valuestring, s_size);
 
     ret = 1;
 
     on_error:
-    if(!ret) pu_log(LL_ERROR, "%s: Error parsing the loud answer %s", __FUNCTION__, answer);
+    if(!ret) pu_log(LL_ERROR, "%s: Error parsing video settings %s", __FUNCTION__, answer);
     if(obj) cJSON_Delete(obj);
     return ret;
 }
 
-static int parst_ws_settings(const char* answer, char* w_host, size_t h_size, char* w_port, size_t p_size) {
-    int i = findNCSubstr(answer, ":");
-    if(i < 0) goto on_error;
-    if(i = findNCSubstr(answer+i+1, ":"), i < 0) goto on_error;
-    if(i > h_size) goto on_error;
-    strncpy(w_host, answer, (size_t)i);
-    w_host[i] = '\0';
-    getStrNumber(w_port, p_size, answer+i+1);
+/* ws://sbox1.presencepro.com:8080 */
+static int parse_ws_settings(const char* answer, char* w_host, size_t h_size, char* w_port, size_t p_size) {
+    int i;
+
+    if(i = findNCSubstr(answer, F_WS_HEAD), i != 0) goto on_error;
+    if(i = findNCSubstr(answer+strlen(F_WS_HEAD), ":"), i < 0) goto on_error;
+
+    if(i+1 > h_size) goto on_error;
+    strncpy(w_host, answer+strlen(F_WS_HEAD), (size_t)(i));
+    getStrNumber(w_port, p_size, answer+strlen(F_WS_HEAD)+i);
 
     return 1;
 on_error:
@@ -266,7 +279,7 @@ on_error:
     return 0;
 }
 
-int ac_cloud_get_params(char* v_url, size_t v_size, int v_port, char* v_sess, size_t vs_size, char* w_url, size_t w_size, int w_port, char* w_sess, size_t ws_size) {
+int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, size_t vs_size, char* w_url, size_t w_size, int* w_port, char* w_sess, size_t ws_size) {
     int ret = 0;
     char answer[LIB_HTTP_MAX_MSG_SIZE] = {0};
     char conn[LIB_HTTP_MAX_MSG_SIZE] = {0};
@@ -291,13 +304,13 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int v_port, char* v_sess, si
     if(!parse_video_settings(answer, &rc, &ssl, v_url, v_size, port2, sizeof(port2), v_sess, vs_size)) goto on_error;
     strncpy(w_sess, v_sess, ws_size-1);
 
-    v_port = atoi(port2);
+    *v_port = atoi(port2);
 
     if(!create_conn_string(conn, sizeof(conn), &ssl, ag_getMainURL(), NULL, AC_HTTP_MAIN_STREAMING_INTERFACE3, NULL, ag_getProxyID(), NULL)) goto on_error;
     if(!get_cloud_settings(conn, NULL, answer, sizeof(answer))) goto on_error;
-    if(!parst_ws_settings(answer, w_url, w_size, port2, sizeof(port2))) goto on_error;
+    if(!parse_ws_settings(answer, w_url, w_size, port2, sizeof(port2))) goto on_error;
 
-    w_port = atoi(port2);
+    *w_port = atoi(port2);
 
     ret = 1;
 

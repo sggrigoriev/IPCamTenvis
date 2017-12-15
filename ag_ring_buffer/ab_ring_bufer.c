@@ -95,7 +95,7 @@ int ab_init(size_t max_chunks) {
     read_index = 0;
     write_index = 0;
 
-    buffer = (t_ab_block*) malloc(buf_len * sizeof(t_ab_block));
+    buffer = (t_ab_block*) calloc(1, buf_len * sizeof(t_ab_block));
     if(!buffer) {
         pu_log(LL_ERROR, "ab_init: Ring buffer memory allocation error");
         return 0;

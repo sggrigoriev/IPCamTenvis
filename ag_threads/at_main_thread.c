@@ -22,6 +22,7 @@
 #include <memory.h>
 #include <errno.h>
 #include <ag_converter/ao_cmd_data.h>
+#include <lib_timer.h>
 
 #include "pu_queue.h"
 #include "pu_logger.h"
@@ -37,6 +38,7 @@
 
 
 #include "at_main_thread.h"
+#include "at_wud_write.h"
 
 #define AT_THREAD_NAME  "IPCamTenvis"
 
@@ -46,7 +48,7 @@
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;         /* main thread events set */
 static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
-static pu_queue_t* to_proxy;            /* main_thread -> proxy_write */
+static pu_queue_t* to_wud;            /* main_thread -> wud_write  */
 //static pu_queue_t* from_cam_control;    /* cam_control -> main_thread */
 //static pu_queue_t* to_cam_control;      /* main_thread -> cam_control */
 static pu_queue_t* to_video_mgr;        /* main_thread -> video manager */
@@ -58,12 +60,18 @@ static int video_on;                        /* 1 if video nmanager runs */
 /*****************************************************************************************
     Local functions deinition
 */
+static void send_wd() {
+        char buf[LIB_HTTP_MAX_MSG_SIZE];
+
+        pr_make_wd_alert4WUD(buf, sizeof(buf), ag_getAgentName(), ag_getProxyID());
+        pu_queue_push(to_wud, buf, strlen(buf)+1);
+}
 static int main_thread_startup() {
 /* Queues initiation */
     aq_init_queues();
 
     from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
-    to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thread -> proxy_write */
+    to_wud = aq_get_gueue(AQ_ToWUD);                    /* main_thread -> proxy_write */
 //    from_cam_control = aq_get_gueue(AQ_FromCamControl); /* cam_control -> main_thread */
 //    to_cam_control = aq_get_gueue(AQ_ToCamControl);     /* main_thread -> cam_control */
 
@@ -79,13 +87,19 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "PROXY_RW");
 
+    if(!at_start_wud_write()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "WUD_WRITE", strerror(errno));
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "WUD_WRITE");
+
     return 1;
 }
 static void main_thread_shutdown() {
     at_set_stop_proxy_rw();
+    at_set_stop_wud_write();
 
-    if(is_video_mgr_run()) at_set_stop_video_mgr();
-
+    at_stop_wud_write();
     at_stop_proxy_rw();
     at_stop_video_mgr();
 
@@ -134,10 +148,13 @@ static void process_proxy_message(char* msg) {
 void at_main_thread() {
     main_finish = 0;
 
-    if(!main_thread_startup()) {
+        if(!main_thread_startup()) {
         pu_log(LL_ERROR, "%s: Initialization failed. Abort", AT_THREAD_NAME);
         main_finish = 1;
     }
+
+    lib_timer_clock_t wd_clock = {0};           /* timer for watchdog sending */
+    lib_timer_init(&wd_clock, ag_getAgentWDTO());   /* Initiating the timer for watchdog sendings */
 
     unsigned int events_timeout = 1; /* Wait until the end of univerce */
     video_on = 0;
@@ -167,6 +184,12 @@ void at_main_thread() {
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
                 break;
 
+        }
+        /* Place for own periodic actions */
+        /*1. Wathchdog */
+        if(lib_timer_alarm(wd_clock)) {
+            send_wd();
+            lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
         if(video_on && !is_video_mgr_run()) {
             pu_log(LL_INFO, "%s Video Manager is off. Restart it.", AT_THREAD_NAME);

@@ -40,6 +40,8 @@
  */
 #define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
+#define AT_VIDEO_PORT 1935
+
 typedef enum {
     AT_STATE_UNDEF,
     AT_STATE_CONNECT,
@@ -60,9 +62,9 @@ static volatile int stop = 1;       /* Thread stop flag */
  * Local connection data. To be replaced later
 */
 
-static char video_host[5000];
-static int video_port = 1935;
-static char vs_session_id[100];
+static char video_host[5000] = {0};
+static int video_port = -1;
+static char vs_session_id[100] = {0};
 
 static const int fake_client_port = 11038;
 
@@ -111,8 +113,8 @@ static void say_disconnected_to_vm() {
 }
 
 static void rtsp_logging(const char* who, const char* h, const char* b) {
-    if(strlen(h)) pu_log(LL_DEBUG, "%s: Head = %s", who, h);
-    if(strlen(b)) pu_log(LL_DEBUG, "%s: Body = %s", who, b);
+    if(strlen(h)) pu_log(LL_DEBUG, "%s: Head = \n%s", who, h);
+    if(strlen(b)) pu_log(LL_DEBUG, "%s: Body = \n%s", who, b);
 }
 
 static t_at_states process_connect() {
@@ -205,8 +207,8 @@ static void process_stop() {
 
     stop_streaming();
 }
+
 static void* vc_thread(void* params) {
-    int tear_down;
     t_at_states state;
 
 on_reconnect:
@@ -215,10 +217,9 @@ on_reconnect:
         say_disconnected_to_vm();
         pthread_exit(NULL);
     }
-    tear_down = 0;
     state = AT_STATE_CONNECT;
 
-    while(!stop) {
+    while(!stop && (state != AT_STATE_ON_ERROR)) {
         switch(state) {
             case AT_STATE_CONNECT:
                 state = process_connect();
@@ -235,10 +236,7 @@ on_reconnect:
             case AT_STATE_PLAYING:
                 sleep(1);
                 break;
-            case AT_STATE_ON_ERROR:
-                stop = 1;
-                break;
-            default:
+             default:
                 pu_log(LL_ERROR, "%s: Unknown state = %d. Exiting", AT_THREAD_NAME, state);
                 state = AT_STATE_ON_ERROR;
                 break;
@@ -251,16 +249,13 @@ on_reconnect:
         case AT_STATE_PLAYING:
             pu_log(LL_INFO, "%s: Exit by stop playing", AT_THREAD_NAME);
             process_stop();
-            tear_down = 1;
             break;
         default:
-            pu_log(LL_ERROR, "%s: Exit by request", AT_THREAD_NAME);
-            tear_down = 1;
+            pu_log(LL_ERROR, "%s: Exit by VIDEO_MANAGER request", AT_THREAD_NAME);
             break;
     }
-    stop_streaming();
-    if(!tear_down) {
-        pu_log(LL_ERROR, "%s: Reconnect due to connection problems", AT_THREAD_NAME);
+    if((state == AT_STATE_ON_ERROR)) {
+        shutdown_proc();
         goto on_reconnect;
     }
     shutdown_proc();
@@ -276,9 +271,10 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
         return 1;
     }
 
-    pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, video_port, vs_session_id);
+    pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, port, session_id);
     strncpy(video_host, host, sizeof(video_host));
     strncpy(vs_session_id, session_id, sizeof(vs_session_id));
+    video_port = AT_VIDEO_PORT;
 
     struct hostent* hn = gethostbyname(host);
     if(!hn) {

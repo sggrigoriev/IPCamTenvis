@@ -73,8 +73,11 @@ static t_mgr_state start_ws_thread() {
     return AT_READY;
 }
 static t_mgr_state start_vc_therad() {
-    if(own_status != AT_READY)
-    if (!at_start_video_connector(video_conn.url, video_conn.port, video_conn.auth)) {
+    if(own_status != AT_READY) {
+        pu_log(LL_ERROR, "%s - %s: Wrong entry status = %d instead of %d, exit.", AT_THREAD_NAME, __FUNCTION__, own_status, AT_READY);
+        return AT_ERROR;
+    }
+    if(!at_start_video_connector(video_conn.url, video_conn.port, video_conn.auth)) {
         pu_log(LL_ERROR, "%s - %s: Error start video connector, exit.", AT_THREAD_NAME, __FUNCTION__);
         return AT_ERROR;
     }
@@ -82,7 +85,7 @@ static t_mgr_state start_vc_therad() {
 }
 /* Get video params params from cloud: 3 steps from https://presence.atlassian.net/wiki/spaces/EM/pages/164823041/Setup+IP+Camera+connection */
 static t_mgr_state get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
-    if(!ac_cloud_get_params(video->url, sizeof(video->url), video->port, video->auth, sizeof(video->auth), ws->url, sizeof(ws->url), ws->port, ws->auth, sizeof(ws->auth))) {
+    if(!ac_cloud_get_params(video->url, sizeof(video->url), &video->port, video->auth, sizeof(video->auth), ws->url, sizeof(ws->url), &ws->port, ws->auth, sizeof(ws->auth))) {
         return AT_ERROR;
     }
     return AT_GOT_VIDEO_CONN_INFO;
@@ -116,25 +119,26 @@ static void* main_thread(void* params) {
     while(!stop) {
         size_t len = sizeof(msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
-
-        switch (ev=pu_wait_for_queues(events, 1)) {
-             case AQ_FromWS:
-                while(pu_queue_pop(from_ws, msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from the Web socket thread %s", AT_THREAD_NAME, msg);
-                    own_status = process_ws_message(msg);
-                    len = sizeof(msg);
-                }
-                break;
-            case AQ_Timeout:
+        if((own_status == AT_PLAY) || (own_status == AT_READY)) {
+            switch (ev = pu_wait_for_queues(events, 1)) {
+                case AQ_FromWS:
+                    while (pu_queue_pop(from_ws, msg, &len)) {
+                        pu_log(LL_DEBUG, "%s: got message from the Web socket thread %s", AT_THREAD_NAME, msg);
+                        own_status = process_ws_message(msg);
+                        len = sizeof(msg);
+                    }
+                    break;
+                case AQ_Timeout:
 //                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
-                break;
-            case AQ_STOP:
-                stop = 1;
-                pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
-                break;
-            default:
-                pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
-                break;
+                    break;
+                case AQ_STOP:
+                    stop = 1;
+                    pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
+                    break;
+                default:
+                    pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
+                    break;
+            }
         }
         switch(own_status) {        /* State machine */
             case AT_GOT_PROXY_INFO:
@@ -158,11 +162,10 @@ static void* main_thread(void* params) {
             case AT_ERROR:
                 pu_log(LL_DEBUG, "%s: Error. Stop the thread", AT_THREAD_NAME);
                 stop = 1;
+                break;
             default:
                 break;
         }
-        break;
-
     }
 /* shutdown procedure */
     if(is_video_connector_run()) at_stop_video_connector();

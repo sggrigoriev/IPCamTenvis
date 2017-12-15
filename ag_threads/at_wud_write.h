@@ -16,15 +16,19 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 12/12/17.
- Suppor all HTTP Cam's negotiations with the cloud
+ Created by gsg on 15/12/17.
 */
 
-#ifndef IPCAMTENVIS_AC_CLOUD_H
-#define IPCAMTENVIS_AC_CLOUD_H
+#ifndef IPCAMTENVIS_AT_WUD_WRITE_H
+#define IPCAMTENVIS_AT_WUD_WRITE_H
 
-#include <stdlib.h>
+/* Start thread */
+int at_start_wud_write();
 
-int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, size_t vs_size, char* w_url, size_t w_size, int* w_port, char* w_sess, size_t ws_size);
+/* Stop the thread */
+void at_stop_wud_write();
 
-#endif /* IPCAMTENVIS_AC_CLOUD_H */
+/* Set stip flag on for async stop */
+void at_set_stop_wud_write();
+
+#endif /* IPCAMTENVIS_AT_WUD_WRITE_H */

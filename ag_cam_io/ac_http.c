@@ -106,8 +106,6 @@ out:
 /* -1 - retry, 0 - error, 1 - OK */
 int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size) {
     CURLcode curlResult = CURLE_OK;
-    long httpResponseCode = 0;
-    long httpConnectCode = 0;
     long curlErrno = 0;
     int ret;
 
@@ -120,31 +118,9 @@ int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size) {
     answer[0] = '\0';
 
     curlResult = curl_easy_perform(h->h);
-    curl_easy_getinfo(h->h, CURLINFO_RESPONSE_CODE, &httpResponseCode );
-    curl_easy_getinfo(h->h, CURLINFO_HTTP_CONNECTCODE, &httpConnectCode );
 
-    if (httpResponseCode >= 300 || httpConnectCode >= 300) {
-        pu_log(LL_ERROR, "%s: HTTP error response code:%ld, connect code:%ld", __FUNCTION__, httpResponseCode, httpConnectCode);
-        curlErrno = EHOSTUNREACH;
-        goto out;
-    }
-    if (curlResult != CURLE_OK) {
-        if (curlResult == CURLE_ABORTED_BY_CALLBACK) {
-            curlErrno = EAGAIN;
-            pu_log(LL_DEBUG, "%s: quitting curl transfer: %d %s", __FUNCTION__, curlErrno, strerror((int)curlErrno));
-        }
-        else {
-            if (curl_easy_getinfo(h->h, CURLINFO_OS_ERRNO, &curlErrno) != CURLE_OK) {
-                curlErrno = ENOEXEC;
-                pu_log(LL_ERROR, "%s: curl_easy_getinfo", __FUNCTION__);
-            }
-            if (curlResult == CURLE_OPERATION_TIMEDOUT) curlErrno = ETIMEDOUT; /* time out error must be distinctive */
-            else if (curlErrno == 0) curlErrno = ENOEXEC; /* can't be equal to 0 if curlResult != CURLE_OK */
+    if(ac_http_analyze_perform(curlResult, h->h, __FUNCTION__) != CURLE_OK) goto out;
 
-            pu_log(LL_WARNING, "%s: %s, %s", __FUNCTION__, curl_easy_strerror(curlResult), strerror((int) curlErrno));
-        }
-        goto out;
-    }
     /* the following is a special case - a time-out from the server is going to return a */
     /* string with 1 character in it ... */
     if (strlen(h->wr_buf.buf) > 1) {
@@ -173,4 +149,35 @@ void ac_http_close_conn(t_ac_http_handler* h) {
         free(h);
         h = NULL;
     }
+}
+
+long ac_http_analyze_perform(CURLcode perform_rc, CURLSH* handler, const char* function) {
+    long httpResponseCode = 0;
+    long httpConnectCode = 0;
+    long curlErrno = 0;
+
+    curl_easy_getinfo(handler, CURLINFO_RESPONSE_CODE, &httpResponseCode );
+    curl_easy_getinfo(handler, CURLINFO_HTTP_CONNECTCODE, &httpConnectCode );
+
+    if (httpResponseCode >= 300 || httpConnectCode >= 300) {
+        pu_log(LL_ERROR, "%s: HTTP error response code at %s:%ld, connect code:%ld", __FUNCTION__, function, httpResponseCode, httpConnectCode);
+        if((httpResponseCode == AC_HTTP_UNAUTH) && (httpConnectCode == 0L)) curlErrno = AC_HTTP_UNAUTH;
+    }
+    else if (perform_rc != CURLE_OK) {
+        if (perform_rc == CURLE_ABORTED_BY_CALLBACK) {
+            curlErrno = EAGAIN;
+            pu_log(LL_DEBUG, "%s: quitting curl transfer at %s: %d %s", __FUNCTION__, function, curlErrno, strerror((int)curlErrno));
+        }
+        else {
+            if (curl_easy_getinfo(handler, CURLINFO_OS_ERRNO, &curlErrno) != CURLE_OK) {
+                curlErrno = ENOEXEC;
+                pu_log(LL_ERROR, "%s: curl_easy_getinfo returned CURLINFO_OS_ERRNO at %s", __FUNCTION__, function);
+            }
+            if (perform_rc == CURLE_OPERATION_TIMEDOUT) curlErrno = ETIMEDOUT; /* time out error must be distinctive */
+            else if (curlErrno == 0) curlErrno = ENOEXEC; /* can't be equalt to 0 if curlResult != CURLE_OK */
+
+            pu_log(LL_WARNING, "%s at %s: %s, %s", __FUNCTION__, function, curl_easy_strerror(perform_rc), strerror((int) curlErrno));
+        }
+    }
+    return curlErrno;
 }
