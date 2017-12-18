@@ -21,7 +21,6 @@
 
 #include <pthread.h>
 #include <memory.h>
-#include <ag_converter/ao_cmd_data.h>
 
 #include "pu_logger.h"
 #include "pu_queue.h"
@@ -88,6 +87,8 @@ static t_mgr_state get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
     if(!ac_cloud_get_params(video->url, sizeof(video->url), &video->port, video->auth, sizeof(video->auth), ws->url, sizeof(ws->url), &ws->port, ws->auth, sizeof(ws->auth))) {
         return AT_ERROR;
     }
+    pu_log(LL_DEBUG, "%s: Video Connection parameters: URL = %s, PORT = %d, SessionId = %s", __FUNCTION__, video->url, video->port, video->auth);
+    pu_log(LL_DEBUG, "%s: WS Connection parameters: URL = %s, PORT = %d, SessionId = %s", __FUNCTION__, ws->url, ws->port, ws->auth);
     return AT_GOT_VIDEO_CONN_INFO;
 }
 
@@ -155,8 +156,14 @@ static void* main_thread(void* params) {
                 break;
             case AT_PLAY:
                 if(!is_ws_run()) {
-                    pu_log(LL_WARNING, "%s: Video connector thread restart", AT_THREAD_NAME);
+                    pu_log(LL_WARNING, "%s: Wideo socket tread restart", AT_THREAD_NAME);
+                    if(is_video_connector_run()) at_stop_video_connector();
                     own_status = start_ws_thread();
+                }
+                else if(!is_video_connector_run()) {
+                    pu_log(LL_WARNING, "%s: Wideo connector tread restart", AT_THREAD_NAME);
+                    own_status = AT_READY;
+                    own_status = start_vc_therad();
                 }
                 break;
             case AT_ERROR:

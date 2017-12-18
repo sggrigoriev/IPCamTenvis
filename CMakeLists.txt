@@ -29,6 +29,7 @@ include_directories(
         ag_threads
         ag_queues
         ag_ring_buffer
+        au_string
         ${PROXY_LIBS_PATH}/pu_logger
         ${PROXY_LIBS_PATH}/presto_commands
         ${PROXY_LIBS_PATH}/pc_config
@@ -49,6 +50,7 @@ file (GLOB SOURCE_FILES
         ag_threads/*.c
         ag_queues/*.c
         ag_ring_buffer/ab_ring_bufer.c
+        au_string/*.c
         ${PROXY_LIBS_PATH}/pc_config/pc_config.c
         ${PROXY_LIBS_PATH}/presto_commands/*.c
         ${PROXY_LIBS_PATH}/pu_queues/*.c

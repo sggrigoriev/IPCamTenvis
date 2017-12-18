@@ -22,11 +22,14 @@
 #include <curl/curl.h>
 #include <memory.h>
 #include <ctype.h>
+#include <au_string/au_string.h>
 
 #include "pu_logger.h"
 
+#include "au_string.h"
 #include "ag_defaults.h"
 #include "ac_http.h"
+#include "ag_settings.h"
 
 #include "ac_rtsp.h"
 
@@ -40,11 +43,20 @@
 #define AC_LOW_RES          "11"
 #define AC_HI_RES           "12"
 
+#define AC_SERVER_PORT      "server_port"
 #define AC_TRACK            "trackID="
+#define AC_SESSION          "Session: "
 #define AC_PLAY_RANGE       "npt=0.000-"
-#define AC_VIDEO_TRACK      0
+#define AC_VIDEO_TRACK      "0"
 #define AC_STREAMING_TCP    0
 #define AC_RTSP_HEAD        "rtsp://"
+
+#define AC_RTSP_EOL         "\r\n"
+#define AC_RTSP_SDP_ORIGIN  AC_RTSP_EOL"o="
+#define AC_RTSP_SDP_CD      AC_RTSP_EOL"c="
+#define AC_RTSP_VS_ORIGIN   "- 0 0 IN IP4 127.0.0.1"
+#define AC_RTSP_CD_IP4      "IP4 "
+
 
 typedef struct {
     CURL* h;
@@ -114,8 +126,8 @@ static size_t reader(void *ptr, size_t size, size_t nmemb, void *userp) {
 }
 
 static void copy_result(t_handler hndlr, char* h, size_t hs, char* b, size_t bs) {
-    strncpy(h, hndlr.ans_hdr.buf, hs); hndlr.ans_hdr.buf[0] = '\0';
-    strncpy(b, hndlr.ans_body.buf, bs); hndlr.ans_body.buf[0] = '\0';
+    if(!au_strcpy(h, hndlr.ans_hdr.buf, hs)) return;
+    if(!au_strcpy(b, hndlr.ans_body.buf, bs)) return;
 }
 static const char* make_transport_string(char* buf, size_t size, int port, int tcp_streaming) {
     char s_port1[20];
@@ -123,10 +135,17 @@ static const char* make_transport_string(char* buf, size_t size, int port, int t
     buf[0] = '\0';
     sprintf(s_port1, "%d", port);
     sprintf(s_port2, "%d", port+1);
-    if(tcp_streaming)
-        sprintf(buf, "RTP/AVP/TCP;unicast;client_port=%s-%s", s_port1, s_port2);
-    else
-        sprintf(buf, "RTP/AVP;unicast;client_port=%s-%s", s_port1, s_port2);
+
+    if(tcp_streaming) {
+        if (!au_strcpy(buf, "RTP/AVP/TCP;unicast;client_port=", size)) return NULL;
+    }
+    else {
+        if (!au_strcpy(buf, "RTP/AVP/TCP;unicast;client_port=", size)) return NULL;
+    }
+
+    if(!au_strcat(buf, s_port1, size)) return NULL;
+    if(!au_strcat(buf, s_port2, size)) return NULL;
+
     return buf;
 }
 static t_handler* get_handler(t_ac_rtsp_device device_type) {
@@ -143,34 +162,14 @@ static t_handler* get_handler(t_ac_rtsp_device device_type) {
     }
 }
 
-static int findNCSubstr(const char* msg, const char* subs) {
-    if(!msg || !subs) return -1;
-    unsigned int i;
-    int gotit = 0;
-    for(i = 0; i < strlen(msg); i++) {
-        if((strlen(msg)-i) >= strlen(subs)) {
-            unsigned j;
-            for(j = 0; j < strlen(subs); j++) {
-                if(tolower(msg[i+j]) != tolower(subs[j])) {
-                    gotit = 0;
-                    break;
-                }
-                gotit = 1;
-            }
-            if(gotit) return i;
-        }
-        else return -1;
-    }
-    return -1;
-}
 static char* get_sesion_id(const char* src, char* buf, size_t size) {
     int start_pos, len;
     buf[0] = '\0';
-    if(start_pos = findNCSubstr(src, "Session: "), start_pos < 0) return buf;
-    start_pos += strlen("Session: ");
-    if(len = findNCSubstr(src+start_pos, ";"), len < 0) return buf;
-    memcpy(buf, src + start_pos, (size_t)len);
-    buf[len] = '\0';
+    if(start_pos = au_findSubstr(src, AC_SESSION, AU_NOCASE), start_pos < 0) return buf;
+    start_pos += strlen(AC_SESSION);
+    if(len = au_findSubstr(src+start_pos, ";", AU_CASE), len < 0) return buf;
+    if(!au_strcpy(buf, src + start_pos, size)) return NULL;
+
     return buf;
 }
 
@@ -199,18 +198,18 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
         pu_log(LL_ERROR, "%s: Device URL is NULL or empty");
         return 0;
     }
-    if(h->req_body.buf = calloc(1, AC_RTSP_BODY_SIZE), !h->req_body.buf) {
+    if(h->req_body.buf = calloc(AC_RTSP_BODY_SIZE, 1), !h->req_body.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         return 0;
     }
 
-    if(h->ans_hdr.buf = calloc(1, AC_RTSP_HEADER_SIZE), !h->ans_hdr.buf) {
+    if(h->ans_hdr.buf = calloc(AC_RTSP_HEADER_SIZE, 1), !h->ans_hdr.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         free(h->req_body.buf);
         return 0;
     }
 
-    if(h->ans_body.buf = calloc(1, AC_RTSP_BODY_SIZE), !h->ans_body.buf) {
+    if(h->ans_body.buf = calloc(AC_RTSP_BODY_SIZE, 1), !h->ans_body.buf) {
         pu_log(LL_ERROR, "%s Memory allocation error", __FUNCTION__);
         free(h->req_body.buf);
         free(h->ans_hdr.buf);
@@ -219,8 +218,8 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
     h->ans_hdr.sz = AC_RTSP_HEADER_SIZE;
     h->ans_body.sz = AC_RTSP_BODY_SIZE;
     h->req_body.sz = AC_RTSP_BODY_SIZE;
-    strncpy(h->url, AC_RTSP_HEAD, sizeof(h->url));
-    strncat(h->url, url, sizeof(h->url)-strlen(h->url)-1);
+    if(!au_strcpy(h->url, AC_RTSP_HEAD, sizeof(h->url))) return 0;
+    if(!au_strcat(h->url, url, sizeof(h->url))) return 0;
 
     if(h->h = curl_easy_init(), !h->h) {
         pu_log(LL_ERROR, "%s: curl_easy_init.");
@@ -288,10 +287,13 @@ int ac_req_setup(t_ac_rtsp_device device_type, char* head, size_t h_size, char* 
     char transport[AC_RTSP_TRANSPORT_SIZE];
     char uri[AC_RTSP_HEADER_SIZE];
 
-    sprintf(h->track, "%s%d", AC_TRACK, AC_VIDEO_TRACK);       /* save "trackID=0" for use in PLAY command */
+    if(!au_strcpy(h->track, AC_TRACK, sizeof(h->track))) goto on_error;
+    if(!au_strcat(h->track, AC_VIDEO_TRACK, sizeof(h->track))) goto on_error; /* save "trackID=0" for use in PLAY command */
+    h->track[sizeof(h->track)-1] = '\0';
 
-    strcpy(uri, h->url);
-    sprintf(uri+strlen(uri), "/%s", h->track);                 /* Add to url "/trackID=0" */
+    if(!au_strcpy(uri, h->url, sizeof(uri))) goto on_error;
+    if(!au_strcat(uri, "/", sizeof(uri))) goto on_error;
+    if(!au_strcat(uri, h->track, sizeof(uri))) goto on_error;                  /* Add to url "/trackID=0" */
 
     make_transport_string(transport, sizeof(transport), cient_port, AC_STREAMING_TCP);
 
@@ -318,8 +320,9 @@ int ac_req_play(t_ac_rtsp_device device_type, char* head, size_t h_size, char* b
     if(!h) return -1;
 
     char uri[AC_RTSP_HEADER_SIZE];
-    strcpy(uri, h->url);
-    sprintf(uri+strlen(uri), "/%s", h->track);                 /* Add to url "/trackID=0" */
+    if(!au_strcpy(uri, h->url, sizeof(uri))) return 0;
+    if(!au_strcat(uri, "/", sizeof(uri))) return 0;
+    if(!au_strcat(uri, h->track, sizeof(uri))) return 0;  /* Add to url "/trackID=0" */
 
     if(res = curl_easy_setopt(h->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(h->h, CURLOPT_RTSP_SESSION_ID, h->session_id), res != CURLE_OK) goto on_error;
@@ -382,24 +385,24 @@ const char* ac_makeCamURL(char *url, size_t size, const char* ip, int port, cons
     }
 
     if(strlen(login) && strlen(pwd)) {
-        strcpy(url, login);
-        strcat(url, ":");
-        strcat(url, pwd);
-        strcat(url, "@");
-        strcat(url, ip);
+        if(!au_strcpy(url, login, size)) return 0;
+        if(!au_strcat(url, ":", size)) return 0;
+        if(!au_strcat(url, pwd, size)) return 0;
+        if(!au_strcat(url, "@", size)) return 0;
+        if(!au_strcat(url, ip, size)) return 0;
     }
     else {
-        strcpy(url, ip);
+        if(!au_strcpy(url, ip, size)) return 0;
     }
-    strcat(url, ":");
-    strcat(url, s_port);
-    strcat(url, "/");
+    if(!au_strcat(url, ":", size)) return 0;
+    if(!au_strcat(url, s_port, size)) return 0;
+    if(!au_strcat(url, "/", size)) return 0;
     switch (resolution) {
         case AO_RES_LO:
-            strcat(url, AC_LOW_RES);
+            if(!au_strcat(url, AC_LOW_RES, size)) return 0;
             break;
         case AO_RES_HI:
-            strcat(url, AC_HI_RES);
+            if(!au_strcat(url, AC_HI_RES, size)) return 0;
             break;
         default:
             break;
@@ -411,14 +414,57 @@ const char* ac_makeCamURL(char *url, size_t size, const char* ip, int port, cons
 /********************************************** Video Server part *****************************************************/
 int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char* body, size_t b_size) {
     CURLcode res = CURLE_OK;
+    char ip[20] ={0};
+    char connection[500] ={0};
+/*
+    if(!au_strcpy(head, cam_describe_body, h_size)) return 0;
 
-    strcpy(vs.req_body.buf, cam_describe_body);
-    vs.req_body.sz = strlen(cam_describe_body);
+// Replace IP in c=
+    ag_getClientIP(ip, sizeof(ip));
+    if(!au_getSection(connection, sizeof(connection), cam_describe_body, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE)) {
+        pu_log(LL_ERROR, "%s: can not extract connection parameter from Camera SDP %s Exiting", __FUNCTION__, cam_describe_body);
+        return 0;
+    }
+    if(!au_replaceSection(connection, sizeof(connection), AC_RTSP_CD_IP4, AC_RTSP_EOL, AU_NOCASE, ip)) {
+        pu_log(LL_ERROR, "%s: can not replace IP %s in VS connection parameter %s Exiting", __FUNCTION__, ip, cam_describe_body);
+        return 0;
+    }
+    if(!au_replaceSection(head, h_size, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE, connection)) {
+        pu_log(LL_ERROR, "%s: can not replace connection parameter %s to VS SDP %s Exiting", __FUNCTION__, connection, head);
+        return 0;
+    }
 
-    char buf[30];
-    snprintf(buf, sizeof(buf) - 1, "Content-Length: %lu", vs.req_body.sz);
+// Replace origin
+    if(!au_replaceSection(head, h_size, AC_RTSP_SDP_ORIGIN, AC_RTSP_EOL, AU_NOCASE, AC_RTSP_VS_ORIGIN)) {
+        pu_log(LL_ERROR, "%s: can not replace origin parameter %s to VS SDP %s Exiting", __FUNCTION__, AC_RTSP_VS_ORIGIN, head);
+        return 0;
+    }
+    pu_log(LL_DEBUG, "%s: Conn string = %s\n Header = %s", __FUNCTION__, vs.url, head);
+
+
+    char buf[30] = {0};
+        char* hh = "v=0\n"
+                "o=- 0 0 IN IP4 127.0.0.1\n"
+                "s=\\11\n"
+                "c=IN IP4 184.73.181.211\n"
+                "t=0 0\n"
+                "a=tool:libavformat 57.65.100\n"
+                "m=video 0 RTP/AVP 96\n"
+                "b=AS:150\n"
+                "a=rtpmap:96 MP4V-ES/90000\n"
+                "a=fmtp:96 profile-level-id=1; config=000001B002000001B58913000001000000012000C48D8800CD3C04871443000001B24C61766335372E37352E313030\n"
+                "a=control:streamid=0\n"
+                "m=audio 0 RTP/AVP 97\n"
+                "b=AS:64\n"
+                "a=rtpmap:97 MPEG4-GENERIC/48000/2\n"
+                "a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\n"
+                "a=control:streamid=1";
+    snprintf(buf, sizeof(buf) - 1, "Content-Length: %lu", strlen(hh));
     vs.slist = curl_slist_append(vs.slist, buf);
+    vs.slist = curl_slist_append(vs.slist, hh);
 
+    if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPHEADER, vs.slist), res != CURLE_OK) goto on_error;
+*/
     if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_ANNOUNCE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(vs.h);
@@ -426,7 +472,7 @@ int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char
 
     if (res = curl_easy_setopt(vs.h, CURLOPT_WRITEDATA, &vs.ans_body), res != CURLE_OK) goto on_error;
 
-    get_sesion_id(vs.ans_hdr.buf, vs.session_id, AC_RTSP_SESSION_ID_SIZE);    /* Save session_id to use in ANNOUNCE2 command */
+//    get_sesion_id(vs.ans_hdr.buf, vs.session_id, AC_RTSP_SESSION_ID_SIZE);    /* Save session_id to use in ANNOUNCE2 command */
 
     copy_result(vs, head, h_size, body, b_size);
     return 1;
@@ -436,7 +482,7 @@ on_error:
 int ac_req_vs_announce2(char* head, size_t h_size, char* body, size_t b_size) {
     CURLcode res = CURLE_OK;
 
-    if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_SESSION_ID, vs.session_id), res != CURLE_OK) goto on_error;
+//    if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_SESSION_ID, vs.session_id), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_USERNAME, vs.session_id), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_USERPWD, vs.session_id), res != CURLE_OK) goto on_error;
@@ -454,10 +500,25 @@ on_error:
 /* <vs_url>:<port>/ppcvideoserver/<vs_session_id> */
 const char* ac_makeVSURL(char *url, size_t size, const char* vs_url, int port, const char* vs_session_id) {
     char s_port[20];
-    sprintf(s_port, "%d", port);
-    strcpy(vs.vs_session_id, vs_session_id);
     url[0] = '\0';
+    sprintf(s_port, "%d", port);
+    if(!au_strcpy(vs.vs_session_id, vs_session_id, sizeof(vs.vs_session_id))) return NULL;
 
-    sprintf(url, "%s:%s@%s:%s/%s/%s", vs_session_id, vs_session_id, vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
+    if((strlen(vs_url)+strlen(s_port)+strlen(vs_session_id)+strlen(DEFAULT_PPC_VIDEO_FOLDER) + 4) > (size-1)) {
+        pu_log(LL_ERROR, "%s: buffer size too low. VS URL can't be constructed", __FUNCTION__);
+        return url;
+    }
+    sprintf(url, "%s:%s/%s/%s", vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
     return url;
+}
+
+/********************************************** Parsing utilities *****************************************************/
+int ac_get_server_port(const char* msg) {
+    char number [10]={0};
+    ssize_t pos;
+
+    if(pos = au_findSubstr(msg, AC_SERVER_PORT, AU_NOCASE), pos < 0) return -1;
+    if(au_getNumber(number, sizeof(number), msg+pos+strlen(AC_SERVER_PORT))) return atoi(number);
+
+    return -1;
 }

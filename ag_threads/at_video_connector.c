@@ -21,6 +21,8 @@
 #include <pthread.h>
 #include <memory.h>
 #include <netdb.h>
+#include <arpa/inet.h>
+#include <au_string/au_string.h>
 
 #include "pu_queue.h"
 #include "pu_logger.h"
@@ -29,7 +31,7 @@
 #include "at_cam_video_read.h"
 #include "at_cam_video_write.h"
 #include "ag_settings.h"
-#include"ac_rtsp.h"
+#include "ac_rtsp.h"
 #include "ao_cma_cam.h"
 
 #include "at_video_connector.h"
@@ -86,7 +88,7 @@ static int init_proc() {
     if(!ac_open_session(AC_WOWZA, ac_makeVSURL(url, sizeof(url), video_host, video_port, vs_session_id))) goto on_error;
     if(!ac_open_session(AC_CAMERA, ac_makeCamURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution()))) goto on_error;
     return 1;
-    on_error:
+on_error:
     shutdown_proc();
     return 0;
 }
@@ -132,21 +134,25 @@ static t_at_states process_connect() {
 
     return AT_STATE_AUTH;
 }
+
+static char cam_head[5000] = {0};
+static char cam_body[5000] = {0};
+static char vs_head[5000] = {0};
+static char vs_body[5000] = {0};
+
 static t_at_states process_auth() {
-    char head[5000] = {0};
-    char body[5000] = {0};
     int rc;
 
-    rc = ac_req_cam_describe(head, sizeof(head), body, sizeof(body));
-    rtsp_logging("CAM-DESCRIBE", head, body);
+    rc = ac_req_cam_describe(cam_head, sizeof(cam_head), cam_body, sizeof(cam_body));
+    rtsp_logging("CAM-DESCRIBE", cam_head, cam_body);
     if(!rc) return AT_STATE_ON_ERROR;
 
-    rc = ac_req_vs_announce1(body, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("VS-ANNOUNCE", head, body);
+    rc = ac_req_vs_announce1(cam_body, vs_head, sizeof(vs_head), vs_body, sizeof(vs_body));
+    rtsp_logging("VS-ANNOUNCE", vs_body, vs_body);
     if(!rc) return AT_STATE_ON_ERROR;
 
-    rc = ac_req_vs_announce2(head, sizeof(head), body, sizeof(body));
-    rtsp_logging("VS-AUTH", head, body);
+    rc = ac_req_vs_announce2(vs_head, sizeof(vs_head), vs_body, sizeof(vs_body));
+    rtsp_logging("VS-AUTH", vs_head, vs_body);
     if(!rc) return AT_STATE_ON_ERROR;
 
     return AT_STATE_SETUP;
@@ -160,7 +166,7 @@ static t_at_states process_setup() {    /* NB! Video stream only!*/
     rtsp_logging("CAM-SETUP", head, body);
     if(!rc) return AT_STATE_ON_ERROR;
 
-    if(port = ao_get_server_port(head), port < 0) {
+    if(port = ac_get_server_port(head), port < 0) {
         pu_log(LL_ERROR, "%s: Get CAM UDP port error", AT_THREAD_NAME);
         return AT_STATE_ON_ERROR;
     }
@@ -170,7 +176,7 @@ static t_at_states process_setup() {    /* NB! Video stream only!*/
     rtsp_logging("VS-SETUP", head, body);
     if(!rc) return AT_STATE_ON_ERROR;
 
-    if(port = ao_get_server_port(head), port < 0) {
+    if(port = ac_get_server_port(head), port < 0) {
         pu_log(LL_ERROR, "%s: Get VS UDP port error", AT_THREAD_NAME);
         return AT_STATE_ON_ERROR;
     }
@@ -210,6 +216,8 @@ static void process_stop() {
 
 static void* vc_thread(void* params) {
     t_at_states state;
+
+    pu_log(LL_INFO, "%s started.", AT_THREAD_NAME);
 
 on_reconnect:
     if(!init_proc()) {
@@ -267,13 +275,13 @@ on_reconnect:
  */
 int at_start_video_connector(const char* host, int port, const char* session_id) {
     if(is_video_connector_run()) {
-        pu_log(LL_WARNING, "%s: Vidoe connector already run. Start ignored", __FUNCTION__);
+        pu_log(LL_WARNING, "%s: Video connector already run. Start ignored", __FUNCTION__);
         return 1;
     }
 
     pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, port, session_id);
-    strncpy(video_host, host, sizeof(video_host));
-    strncpy(vs_session_id, session_id, sizeof(vs_session_id));
+    if(!au_strcpy(video_host, host, sizeof(video_host))) return 0;
+    if(!au_strcpy(vs_session_id, session_id, sizeof(vs_session_id))) return 0;
     video_port = AT_VIDEO_PORT;
 
     struct hostent* hn = gethostbyname(host);
@@ -281,12 +289,14 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
         pu_log(LL_ERROR, "%s: Can't get IP of VS server: %d - %s", __FUNCTION__, h_errno, strerror(h_errno));
         return -1;
     }
-    ag_saveClientIP(hn->h_addr);
+    struct sockaddr_in s;
+    memcpy(&s.sin_addr, hn->h_addr_list[0], (size_t)hn->h_length);
+    char* ip = inet_ntoa(s.sin_addr);
+    ag_saveClientIP(ip);
     stop = 0;
 
     if(pthread_attr_init(&attr)) {stop = 1; return 0;}
     if(pthread_create(&id, &attr, &vc_thread, NULL)) {stop = 1; return 0;}
-
 
     return 1;
 }

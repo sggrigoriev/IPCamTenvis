@@ -24,6 +24,7 @@
 #include <memory.h>
 
 #include <cJSON.h>
+#include <au_string/au_string.h>
 #include "pu_logger.h"
 #include "pc_config.h"
 #include "pr_commands.h"
@@ -197,21 +198,21 @@ const char*     ag_getCamPassword() {
 }
 
 void ag_saveProxyAuthToken(const char* token) {
-    if(token) strncpy(proxy_auth_token, token, sizeof(proxy_auth_token));
+    if(token) au_strcpy(proxy_auth_token, token, sizeof(proxy_auth_token));
 }
 const char* ag_getProxyAuthToken() {
     return proxy_auth_token;
 }
 
 void ag_saveProxyID(const char* proxyID) {
-    strncpy(proxy_id, proxyID, sizeof(proxy_id)-1);
+    au_strcpy(proxy_id, proxyID, sizeof(proxy_id));
 }
 const char* ag_getProxyID() {
     return proxy_id;
 }
 
 void ag_saveMainURL(const char* mu) {
-    strncpy(main_url, mu, sizeof(main_url)-1);
+    au_strcpy(main_url, mu, sizeof(main_url));
 }
 const char* ag_getMainURL() {
     return main_url;
@@ -225,12 +226,13 @@ const char* ag_getMainURL() {
 
 void ag_saveClientIP(const char* ip_address) {
     pthread_mutex_lock(&local_mutex);
-    strncpy(client_ip, ip_address, sizeof(client_ip)-1);
+    au_strcpy(client_ip, ip_address, sizeof(client_ip));
+    client_ip[sizeof(client_ip)-1] = '\0';
     pthread_mutex_unlock(&local_mutex);
 }
 const char* ag_getClientIP(char* buf, size_t size) {
     pthread_mutex_lock(&local_mutex);
-    strncpy(buf, client_ip, size-1);
+    au_strcpy(buf, client_ip, size);
     pthread_mutex_unlock(&local_mutex);
     return buf;
 }
@@ -299,10 +301,10 @@ int ag_load_config(const char* cfg_file_name) {
 static void initiate_defaults() {
     initiated = 1;
 
-    strncpy(agent_process_name, DEFAULT_AGENT_NAME, PR_MAX_PROC_NAME_SIZE);
-    strncpy(agent_cfg_file_name, DEFAULT_CFG_FILE_NAME, LIB_HTTP_MAX_URL_SIZE);
+    au_strcpy(agent_process_name, DEFAULT_AGENT_NAME, PR_MAX_PROC_NAME_SIZE);
+    au_strcpy(agent_cfg_file_name, DEFAULT_CFG_FILE_NAME, LIB_HTTP_MAX_URL_SIZE);
 
-    strncpy(log_name, DEFAULT_LOG_NAME, LIB_HTTP_MAX_URL_SIZE);
+    au_strcpy(log_name, DEFAULT_LOG_NAME, LIB_HTTP_MAX_URL_SIZE);
     log_rec_amt = DEFAULT_LOG_RECORDS_AMT;
     log_level = DEFAULT_LOG_LEVEL;
 
@@ -314,13 +316,13 @@ static void initiate_defaults() {
     watchdog_to_sec = DEFAULT_WATCHDOG_TO_SEC;
 
     ipcam_port = DEFAULT_IPCAM_PORT;
-    strncpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
+    au_strcpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
     chunks_amount = DEFAULT_CHUNKS_AMOUNT;
     streaming_buffer_size = DEFAULT_MAX_UDP_STREAM_BUFF_SIZE;
     ipcam_resolution = DEFAULT_IPCAM_RESOLUTION;
 
-    strncpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
-    strncpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
+    au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
+    au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
 }
 
 /*

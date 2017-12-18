@@ -19,6 +19,7 @@
  Created by gsg on 09/12/17.
 */
 #include <string.h>
+#include <au_string/au_string.h>
 
 #include "cJSON.h"
 #include "pu_logger.h"
@@ -61,7 +62,7 @@ static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
         pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_DEVICE_ID);
         return 0;
     }
-    strncpy(fld->proxy_device_id, ent->valuestring, sizeof(fld->proxy_device_id));
+    if(!au_strcpy(fld->proxy_device_id, ent->valuestring, sizeof(fld->proxy_device_id))) return 0;
 
     if(map = cJSON_GetObjectItem(arr_item, F_PAR_MAP), !map) {
         pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PAR_MAP);
@@ -85,13 +86,13 @@ static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
         pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_AUTH_TOKEN);
         return 0;
     }
-    strncpy(fld->proxy_auth, ent->valuestring, sizeof(fld->proxy_auth));
+    if(!au_strcpy(fld->proxy_auth, ent->valuestring, sizeof(fld->proxy_auth))) return 0;
 
     if(ent = cJSON_GetObjectItem(map, F_CONN_STRING), !ent) {
         pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_CONN_STRING);
         return 0;
     }
-    strncpy(fld->main_url, ent->valuestring, sizeof(fld->main_url));
+    if(!au_strcpy(fld->main_url, ent->valuestring, sizeof(fld->main_url))) return 0;
 
     return 1;
 }

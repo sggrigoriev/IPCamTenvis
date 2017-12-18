@@ -81,6 +81,8 @@ int ac_req_setup(t_ac_rtsp_device device_type, char* head, size_t h_size, char* 
 int ac_req_play(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
 int ac_req_teardown(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
 
+int ac_get_server_port(const char* msg);
+
 
 int ac_req_cam_describe(char* head, size_t h_size, char* body, size_t b_size);
 

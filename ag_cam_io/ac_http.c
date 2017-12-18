@@ -25,6 +25,7 @@
 #include "lib_http.h"
 #include "pu_logger.h"
 
+#include "au_string.h"
 #include "ag_defaults.h"
 #include "ac_http.h"
 
@@ -69,11 +70,11 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
 
     t_ac_http_handler* h = NULL;
 
-    if(h = calloc(1, sizeof(t_ac_http_handler)), !h) {
+    if(h = calloc(sizeof(t_ac_http_handler), 1), !h) {
         pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
         goto out;
     }
-    if(h->wr_buf.buf = calloc(1, LIB_HTTP_MAX_MSG_SIZE), !h->wr_buf.buf) {
+    if(h->wr_buf.buf = calloc(LIB_HTTP_MAX_MSG_SIZE, 1), !h->wr_buf.buf) {
         pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
         goto out;
     }
@@ -126,8 +127,8 @@ int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size) {
     if (strlen(h->wr_buf.buf) > 1) {
         /* put the result into the main buffer and return */
         pu_log(LL_DEBUG, "%s: received msg length %d", __FUNCTION__, strlen(h->wr_buf.buf));
-        strncpy(answer, h->wr_buf.buf, size-1);
-    }
+        if(!au_strcpy(answer, h->wr_buf.buf, size)) goto out;
+     }
     else {
         pu_log(LL_DEBUG, "%s: received time-out message from the server. RX len = %d", __FUNCTION__, strlen(h->wr_buf.buf));
         curlErrno = EAGAIN;

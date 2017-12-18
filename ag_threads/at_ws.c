@@ -106,12 +106,13 @@ static void *ws_read_thread(void *pvoid) {
     pu_log(LL_DEBUG,"%s: connecting to %s:%s%s",__FUNCTION__,args->hostname,args->port,args->path);
     noPollConn * conn = nopoll_conn_new (ctx, args->hostname, args->port, NULL, args->path, NULL, NULL);
 
-    if (! nopoll_conn_is_ok (conn)) {
+    if (!nopoll_conn_is_ok (conn)) {
         pu_log(LL_ERROR,"%s: unable to create websocket",__FUNCTION__);
     }
     /* wait until connection is ready */
     if (!nopoll_conn_wait_until_connection_ready(conn, 5) ) { //todo
         pu_log(LL_ERROR,"%s: failed to connect",__FUNCTION__);
+        stop = 1;
         return (0);
     }
     /* send 1's magic whisper */

@@ -21,10 +21,12 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <au_string/au_string.h>
 
 #include "pu_logger.h"
 #include "lib_http.h"
 
+#include "au_string.h"
 #include "ac_http.h"
 #include "ag_settings.h"
 
@@ -51,45 +53,6 @@ static const char* F_VS_HOST = "videoServer";
 static const char* F_SESS_ID = "sessionId";
 
 static const char* F_WS_HEAD = "ws://";
-
-
-static int findNCSubstr(const char* msg, const char* subs) {
-    if(!msg || !subs) return -1;
-    unsigned int i;
-    int gotit = 0;
-    for(i = 0; i < strlen(msg); i++) {
-        if((strlen(msg)-i) >= strlen(subs)) {
-            unsigned j;
-            for(j = 0; j < strlen(subs); j++) {
-                if(tolower(msg[i+j]) != tolower(subs[j])) {
-                    gotit = 0;
-                    break;
-                }
-                gotit = 1;
-            }
-            if(gotit) return i;
-        }
-        else return -1;
-    }
-    return -1;
-}
-static const char* getStrNumber(char* buf, size_t size, const char* msg) {
-    unsigned int i;
-    unsigned int counter = 0;
-    buf[0] = '\0';
-    if(!msg) return buf;
-
-    for(i = 0; i < strlen(msg); i++) {
-        if(isdigit(msg[i])) {
-            buf[counter++] = msg[i];
-        }
-        else if(counter) {
-            buf[counter] = '\0';
-            break;
-        }
-    }
-    return buf;
-}
 
 static int get_cloud_settings(const char* conn, const char* auth, char* answer, size_t size) {
 
@@ -131,19 +94,19 @@ static int get_cloud_settings(const char* conn, const char* auth, char* answer, 
 
 static int parse_url_head(const char* url, char* head, size_t h_size, char* rest, size_t r_size) {
     int i;
-    if(i = findNCSubstr(url, AC_HTTP_HTTPS), i == 0) {
-        strncpy(head, AC_HTTP_HTTPS, h_size);
-        strncpy(rest, url+strlen(AC_HTTP_HTTPS), r_size);
+    if(i = au_findSubstr(url, AC_HTTP_HTTPS, AU_NOCASE), i == 0) {
+        if(!au_strcpy(head, AC_HTTP_HTTPS, h_size)) return 0;
+        if(!au_strcpy(rest, url+strlen(AC_HTTP_HTTPS), r_size)) return 0;
         return 1;
     }
-    if(i = findNCSubstr(url, AC_HTTP_HTTP), i == 0) {
-        strncpy(head, AC_HTTP_HTTP, h_size);
-        strncpy(rest, url+strlen(AC_HTTP_HTTP), r_size);
+    if(i = au_findSubstr(url, AC_HTTP_HTTP, AU_NOCASE), i == 0) {
+        if(!au_strcpy(head, AC_HTTP_HTTP, h_size)) return 0;
+        if(!au_strcpy(rest, url+strlen(AC_HTTP_HTTP), r_size)) return 0;
         return 1;
     }
     if(i < 0) { /* No head on URL */
         head[0] = '\0';
-        strncpy(rest, url, r_size);
+        if(!au_strcpy(rest, url, r_size)) return 0;
         return 1;
     }
     pu_log(LL_ERROR, "%s: Error parsing url %s", __FUNCTION__, url);
@@ -159,27 +122,31 @@ static const char* create_conn_string(char* str, size_t size, const int* ssl, co
         return NULL;
     }
 
-    if(!ssl) strncpy(str, url, size);
+    if(!ssl) {
+        if(!au_strcpy(str, url, size)) return NULL;
+    }
     else {
         char head[10] = {0};
         char rest[LIB_HTTP_MAX_URL_SIZE] ={0};
         if(!parse_url_head(url, head, sizeof(head), rest, sizeof(rest))) return NULL;
-        if(*ssl)
-            strncpy(str, AC_HTTP_HTTPS, size);
-        else
-            strncpy(str, AC_HTTP_HTTP, size);
-        strncat(str, rest, size - strlen(str)-1);
+        if(*ssl) {
+            if(!au_strcpy(str, AC_HTTP_HTTPS, size)) return NULL;
+        }
+        else {
+            if(!au_strcpy(str, AC_HTTP_HTTP, size)) return NULL;
+        }
+        if(!au_strcat(str, rest, size)) return NULL;
     }
 
     if(port) {
-        strncat(str, ":", size - strlen(str)-1);
-        strncat(str, port, size - strlen(str)-1);
+        if(!au_strcat(str, ":", size)) return NULL;
+        if(!au_strcat(str, port, size)) return NULL;
     }
 
-    if(pref1) strncat(str, pref1, size - strlen(str)-1);
-    if(pref2) strncat(str, pref2, size - strlen(str)-1);
-    if(dev_id) strncat(str, dev_id, size - strlen(str)-1);
-    if(posfix) strncat(str, posfix, size - strlen(str)-1);
+    if(pref1) if(!au_strcat(str, pref1, size)) return NULL;
+    if(pref2) if(!au_strcat(str, pref2, size)) return NULL;
+    if(dev_id) if(!au_strcat(str, dev_id, size)) return NULL;
+    if(posfix) if(!au_strcat(str, posfix, size)) return NULL;
 
     return str;
 }
@@ -189,8 +156,8 @@ static const char* create_auth_string(char* str, size_t size, const char* auth_p
         pu_log(LL_ERROR, "%s: One of input parameters is NULL. Exiting", __FUNCTION__);
         return NULL;
     }
-    strncpy(str, auth_preffix, size);
-    strncat(str, auth, size-strlen(str)-1);
+    if(!au_strcpy(str, auth_preffix, size)) return NULL;
+    if(!au_strcat(str, auth, size)) return NULL;
     return str;
 }
 
@@ -206,13 +173,16 @@ static int parse_cloud_settings(const char* answer, char* host, size_t h_size, c
     if(map = cJSON_GetObjectItem(obj, F_SERVER), !map) goto on_error;
 
     if(item = cJSON_GetObjectItem(map, F_HOST), !item) goto on_error;
-    strncpy(host, item->valuestring, h_size);
+    if(!au_strcpy(host, item->valuestring, h_size)) goto on_error;
+    host[h_size-1] = '\0';
 
     if(item = cJSON_GetObjectItem(map, F_PORT), !item) goto on_error;
-    snprintf(port, p_size, "%d", item->valueint);
+    snprintf(port, p_size-1, "%d", item->valueint);
+    port[p_size-1] = '\0';
 
     if(item = cJSON_GetObjectItem(map, F_PATH), !item) goto on_error;
-    strncpy(path, item->valuestring, pth_size);
+    if(!au_strcpy(path, item->valuestring, pth_size)) goto on_error;
+    path[pth_size-1] = '\0';
 
     if(item = cJSON_GetObjectItem(map, F_SSL), !item) goto on_error;
     *ssl = (item->type == cJSON_True)?1:0;
@@ -240,19 +210,19 @@ static int parse_video_settings(const char* answer, int* rc, int* ssl, char* hos
     *ssl = (item->type == cJSON_True)?1:0;
 
     if(item = cJSON_GetObjectItem(obj, F_VS_HOST), !item) goto on_error;
-    strncpy(host, item->valuestring, h_size);
-    int i = findNCSubstr(host, ":");
+    if(!au_strcpy(host, item->valuestring, h_size)) goto on_error;
+    int i = au_findSubstr(host, ":", AU_CASE);
     if(i < 0) {
         pu_log(LL_ERROR, "%s: video server host is not found in %s - %s", __FUNCTION__, F_VS_HOST, host);
         goto on_error;
     }
     else {
         host[i] = '\0';
-        strncpy(port, host+i+1, p_size);
+        if(!au_strcpy(port, host+i+1, p_size)) goto on_error;
     }
 
     if(item = cJSON_GetObjectItem(obj, F_SESS_ID), !item) goto on_error;
-    strncpy(sess, item->valuestring, s_size);
+    if(!au_strcpy(sess, item->valuestring, s_size)) goto on_error;
 
     ret = 1;
 
@@ -264,14 +234,11 @@ static int parse_video_settings(const char* answer, int* rc, int* ssl, char* hos
 
 /* ws://sbox1.presencepro.com:8080 */
 static int parse_ws_settings(const char* answer, char* w_host, size_t h_size, char* w_port, size_t p_size) {
-    int i;
+    int pos;
+    if(!au_getSection(w_host, h_size, answer, F_WS_HEAD, ":", AU_NOCASE)) goto on_error;
 
-    if(i = findNCSubstr(answer, F_WS_HEAD), i != 0) goto on_error;
-    if(i = findNCSubstr(answer+strlen(F_WS_HEAD), ":"), i < 0) goto on_error;
-
-    if(i+1 > h_size) goto on_error;
-    strncpy(w_host, answer+strlen(F_WS_HEAD), (size_t)(i));
-    getStrNumber(w_port, p_size, answer+strlen(F_WS_HEAD)+i);
+    if(pos = au_findSubstr(answer+strlen(w_host)+strlen(F_WS_HEAD), ":", AU_NOCASE), pos < 0) goto on_error;
+    au_getNumber(w_port, p_size, answer+pos + strlen(w_host)+strlen(F_WS_HEAD));
 
     return 1;
 on_error:
@@ -302,7 +269,7 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, s
 
     if(!get_cloud_settings(conn, auth, answer, sizeof(answer))) goto on_error;
     if(!parse_video_settings(answer, &rc, &ssl, v_url, v_size, port2, sizeof(port2), v_sess, vs_size)) goto on_error;
-    strncpy(w_sess, v_sess, ws_size-1);
+    if(!au_strcpy(w_sess, v_sess, ws_size)) goto on_error;
 
     *v_port = atoi(port2);
 

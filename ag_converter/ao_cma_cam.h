@@ -34,15 +34,6 @@ typedef enum {
     AO_RES_HI
 } t_ao_cam_res;
 
-
-
-int ao_get_msg_type(const char* msg);
-int ao_get_msg_number(const char* msg);
-void ao_get_uri(char* uri, size_t size, const char* msg);
-void ao_cam_replace_uri(char* msg, size_t size, const char* new_uri);
-int ao_get_client_port(const char* msg);
-int ao_get_server_port(const char* msg);
-
 int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size);
 
 
