@@ -126,8 +126,15 @@ static size_t reader(void *ptr, size_t size, size_t nmemb, void *userp) {
 }
 
 static void copy_result(t_handler hndlr, char* h, size_t hs, char* b, size_t bs) {
-    if(!au_strcpy(h, hndlr.ans_hdr.buf, hs)) return;
-    if(!au_strcpy(b, hndlr.ans_body.buf, bs)) return;
+    au_strcpy(h, hndlr.ans_hdr.buf, hs);
+    memset(hndlr.ans_hdr.buf, 0, AC_RTSP_HEADER_SIZE);
+    hndlr.ans_hdr.sz = AC_RTSP_HEADER_SIZE;
+
+    au_strcpy(b, hndlr.ans_body.buf, bs);
+    memset(hndlr.ans_body.buf, 0, AC_RTSP_BODY_SIZE);
+    hndlr.ans_hdr.sz = AC_RTSP_BODY_SIZE;
+
+
 }
 static const char* make_transport_string(char* buf, size_t size, int port, int tcp_streaming) {
     char s_port1[20];
@@ -217,7 +224,7 @@ int ac_open_session(t_ac_rtsp_device device_type, const char* url) {
     }
     h->ans_hdr.sz = AC_RTSP_HEADER_SIZE;
     h->ans_body.sz = AC_RTSP_BODY_SIZE;
-    h->req_body.sz = AC_RTSP_BODY_SIZE;
+    h->req_body.sz = 0;
     if(!au_strcpy(h->url, AC_RTSP_HEAD, sizeof(h->url))) return 0;
     if(!au_strcat(h->url, url, sizeof(h->url))) return 0;
 
@@ -416,8 +423,8 @@ int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char
     CURLcode res = CURLE_OK;
     char ip[20] ={0};
     char connection[500] ={0};
-/*
-    if(!au_strcpy(head, cam_describe_body, h_size)) return 0;
+
+    if(!au_strcpy(body, cam_describe_body, b_size)) return 0;
 
 // Replace IP in c=
     ag_getClientIP(ip, sizeof(ip));
@@ -429,48 +436,61 @@ int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char
         pu_log(LL_ERROR, "%s: can not replace IP %s in VS connection parameter %s Exiting", __FUNCTION__, ip, cam_describe_body);
         return 0;
     }
-    if(!au_replaceSection(head, h_size, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE, connection)) {
-        pu_log(LL_ERROR, "%s: can not replace connection parameter %s to VS SDP %s Exiting", __FUNCTION__, connection, head);
+    if(!au_replaceSection(body, b_size, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE, connection)) {
+        pu_log(LL_ERROR, "%s: can not replace connection parameter %s to VS SDP %s Exiting", __FUNCTION__, connection, body);
         return 0;
     }
 
 // Replace origin
-    if(!au_replaceSection(head, h_size, AC_RTSP_SDP_ORIGIN, AC_RTSP_EOL, AU_NOCASE, AC_RTSP_VS_ORIGIN)) {
-        pu_log(LL_ERROR, "%s: can not replace origin parameter %s to VS SDP %s Exiting", __FUNCTION__, AC_RTSP_VS_ORIGIN, head);
+    if(!au_replaceSection(body, b_size, AC_RTSP_SDP_ORIGIN, AC_RTSP_EOL, AU_NOCASE, AC_RTSP_VS_ORIGIN)) {
+        pu_log(LL_ERROR, "%s: can not replace origin parameter %s to VS SDP %s Exiting", __FUNCTION__, AC_RTSP_VS_ORIGIN, body);
         return 0;
     }
-    pu_log(LL_DEBUG, "%s: Conn string = %s\n Header = %s", __FUNCTION__, vs.url, head);
 
 
-    char buf[30] = {0};
-        char* hh = "v=0\n"
-                "o=- 0 0 IN IP4 127.0.0.1\n"
-                "s=\\11\n"
-                "c=IN IP4 184.73.181.211\n"
-                "t=0 0\n"
-                "a=tool:libavformat 57.65.100\n"
-                "m=video 0 RTP/AVP 96\n"
-                "b=AS:150\n"
-                "a=rtpmap:96 MP4V-ES/90000\n"
-                "a=fmtp:96 profile-level-id=1; config=000001B002000001B58913000001000000012000C48D8800CD3C04871443000001B24C61766335372E37352E313030\n"
-                "a=control:streamid=0\n"
-                "m=audio 0 RTP/AVP 97\n"
-                "b=AS:64\n"
-                "a=rtpmap:97 MPEG4-GENERIC/48000/2\n"
-                "a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\n"
-                "a=control:streamid=1";
-    snprintf(buf, sizeof(buf) - 1, "Content-Length: %lu", strlen(hh));
-    vs.slist = curl_slist_append(vs.slist, buf);
-    vs.slist = curl_slist_append(vs.slist, hh);
+    char buf[100]={0};
+
+    au_strcpy(vs.req_body.buf, body, AC_RTSP_BODY_SIZE);
+    vs.req_body.sz = strlen(vs.req_body.buf)+1;
+
+    char* hh = "v=0\r\n"
+            "o=- 0 0 IN IP4 127.0.0.1\r\n"
+            "s=\\11\r\n"
+            "c=IN IP4 184.73.181.211\r\n"
+            "t=0 0\r\n"
+            "a=tool:libavformat 57.65.100\r\n"
+            "m=video 0 RTP/AVP 96\r\n"
+            "b=AS:150\r\n"
+            "a=rtpmap:96 MP4V-ES/90000\r\n"
+            "a=fmtp:96 profile-level-id=1; config=000001B002000001B58913000001000000012000C48D8800CD3C04871443000001B24C61766335372E37352E313030\r\n"
+            "a=control:streamid=0\r\n"
+            "m=audio 0 RTP/AVP 97\r\n"
+            "b=AS:64\r\n"
+            "a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n"
+            "a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n"
+            "a=control:streamid=1\r\n\r\n";
+
+
+    vs.slist = curl_slist_append(vs.slist, "Content-Type: application/sdp");
+    vs.slist = curl_slist_append(vs.slist, "User-Agent: IOT Proxy");
+    snprintf(buf, sizeof(buf)-1, "Content-Length: %lu", strlen(hh));
+//    vs.slist = curl_slist_append(vs.slist, buf);
+//    vs.slist = curl_slist_append(vs.slist, "");
+
+
+//    pu_log(LL_DEBUG, "%s: Conn string = %s\n Body = %s", __FUNCTION__, vs.url, vs.req_body.buf);
 
     if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPHEADER, vs.slist), res != CURLE_OK) goto on_error;
-*/
+
+    if(res = curl_easy_setopt(vs.h, CURLOPT_POSTFIELDS, hh), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_ANNOUNCE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(vs.h);
     if(res = ac_http_analyze_perform(res, vs.h, __FUNCTION__), ((res != CURLE_OK) && (res != AC_HTTP_UNAUTH))) goto on_error;
 
     if (res = curl_easy_setopt(vs.h, CURLOPT_WRITEDATA, &vs.ans_body), res != CURLE_OK) goto on_error;
+
+    curl_easy_reset(vs.h);
 
 //    get_sesion_id(vs.ans_hdr.buf, vs.session_id, AC_RTSP_SESSION_ID_SIZE);    /* Save session_id to use in ANNOUNCE2 command */
 
@@ -483,9 +503,11 @@ int ac_req_vs_announce2(char* head, size_t h_size, char* body, size_t b_size) {
     CURLcode res = CURLE_OK;
 
 //    if(res = curl_easy_setopt(vs.h, CURLOPT_RTSP_SESSION_ID, vs.session_id), res != CURLE_OK) goto on_error;
-    if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(vs.h, CURLOPT_URL, vs.url), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(vs.h, CURLOPT_HTTPAUTH, CURLAUTH_BASIC|CURLAUTH_DIGEST), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(vs.h, CURLOPT_USERNAME, vs.session_id), res != CURLE_OK) goto on_error;
-    if(res = curl_easy_setopt(vs.h, CURLOPT_USERPWD, vs.session_id), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(vs.h, CURLOPT_PASSWORD, vs.session_id), res != CURLE_OK) goto on_error;
+
 
     res = curl_easy_perform(vs.h);
     if(ac_http_analyze_perform(res, vs.h, __FUNCTION__) != CURLE_OK) goto on_error;
