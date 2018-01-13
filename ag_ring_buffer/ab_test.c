@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ab_ring_bufer.h"
 
@@ -69,8 +70,28 @@ void* reader(void* v) {     /* Reader thread */
 }
 
 int main() {
-    void *ret;
+    char* a = "v=0\r\n"
+            "o=- 0 0 IN IP4 127.0.0.1\r\n"
+            "s=\\11\r\n"
+            "c=IN IP4 184.73.181.211\r\n"
+            "t=0 0\r\n"
+            "a=tool:libavformat 57.65.100\r\n"
+            "m=video 0 RTP/AVP 96\r\n"
+            "b=AS:150\r\n"
+            "a=rtpmap:96 MP4V-ES/90000\n"
+            "a=fmtp:96 profile-level-id=1; config=000001B002000001B58913000001000000012000C48D8800CD3C04871443000001B24C61766335372E37352E313030\r\n"
+            "a=control:streamid=0\r\n"
+            "m=audio 0 RTP/AVP 97\r\n"
+            "b=AS:64\r\n"
+            "a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n"
+            "a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n"
+            "a=control:streamid=1\r\n\r\n";
 
+    size_t la = strlen(a);
+    printf("%lu  ", la);
+    exit(0);
+
+    void *ret;
     ab_init(20);
 
     pthread_attr_init(&writer_attr);

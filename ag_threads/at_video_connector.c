@@ -22,9 +22,7 @@
 #include <memory.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <au_string/au_string.h>
 
-#include "pu_queue.h"
 #include "pu_logger.h"
 
 #include "ab_ring_bufer.h"
@@ -32,49 +30,40 @@
 #include "at_cam_video_write.h"
 #include "ag_settings.h"
 #include "ac_rtsp.h"
-#include "ao_cma_cam.h"
+#include "au_string.h"
+#include "ac_wowza.h"
+#include "ac_alfapro.h"
 
 #include "at_video_connector.h"
 
+#define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
 /*************************************************************************
  * Local data & functione
  */
-#define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
-#define AT_VIDEO_PORT 1935
+t_at_rtsp_session* CAM_SESSION = NULL;
+t_at_rtsp_session* PLAYER_SESSION = NULL;
 
-typedef enum {
-    AT_STATE_UNDEF,
-    AT_STATE_CONNECT,
-    AT_STATE_AUTH,
-    AT_STATE_SETUP,
-    AT_STATE_START_PLAY,
-    AT_STATE_PLAYING,
-    AT_STATE_STOP_PLAY,
-    AT_STATE_ON_ERROR
-} t_at_states;
+struct {
+    char host[LIB_HTTP_MAX_URL_SIZE];
+    int port;
+    char session_id[100];
+} IN_PARAMS;
+
+
 
 static pthread_t id;
 static pthread_attr_t attr;
 
 static volatile int stop = 1;       /* Thread stop flag */
 
-/***********
- * Local connection data. To be replaced later
-*/
-
-static char video_host[5000] = {0};
-static int video_port = -1;
-static char vs_session_id[100] = {0};
-
-static const int fake_client_port = 11038;
-
 /*************************************************/
 static void shutdown_proc() {
-    ac_close_session(AC_WOWZA);
-    ac_close_session(AC_CAMERA);
-    ac_rtsp_down();
+    ac_close_session(PLAYER_SESSION);
+    ac_close_session(CAM_SESSION);
+    ac_rtsp_down(PLAYER_SESSION);
+    ac_rtsp_down(CAM_SESSION);
     ab_close();         /* Erase videostream buffer */
 }
 static int init_proc() {
@@ -83,10 +72,21 @@ static int init_proc() {
         pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
         return 0;
     }
-    if(!ac_rtsp_init()) return 0;
-    char url[4000] = {0};
-    if(!ac_open_session(AC_WOWZA, ac_makeVSURL(url, sizeof(url), video_host, video_port, vs_session_id))) goto on_error;
-    if(!ac_open_session(AC_CAMERA, ac_makeCamURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution()))) goto on_error;
+    if(CAM_SESSION = ac_rtsp_init(AC_CAMERA), CAM_SESSION == NULL) {
+        ab_close();
+        return 0;
+    }
+    if(PLAYER_SESSION = ac_rtsp_init(AC_WOWZA), PLAYER_SESSION == NULL) {
+        ab_close();
+        ac_rtsp_down(CAM_SESSION);
+        return 0;
+    }
+
+    char url[LIB_HTTP_MAX_URL_SIZE];
+
+    if(!ac_open_session(PLAYER_SESSION, ac_make_wowza_url(url, sizeof(url), IN_PARAMS.host, IN_PARAMS.port, IN_PARAMS.session_id), IN_PARAMS.session_id)) goto on_error;
+    if(!ac_open_session(CAM_SESSION, ac_makeAlfaProURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution()), "")) goto on_error;
+
     return 1;
 on_error:
     shutdown_proc();
@@ -114,108 +114,54 @@ static void say_disconnected_to_vm() {
     pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
 }
 
-static void rtsp_logging(const char* who, const char* h, const char* b) {
-    if(strlen(h)) pu_log(LL_DEBUG, "%s: Head = \n%s", who, h);
-    if(strlen(b)) pu_log(LL_DEBUG, "%s: Body = \n%s", who, b);
+static t_ac_rtsp_states process_connect() {
+
+    if(!ac_req_options(CAM_SESSION)) return AC_STATE_ON_ERROR;
+    if(!ac_req_options(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
+
+    return AC_STATE_DESCRIBE;
 }
+static t_ac_rtsp_states process_describe() {
+    char *description = NULL;
+    t_ac_rtsp_states rc = AC_STATE_ON_ERROR;
 
-static t_at_states process_connect() {
-    char head[5000] = {0};
-    char body[5000] = {0};
-    int rc;
+    if(!ac_req_cam_describe(CAM_SESSION, &description)) goto on_exit;
+    if(!ac_req_vs_announce(PLAYER_SESSION, description)) goto on_exit;
 
-    rc = ac_req_options(AC_CAMERA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("CAM-OPTIONS", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    rc = ac_req_options(AC_WOWZA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("VS-OPTIONS", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    return AT_STATE_AUTH;
+    rc = AC_STATE_SETUP;
+on_exit:
+    if(description) free(description);
+    return rc;
 }
+static t_ac_rtsp_states process_setup() {    /* NB! Video stream only!*/
 
-static char cam_head[5000] = {0};
-static char cam_body[5000] = {0};
-static char vs_head[5000] = {0};
-static char vs_body[5000] = {0};
+    if(!ac_req_setup(CAM_SESSION, AC_FAKE_CLIENT_PORT)) return AC_STATE_ON_ERROR;
+    ag_saveServerPort(CAM_SESSION->video_port);
 
-static t_at_states process_auth() {
-    int rc;
+    if(!ac_req_setup(PLAYER_SESSION, AC_FAKE_CLIENT_PORT)) return AC_STATE_ON_ERROR;
+    ag_saveClientPort(PLAYER_SESSION->video_port);
 
-    rc = ac_req_cam_describe(cam_head, sizeof(cam_head), cam_body, sizeof(cam_body));
-    rtsp_logging("CAM-DESCRIBE", cam_head, cam_body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    rc = ac_req_vs_announce1(cam_body, vs_head, sizeof(vs_head), vs_body, sizeof(vs_body));
-    rtsp_logging("VS-ANNOUNCE", vs_body, vs_body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    rc = ac_req_vs_announce2(vs_head, sizeof(vs_head), vs_body, sizeof(vs_body));
-    rtsp_logging("VS-AUTH", vs_head, vs_body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    return AT_STATE_SETUP;
+    return AC_STATE_START_PLAY;
 }
-static t_at_states process_setup() {    /* NB! Video stream only!*/
-    char head[5000] = {0};
-    char body[5000] = {0};
-    int rc, port;
+static t_ac_rtsp_states process_play() {
 
-    rc = ac_req_setup(AC_CAMERA, head, sizeof(head), body, sizeof(body), fake_client_port);
-    rtsp_logging("CAM-SETUP", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
+    if(!ac_req_play(CAM_SESSION)) return AC_STATE_ON_ERROR;
+    if(!ac_req_play(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
-    if(port = ac_get_server_port(head), port < 0) {
-        pu_log(LL_ERROR, "%s: Get CAM UDP port error", AT_THREAD_NAME);
-        return AT_STATE_ON_ERROR;
-    }
-    ag_saveServerPort(port);
+    if(!start_streaming()) return AC_STATE_ON_ERROR;
 
-    rc = ac_req_setup(AC_WOWZA, head, sizeof(head), body, sizeof(body), fake_client_port);
-    rtsp_logging("VS-SETUP", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    if(port = ac_get_server_port(head), port < 0) {
-        pu_log(LL_ERROR, "%s: Get VS UDP port error", AT_THREAD_NAME);
-        return AT_STATE_ON_ERROR;
-    }
-    ag_saveClientPort(port);
-
-    return AT_STATE_START_PLAY;
-}
-static t_at_states process_play() {
-    char head[5000] = {0};
-    char body[5000] = {0};
-    int rc;
-
-    rc = ac_req_play(AC_CAMERA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("CAM-PLAY", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    rc = ac_req_play(AC_WOWZA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("VS-PLAY", head, body);
-    if(!rc) return AT_STATE_ON_ERROR;
-
-    if(!start_streaming()) return AT_STATE_ON_ERROR;
-
-    return AT_STATE_PLAYING;
+    return AC_STATE_PLAYING;
 }
 static void process_stop() {
-    char head[5000] = {0};
-    char body[5000] = {0};
 
-    ac_req_teardown(AC_CAMERA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("CAM-TEARDOWN", head, body);
-
-    ac_req_teardown(AC_WOWZA, head, sizeof(head), body, sizeof(body));
-    rtsp_logging("VS-TEARDOWN", head, body);
+    ac_req_teardown(CAM_SESSION);
+    ac_req_teardown(PLAYER_SESSION);
 
     stop_streaming();
 }
 
 static void* vc_thread(void* params) {
-    t_at_states state;
+    t_ac_rtsp_states state;
 
     pu_log(LL_INFO, "%s started.", AT_THREAD_NAME);
 
@@ -225,36 +171,41 @@ on_reconnect:
         say_disconnected_to_vm();
         pthread_exit(NULL);
     }
-    state = AT_STATE_CONNECT;
+    state = AC_STATE_CONNECT;
 
-    while(!stop && (state != AT_STATE_ON_ERROR)) {
+    while(!stop && (state != AC_STATE_ON_ERROR)) {
         switch(state) {
-            case AT_STATE_CONNECT:
+            case AC_STATE_CONNECT:
+                pu_log(LL_DEBUG, "%s: State CONNECT processing", AT_THREAD_NAME);
                 state = process_connect();
                 break;
-            case AT_STATE_AUTH:
-                state = process_auth();
+             case AC_STATE_DESCRIBE:
+                pu_log(LL_DEBUG, "%s: State DESCRIBE processing", AT_THREAD_NAME);
+                state = process_describe();
                 break;
-            case AT_STATE_SETUP:
+            case AC_STATE_SETUP:
+                pu_log(LL_DEBUG, "%s: State SETUP processing", AT_THREAD_NAME);
                 state = process_setup(); /* Save VS & CAM UDP ports */
                 break;
-            case AT_STATE_START_PLAY:
+            case AC_STATE_START_PLAY:
+                pu_log(LL_DEBUG, "%s: State START PLAY processing", AT_THREAD_NAME);
                 state = process_play();
                 break;
-            case AT_STATE_PLAYING:
+            case AC_STATE_PLAYING:
+                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
                 sleep(1);
                 break;
              default:
                 pu_log(LL_ERROR, "%s: Unknown state = %d. Exiting", AT_THREAD_NAME, state);
-                state = AT_STATE_ON_ERROR;
+                state = AC_STATE_ON_ERROR;
                 break;
         }
     }
     switch (state) {
-        case AT_STATE_ON_ERROR:
+        case AC_STATE_ON_ERROR:
             pu_log(LL_ERROR, "%s: Exit by error. Reconnect", AT_THREAD_NAME);
             break;
-        case AT_STATE_PLAYING:
+        case AC_STATE_PLAYING:
             pu_log(LL_INFO, "%s: Exit by stop playing", AT_THREAD_NAME);
             process_stop();
             break;
@@ -262,7 +213,7 @@ on_reconnect:
             pu_log(LL_ERROR, "%s: Exit by VIDEO_MANAGER request", AT_THREAD_NAME);
             break;
     }
-    if((state == AT_STATE_ON_ERROR)) {
+    if((state == AC_STATE_ON_ERROR)) {
         shutdown_proc();
         goto on_reconnect;
     }
@@ -280,9 +231,9 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
     }
 
     pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, port, session_id);
-    if(!au_strcpy(video_host, host, sizeof(video_host))) return 0;
-    if(!au_strcpy(vs_session_id, session_id, sizeof(vs_session_id))) return 0;
-    video_port = AT_VIDEO_PORT;
+    if(!au_strcpy(IN_PARAMS.host, host, sizeof(IN_PARAMS.host))) return 0;
+    if(!au_strcpy(IN_PARAMS.session_id, session_id, sizeof(IN_PARAMS.session_id))) return 0;
+    IN_PARAMS.port = AC_PLAYER_VIDEO_PORT;
 
     struct hostent* hn = gethostbyname(host);
     if(!hn) {

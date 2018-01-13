@@ -26,7 +26,8 @@
 #define AU_CASE     1
 
 char* au_strcpy(char* dest, const char* source, size_t size);
-char* au_strcat(char*dest, const char* source, size_t size);
+char* au_strcat(char* dest, const char* source, size_t size);
+char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size);
 
 /* Return position in the msg when subs starts. Else return -1. */
 int au_findSubstr(const char* msg, const char* subs, int case_sencitive);

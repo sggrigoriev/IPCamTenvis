@@ -51,6 +51,7 @@ typedef enum {
     AT_GOT_PROXY_INFO,              /* Got proxy/auth info - could start params */
     AT_GOT_VIDEO_CONN_INFO,         /* Got parameters! */
     AT_READY,
+    AT_LISTEN,                      /* WS run and listens commands to sart/stop play */
     AT_PLAY
 } t_mgr_state;
 
@@ -69,10 +70,10 @@ static t_mgr_state start_ws_thread() {
         pu_log(LL_ERROR, "%s - %s: Error start WEB socket connector, exit.", AT_THREAD_NAME, __FUNCTION__);
         return AT_ERROR;
     }
-    return AT_READY;
+    return AT_LISTEN;
 }
 static t_mgr_state start_vc_therad() {
-    if(own_status != AT_READY) {
+    if(own_status != AT_LISTEN) {
         pu_log(LL_ERROR, "%s - %s: Wrong entry status = %d instead of %d, exit.", AT_THREAD_NAME, __FUNCTION__, own_status, AT_READY);
         return AT_ERROR;
     }
@@ -93,16 +94,12 @@ static t_mgr_state get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
 }
 
 static t_mgr_state process_ws_message(const char* msg) {
-    if(own_status != AT_READY) {
-        pu_log(LL_ERROR, "%s - %s: Bad status = %d! Sould be %d", AT_THREAD_NAME, __FUNCTION__, own_status, AT_READY);
-        return AT_ERROR;
-    }
     if(!strcmp(msg, DEFAULT_WC_START_PLAY)) return start_vc_therad();
 
     if(!strcmp(msg, DEFAULT_WC_STOP_PLAY)) {
         at_stop_video_connector();
         pu_log(LL_INFO, "%s: Video connector stop", AT_THREAD_NAME);
-        return AT_READY;
+        return AT_LISTEN;
     }
     return own_status;
 }
@@ -120,7 +117,7 @@ static void* main_thread(void* params) {
     while(!stop) {
         size_t len = sizeof(msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
-        if((own_status == AT_PLAY) || (own_status == AT_READY)) {
+        if((own_status == AT_LISTEN) || (own_status == AT_PLAY)) {
             switch (ev = pu_wait_for_queues(events, 1)) {
                 case AQ_FromWS:
                     while (pu_queue_pop(from_ws, msg, &len)) {
@@ -154,15 +151,16 @@ static void* main_thread(void* params) {
                     own_status = start_ws_thread();
                 }
                 break;
-            case AT_PLAY:
+            case AT_PLAY:       // Just check both processes run
                 if(!is_ws_run()) {
                     pu_log(LL_WARNING, "%s: Wideo socket tread restart", AT_THREAD_NAME);
                     if(is_video_connector_run()) at_stop_video_connector();
                     own_status = start_ws_thread();
+                    break;
                 }
-                else if(!is_video_connector_run()) {
+                if(!is_video_connector_run()) {
                     pu_log(LL_WARNING, "%s: Wideo connector tread restart", AT_THREAD_NAME);
-                    own_status = AT_READY;
+                    own_status = AT_LISTEN;
                     own_status = start_vc_therad();
                 }
                 break;
@@ -177,6 +175,7 @@ static void* main_thread(void* params) {
 /* shutdown procedure */
     if(is_video_connector_run()) at_stop_video_connector();
     if(is_ws_run()) stop_ws();
+    pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
 

@@ -25,76 +25,21 @@
 #ifndef IPCAMTENVIS_AC_RTSP_H
 #define IPCAMTENVIS_AC_RTSP_H
 
-#include "ao_cma_cam.h"
-#include "ao_cmd_data.h"
-
-typedef enum {
-    AC_CAMERA,
-    AC_WOWZA
-} t_ac_rtsp_device;
-
-typedef enum {
-    AC_UNDEFINED,
-    AC_DESCRIBE,
-    AC_ANNOUNCE,
-    AC_SETUP,
-    AC_PLAY,
-    AC_TEARDOWN,
-} t_ac_rtsp_type;
-
-typedef struct {
-    int video_tracks_number;
-} t_ac_rtsp_describe;
-typedef struct {
-    int video_track_number;
-} t_ac_rtsp_announce;
-typedef struct {
-    int track_number;
-    int client_port;
-    int server_port;
-} t_ac_rtsp_setup;
-typedef struct {
-    char session_id[DEFAULT_CAM_RSTP_SESSION_ID_LEN];
-} t_ac_rtsp_play;
-
-typedef union {
-    t_ac_rtsp_describe describe;
-    t_ac_rtsp_announce announce;
-    t_ac_rtsp_setup setup;
-    t_ac_rtsp_play play;
-} t_ac_rtsp_body;
-
-typedef struct {
-    t_ac_rtsp_type msg_type;
-    char uri[LIB_HTTP_MAX_URL_SIZE];
-    int number;
-    t_ac_rtsp_body b;
-}t_ac_rtsp_msg;
-
-int ac_rtsp_init();
-void ac_rtsp_down();
-
-int ac_open_session(t_ac_rtsp_device device_type, const char* url);
-void ac_close_session(t_ac_rtsp_device device_type);
-int ac_req_options(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
-int ac_req_setup(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size, int cient_port);
-int ac_req_play(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
-int ac_req_teardown(t_ac_rtsp_device device_type, char* head, size_t h_size, char* body, size_t b_size);
-
-int ac_get_server_port(const char* msg);
+#include "ac_cam_types.h"
 
 
-int ac_req_cam_describe(char* head, size_t h_size, char* body, size_t b_size);
+t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device);
+void ac_rtsp_down(t_at_rtsp_session* sess);
 
-/* [login:password@]ip:port/resolution/ */
-const char* ac_makeCamURL(char *url, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
+int ac_open_session(t_at_rtsp_session* sess, const char* url, const char* session_id);
+void ac_close_session(t_at_rtsp_session* sess);
 
-/******************************************** Video Server part *******************************************************/
+int ac_req_options(t_at_rtsp_session* sess);
+int ac_req_cam_describe(t_at_rtsp_session* sess, char** dev_description);
+int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description);
 
-int ac_req_vs_announce1(char* cam_describe_body, char* head, size_t h_size, char* body, size_t b_size);
-int ac_req_vs_announce2(char* head, size_t h_size, char* body, size_t b_size);
-/* <vs_url>:<port>/ppcvideoserver/<vs_session_id> */
-const char* ac_makeVSURL(char *url, size_t size, const char* vs_url, int port, const char* vs_session_id);
-
+int ac_req_setup(t_at_rtsp_session* sess, int client_port);
+int ac_req_play(t_at_rtsp_session* sess);
+int ac_req_teardown(t_at_rtsp_session* sess);
 
 #endif /* IPCAMTENVIS_AC_RTSP_H */

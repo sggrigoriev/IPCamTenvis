@@ -8,16 +8,26 @@ set(GCC_STANDARD $ENV{STANDARD})
 #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
 #add_definitions( -DLOCAL_TEST)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)
+
+message("gst_FOUND = ${gst_FOUND}")
+message("gst_LIBRARIES = ${gst_LIBRARIES}")
+message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
+
 #PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
 set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../../Presto_new/lib)
 set(REQUIRED_LIBRARIES
+        ${gst_LIBRARIES}
+        curl
         m
         pthread
         nopoll
-        curl
+        ssl
+        crypto
 )
 
 #all include paths
@@ -30,6 +40,7 @@ include_directories(
         ag_queues
         ag_ring_buffer
         au_string
+        gsrtsp_local
         ${PROXY_LIBS_PATH}/pu_logger
         ${PROXY_LIBS_PATH}/presto_commands
         ${PROXY_LIBS_PATH}/pc_config
@@ -38,6 +49,7 @@ include_directories(
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
+        ${gst_INCLUDE_DIRS}
         /usr/local/include/nopoll
 )
 
@@ -51,6 +63,7 @@ file (GLOB SOURCE_FILES
         ag_queues/*.c
         ag_ring_buffer/ab_ring_bufer.c
         au_string/*.c
+        gsrtsp_local/*.c
         ${PROXY_LIBS_PATH}/pc_config/pc_config.c
         ${PROXY_LIBS_PATH}/presto_commands/*.c
         ${PROXY_LIBS_PATH}/pu_queues/*.c

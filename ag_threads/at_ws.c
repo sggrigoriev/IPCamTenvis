@@ -95,7 +95,7 @@ static void *ws_read_thread(void *pvoid) {
     pu_log(LL_DEBUG, "%s: args->hostname = %s args->port = %s args->path = %s args->session_id = %s", __FUNCTION__, args->hostname, args->port, args->path, args->session_id);
 
     noPollCtx *ctx = nopoll_ctx_new ();
-    nopoll_log_enable(ctx,nopoll_true);
+    nopoll_log_enable(ctx,nopoll_false);
     if (!ctx) {
         pu_log(LL_ERROR, "%s unable to create context",__FUNCTION__);
     }
@@ -148,7 +148,7 @@ int start_ws(const char *host, int port,const char *path, const char *session_id
     if(is_ws_run()) return 1;
 
     if(!host || !port || !path || !session_id) {
-        printf("%s: One of arguments is NULL exiting\n", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: One of arguments is NULL exiting\n", __FUNCTION__);
         return 0;
     }
     sprintf(s_port, "%d", port);
@@ -158,7 +158,7 @@ int start_ws(const char *host, int port,const char *path, const char *session_id
     strcpy(argz->path,path);
     strcpy(argz->session_id,session_id);
 
-    printf("%s: Starting Proxy interface...",__FUNCTION__);
+    pu_log(LL_INFO, "%s: Starting Web Socket interface...",__FUNCTION__);
 
     stop = 0;
     pthread_attr_init(&threadAttr);

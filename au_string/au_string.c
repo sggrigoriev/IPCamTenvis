@@ -61,15 +61,35 @@ static t_au_pos findSection(const char* msg, const char* before, const char* aft
 }
 
 char* au_strcpy(char* dest, const char* source, size_t size) {
-    assert(dest); assert(source); assert(size);
+    assert(dest); assert(source);
+    if(!size) return dest;
+
     if((size-1) < strlen(source)) return NULL;
     memcpy(dest, source, strlen(source)+1);
     return dest;
 }
 char* au_strcat(char* dest, const char* source, size_t size) {
-    assert(dest); assert(source); assert(size);
+    assert(dest); assert(source);
+    if(!size) return dest;
     if((size-1) < strlen(dest)+strlen(source)) return NULL;
     strcat(dest, source);
+    return dest;
+}
+char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size) {
+    assert(dest); assert(src);
+    if((!size) || (!src_len)) return dest;
+
+    unsigned int i, len;
+    len = 0;
+    dest[0] = '\0';
+    for(i = 0; i < src_len; i++) {
+        char hex[3]={0};
+        sprintf(hex, "%x", src[i]);
+        if(!au_strcat(dest, hex, size)) return NULL;
+        len += strlen(hex);
+    }
+    if(len+1 > size) return NULL;
+    dest[len] = '\0';
     return dest;
 }
 

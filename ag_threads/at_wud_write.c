@@ -110,9 +110,15 @@ static void* wud_write(void* params) {
 
 /* Start thread */
 int at_start_wud_write() {
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &wud_write, NULL)) return 0;
     stop = 0;
+    if(pthread_attr_init(&attr)) {
+        stop = 1;
+        return 0;
+    }
+    if(pthread_create(&id, &attr, &wud_write, NULL)) {
+        stop = 1;
+        return 0;
+    }
     return 1;
 }
 
