@@ -51,10 +51,9 @@ static void* the_thread(void* params);
  * Global functions
  */
 
-int at_start_video_write() {
-    char ip[LIB_HTTP_MAX_IPADDRES_SIZE];
+int at_start_video_write(const char* addr, int port) {
     if(at_is_video_write_run()) return 1;
-    if((sock = ac_udp_client_connection(ag_getClientIP(ip, sizeof(ip)), ag_getClientPort(), &sin, 0)) < 0) {
+    if((sock = ac_udp_client_connection(addr, port, &sin, 0)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
@@ -70,7 +69,7 @@ void at_stop_video_write() {
 
     if(!at_is_video_write_run()) return;
 
-    at_set_stop_video_write();
+    stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
 }
@@ -78,9 +77,7 @@ void at_stop_video_write() {
 int at_is_video_write_run() {
     return !stop;
 }
-void at_set_stop_video_write() {
-    stop = 1;
-}
+
 
 /********************************************************
  * Local functions declaration

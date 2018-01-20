@@ -114,6 +114,10 @@ int au_findSubstr(const char* msg, const char* subs, int case_sencitive) {
     }
     return -1;
 }
+int au_findFirstOutOfSet(const char* msg, const char* set) {
+    return (int)strspn(msg, set);
+}
+
 const char* au_getNumber(char* buf, size_t size, const char* msg) {
     unsigned int i;
     unsigned int counter = 0;

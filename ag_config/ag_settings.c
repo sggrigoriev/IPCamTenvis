@@ -102,14 +102,6 @@ static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
 
-/****************************************************
- * Non- configurable but saved & updates persistent params
- *
- */
-static char client_ip[LIB_HTTP_MAX_IPADDRES_SIZE] = {0};
-static int client_port = -1;
-static int server_port = -1;
-
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE] = {0};
 /***********************************************************************
     Local functions
@@ -216,39 +208,6 @@ void ag_saveMainURL(const char* mu) {
 }
 const char* ag_getMainURL() {
     return main_url;
-}
-/**************************************************************************************************************************
-    Thread-protected functions
-*/
-/* Initiate the configuration service. Load data from configuration port; Initiates default values
-   Return 1 if Ok, 0 if not
-*/
-
-void ag_saveClientIP(const char* ip_address) {
-    pthread_mutex_lock(&local_mutex);
-    au_strcpy(client_ip, ip_address, sizeof(client_ip));
-    client_ip[sizeof(client_ip)-1] = '\0';
-    pthread_mutex_unlock(&local_mutex);
-}
-const char* ag_getClientIP(char* buf, size_t size) {
-    pthread_mutex_lock(&local_mutex);
-    au_strcpy(buf, client_ip, size);
-    pthread_mutex_unlock(&local_mutex);
-    return buf;
-}
-
-void ag_saveClientPort(int port) {
-    client_port = port;
-}
-int ag_getClientPort() {
-    return client_port;
-}
-
-void ag_saveServerPort(int port) {
-    server_port = port;
-}
-int ag_getServerPort() {
-    return server_port;
 }
 
 int ag_load_config(const char* cfg_file_name) {

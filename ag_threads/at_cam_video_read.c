@@ -42,7 +42,8 @@
 static volatile int stop = 1;
 
 static int sock;
-static struct sockaddr_in sin={0};
+static struct sockaddr_in s_src={0};
+static struct sockaddr_in s_dst={0};
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -53,9 +54,9 @@ static void* the_thread(void* params);
  * Global functions
  */
 
-int at_start_video_read() {
+int at_start_video_read(const char* src_addr, int src_port, const char* dst_addr, int dst_port) {
     if(at_is_video_read_run()) return 1;
-    if((sock = ac_udp_client_connection(ag_getCamIP(), ag_getServerPort(), &sin, 0)) < 0) {
+    if((sock = ac_udp_server_connection(dst_addr, dst_port, src_addr, src_port, &s_dst, &s_src, 0)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
         return 0;
     }
@@ -71,17 +72,13 @@ void at_stop_video_read() {
 
     if(!at_is_video_read_run()) return;
 
-    at_set_stop_video_read();
+    stop = 0;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
 }
 
 int at_is_video_read_run() {
     return !stop;
-}
-
-void at_set_stop_video_read() {
-    stop = 1;
 }
 
 /****************************************************************
@@ -97,7 +94,7 @@ static void* the_thread(void* params) {
         }
         ssize_t sz = 0;
         while(!stop && !sz) {
-            sz = ac_udp_read(sock, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
+            sz = ac_udp_read(sock, &s_src, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
 //            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
         }
         switch(sz) {

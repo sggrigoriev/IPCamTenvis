@@ -22,6 +22,9 @@
 #ifndef IPCAMTENVIS_AC_ALFAPRO_H
 #define IPCAMTENVIS_AC_ALFAPRO_H
 
+#define AC_ALFA_VIDEO_SETUP 0
+#define AC_ALFA_AUDIO_SETUP 1
+
 #include <stdlib.h>
 
 #include "ac_cam_types.h"
@@ -29,15 +32,12 @@
 #include "ao_cma_cam.h"
 
 
-t_at_rtsp_session* ac_alfaProInit();
+int ac_alfaProInit(t_at_rtsp_session* sess);
 void ac_alfaProDown(t_at_rtsp_session* sess);
-
-int ac_alfaProOpenSession(t_at_rtsp_session* sess);
-void ac_alfaProCloseSession(t_at_rtsp_session* sess);
 
 int ac_alfaProOptions(t_at_rtsp_session* sess);
 int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size);
-int ac_alfaProSetup(t_at_rtsp_session* sess, int client_port);
+int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type);
 int ac_alfaProPlay(t_at_rtsp_session* sess);
 int ac_alfaProTeardown(t_at_rtsp_session* sess);
 

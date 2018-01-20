@@ -24,6 +24,10 @@
 
 #include <stdio.h>
 
+/* TODO: shift the function to lib_tcp */
+/* returns interface name for local_ip */
+const char* at_tcp_get_eth(const char* local_ip, char* eth_name, size_t size);
+
 const char* ac_tcp_read(int sock, char* buf, size_t size, int stop);
 int ac_tcp_write(int sock, const char* msg, int stop);
 

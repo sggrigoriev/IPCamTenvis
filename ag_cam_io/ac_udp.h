@@ -29,10 +29,11 @@ typedef struct sockaddr_in t_struct_sockaddr_in;
 
 /* Return -1 if error or opened socket if OK */
 int ac_udp_client_connection(const char* ip, uint16_t port, t_struct_sockaddr_in* sin, int async);
+int ac_udp_server_connection(const char* my_ip, uint16_t my_port, const char* other_ip, uint16_t other_port, struct sockaddr_in* smy, struct sockaddr_in* sother, int async);
 void ac_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-ssize_t ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to);
+ssize_t ac_udp_read(int sock, struct sockaddr_in* sother, t_ab_byte* buf, size_t size, int to);
 int ac_udp_write(int sock, const t_ab_byte* buf, size_t size, const t_struct_sockaddr_in* addr);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */

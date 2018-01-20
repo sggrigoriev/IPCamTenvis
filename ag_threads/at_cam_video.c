@@ -74,7 +74,7 @@ static t_mgr_state start_ws_thread() {
 }
 static t_mgr_state start_vc_therad() {
     if(own_status != AT_LISTEN) {
-        pu_log(LL_ERROR, "%s - %s: Wrong entry status = %d instead of %d, exit.", AT_THREAD_NAME, __FUNCTION__, own_status, AT_READY);
+        pu_log(LL_ERROR, "%s - %s: Wrong entry status = %d instead of %d, exit.", AT_THREAD_NAME, __FUNCTION__, own_status, AT_LISTEN, AT_PLAY);
         return AT_ERROR;
     }
     if(!at_start_video_connector(video_conn.url, video_conn.port, video_conn.auth)) {
@@ -92,14 +92,27 @@ static t_mgr_state get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
     pu_log(LL_DEBUG, "%s: WS Connection parameters: URL = %s, PORT = %d, SessionId = %s", __FUNCTION__, ws->url, ws->port, ws->auth);
     return AT_GOT_VIDEO_CONN_INFO;
 }
-
+/* Start play or stop play */
 static t_mgr_state process_ws_message(const char* msg) {
-    if(!strcmp(msg, DEFAULT_WC_START_PLAY)) return start_vc_therad();
-
-    if(!strcmp(msg, DEFAULT_WC_STOP_PLAY)) {
-        at_stop_video_connector();
-        pu_log(LL_INFO, "%s: Video connector stop", AT_THREAD_NAME);
-        return AT_LISTEN;
+    switch (own_status) {
+        case AT_LISTEN:
+            if(!strcmp(msg, DEFAULT_WC_START_PLAY)) return start_vc_therad();
+            if(!strcmp(msg, DEFAULT_WC_STOP_PLAY)) return AT_LISTEN;    //Nothing to do: we didn't start play yet
+        case AT_PLAY:
+            if(!strcmp(msg, DEFAULT_WC_START_PLAY)) {
+                pu_log(LL_WARNING, "%s: Play command received during the play state. Ignored", __FUNCTION__);
+                return AT_PLAY;
+            }
+            if(!strcmp(msg, DEFAULT_WC_STOP_PLAY)) {
+                pu_log(LL_INFO, "%s: Stop play received", __FUNCTION__);
+                at_stop_video_connector();
+                return AT_LISTEN;
+            }
+            pu_log(LL_ERROR, "%s Wideo Socket sent unnknown message %s. Ignored", __FUNCTION__, msg);
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Unexpected thread state %d instead of %d or %d. Ignored", __FUNCTION__);
+            break;
     }
     return own_status;
 }
@@ -140,16 +153,10 @@ static void* main_thread(void* params) {
         }
         switch(own_status) {        /* State machine */
             case AT_GOT_PROXY_INFO:
-                own_status = get_vs_conn_params(&video_conn, &ws_conn);
+                own_status = get_vs_conn_params(&video_conn, &ws_conn); /* -> AT_GOT_VIDEO_CONN_INFO */
                 break;
             case AT_GOT_VIDEO_CONN_INFO:
-                own_status = start_ws_thread(); /* -> READY */
-                break;
-            case AT_READY:
-                if(!is_ws_run()) {
-                    pu_log(LL_WARNING, "%s: Wideo socket tread restart", AT_THREAD_NAME);
-                    own_status = start_ws_thread();
-                }
+                own_status = start_ws_thread(); /* -> AT_LISTEN */
                 break;
             case AT_PLAY:       // Just check both processes run
                 if(!is_ws_run()) {
@@ -168,13 +175,13 @@ static void* main_thread(void* params) {
                 pu_log(LL_DEBUG, "%s: Error. Stop the thread", AT_THREAD_NAME);
                 stop = 1;
                 break;
-            default:
+            default:        //Stop case is also here
                 break;
         }
     }
 /* shutdown procedure */
-    if(is_video_connector_run()) at_stop_video_connector();
-    if(is_ws_run()) stop_ws();
+    at_stop_video_connector();
+    stop_ws();
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

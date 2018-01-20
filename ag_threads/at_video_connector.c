@@ -19,9 +19,8 @@
  Created by gsg on 23/11/17.
 */
 #include <pthread.h>
-#include <memory.h>
-#include <netdb.h>
-#include <arpa/inet.h>
+#include <gst/sdp/gstsdp.h>
+#include <ag_cam_io/ac_cam_types.h>
 
 #include "pu_logger.h"
 
@@ -52,7 +51,6 @@ struct {
 } IN_PARAMS;
 
 
-
 static pthread_t id;
 static pthread_attr_t attr;
 
@@ -60,32 +58,23 @@ static volatile int stop = 1;       /* Thread stop flag */
 
 /*************************************************/
 static void shutdown_proc() {
-    ac_close_session(PLAYER_SESSION);
-    ac_close_session(CAM_SESSION);
-    ac_rtsp_down(PLAYER_SESSION);
-    ac_rtsp_down(CAM_SESSION);
+    if(PLAYER_SESSION) ac_rtsp_down(PLAYER_SESSION);
+    if(CAM_SESSION) ac_rtsp_down(CAM_SESSION);
     ab_close();         /* Erase videostream buffer */
 }
 static int init_proc() {
     /* Setup the ring buffer for video streaming */
     if(!ab_init(ag_getVideoChunksAmount())) {
-        pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error");
+        pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error", __FUNCTION__);
         return 0;
     }
-    if(CAM_SESSION = ac_rtsp_init(AC_CAMERA), CAM_SESSION == NULL) {
-        ab_close();
-        return 0;
-    }
-    if(PLAYER_SESSION = ac_rtsp_init(AC_WOWZA), PLAYER_SESSION == NULL) {
-        ab_close();
-        ac_rtsp_down(CAM_SESSION);
-        return 0;
-    }
-
     char url[LIB_HTTP_MAX_URL_SIZE];
+    ac_makeAlfaProURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution());
 
-    if(!ac_open_session(PLAYER_SESSION, ac_make_wowza_url(url, sizeof(url), IN_PARAMS.host, IN_PARAMS.port, IN_PARAMS.session_id), IN_PARAMS.session_id)) goto on_error;
-    if(!ac_open_session(CAM_SESSION, ac_makeAlfaProURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution()), "")) goto on_error;
+    if(CAM_SESSION = ac_rtsp_init(AC_CAMERA, url, ""), !CAM_SESSION) goto on_error;
+
+    ac_make_wowza_url(url, sizeof(url), "rtsp", IN_PARAMS.host, IN_PARAMS.port, IN_PARAMS.session_id);
+    if(PLAYER_SESSION = ac_rtsp_init(AC_WOWZA, url,  IN_PARAMS.session_id), !PLAYER_SESSION) goto on_error;
 
     return 1;
 on_error:
@@ -93,21 +82,15 @@ on_error:
     return 0;
 }
 
-static int start_streaming() {
-    if(at_is_video_read_run()) at_stop_video_read();
-    if(!at_start_video_read()) return -1;
-
-    if(at_is_video_write_run()) at_stop_video_write();
-    if(!at_start_video_write()) return -1;
+static int start_streaming(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out) {
+    if(!at_start_video_read(video_in.src.ip, video_in.src.port, video_in.dst.ip, video_in.dst.port)) return 0;
+    if(!at_start_video_write(video_out.dst.ip, video_out.dst.port)) return 0;
 
     return 1;
 }
 static void stop_streaming() {
-    at_set_stop_video_read();
-    at_set_stop_video_write();
-
-    if(at_is_video_read_run()) at_stop_video_read();
-    if(at_is_video_write_run()) at_stop_video_write();
+    at_stop_video_read();
+    at_stop_video_write();
 }
 
 static void say_disconnected_to_vm() {
@@ -135,11 +118,8 @@ on_exit:
 }
 static t_ac_rtsp_states process_setup() {    /* NB! Video stream only!*/
 
-    if(!ac_req_setup(CAM_SESSION, AC_FAKE_CLIENT_PORT)) return AC_STATE_ON_ERROR;
-    ag_saveServerPort(CAM_SESSION->video_port);
-
-    if(!ac_req_setup(PLAYER_SESSION, AC_FAKE_CLIENT_PORT)) return AC_STATE_ON_ERROR;
-    ag_saveClientPort(PLAYER_SESSION->video_port);
+    if(!ac_req_setup(CAM_SESSION)) return AC_STATE_ON_ERROR;
+    if(!ac_req_setup(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
     return AC_STATE_START_PLAY;
 }
@@ -148,7 +128,7 @@ static t_ac_rtsp_states process_play() {
     if(!ac_req_play(CAM_SESSION)) return AC_STATE_ON_ERROR;
     if(!ac_req_play(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
-    if(!start_streaming()) return AC_STATE_ON_ERROR;
+    if(!start_streaming(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair)) return AC_STATE_ON_ERROR;
 
     return AC_STATE_PLAYING;
 }
@@ -192,7 +172,7 @@ on_reconnect:
                 state = process_play();
                 break;
             case AC_STATE_PLAYING:
-                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
+//                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
                 sleep(1);
                 break;
              default:
@@ -233,21 +213,12 @@ int at_start_video_connector(const char* host, int port, const char* session_id)
     pu_log(LL_DEBUG, "%s: VS connection parameters: host = %s, port = %d, vs_session_id = %s", __FUNCTION__, host, port, session_id);
     if(!au_strcpy(IN_PARAMS.host, host, sizeof(IN_PARAMS.host))) return 0;
     if(!au_strcpy(IN_PARAMS.session_id, session_id, sizeof(IN_PARAMS.session_id))) return 0;
-    IN_PARAMS.port = AC_PLAYER_VIDEO_PORT;
-
-    struct hostent* hn = gethostbyname(host);
-    if(!hn) {
-        pu_log(LL_ERROR, "%s: Can't get IP of VS server: %d - %s", __FUNCTION__, h_errno, strerror(h_errno));
-        return -1;
-    }
-    struct sockaddr_in s;
-    memcpy(&s.sin_addr, hn->h_addr_list[0], (size_t)hn->h_length);
-    char* ip = inet_ntoa(s.sin_addr);
-    ag_saveClientIP(ip);
-    stop = 0;
+    IN_PARAMS.port = port;
 
     if(pthread_attr_init(&attr)) {stop = 1; return 0;}
     if(pthread_create(&id, &attr, &vc_thread, NULL)) {stop = 1; return 0;}
+
+    stop = 0;
 
     return 1;
 }

@@ -145,7 +145,10 @@ int start_ws(const char *host, int port,const char *path, const char *session_id
     ws_args *argz;
     char s_port[20];
 
-    if(is_ws_run()) return 1;
+    if(is_ws_run()) {
+        pu_log(LL_ERROR, "WS THREAD already run. Start ignored");
+        return 1;
+    }
 
     if(!host || !port || !path || !session_id) {
         pu_log(LL_ERROR, "%s: One of arguments is NULL exiting\n", __FUNCTION__);
@@ -170,6 +173,10 @@ int start_ws(const char *host, int port,const char *path, const char *session_id
 void stop_ws()
 {
     void* ret;
+    if(!is_ws_run()) {
+        pu_log(LL_ERROR, "WS THERAD is not running. Stop ignored");
+        return;
+    }
     stop = 1;
     pthread_join(ws_thread_id, &ret);
     pthread_attr_destroy(&threadAttr);

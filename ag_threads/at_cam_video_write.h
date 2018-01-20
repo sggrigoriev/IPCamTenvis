@@ -27,7 +27,7 @@
  * Run streaming into cloud
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_write();
+int at_start_video_write(const char* addr, int port);
 /**************************
  * Stop the thread (join)
  */
@@ -37,9 +37,6 @@ void at_stop_video_write();
  * @return 1 if write stream runs
  */
 int at_is_video_write_run();
-/******************************
- * Set sign to stop the thread
- */
-void at_set_stop_video_write();
+
 
 #endif /* IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H */

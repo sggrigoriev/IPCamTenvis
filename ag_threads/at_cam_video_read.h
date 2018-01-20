@@ -30,7 +30,7 @@
  * Start getting cideo stream from the camera
  * @return - 1 is OK, 0 if not
  */
-int at_start_video_read();
+int at_start_video_read(const char* src_addr, int src_port, const char* dst_addr, int dst_port);
 /*****************************
  * Stop read streaming (join)
  */
@@ -40,9 +40,6 @@ void at_stop_video_read();
  * @return 1 if runs 0 if not
  */
 int at_is_video_read_run();
-/*******************************
- * Set sign to stop the thread
- */
-void at_set_stop_video_read();
+
 
 #endif /* IPCAMTENVIS_AT_CAM_VIDEO_READ_H */

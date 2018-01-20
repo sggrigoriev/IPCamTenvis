@@ -26,19 +26,16 @@
 
 #include "ac_cam_types.h"
 
-t_at_rtsp_session* ac_WowzaInit();
+int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id);
 void ac_WowzaDown(t_at_rtsp_session* sess);
-
-int ac_WowzaOpenSession(t_at_rtsp_session* sess, const char* wowza_session);
-void ac_WowzaCloseSession(t_at_rtsp_session* sess);
 
 int ac_WowzaOptions(t_at_rtsp_session* sess);
 int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description);
-int ac_WowzaSetup(t_at_rtsp_session* sess, int client_port);
+int ac_WowzaSetup(t_at_rtsp_session* sess);
 int ac_WowzaPlay(t_at_rtsp_session* sess);
 int ac_WowzaTeardown(t_at_rtsp_session* sess);
 
 /* <vs_url>:<port>/ppcvideoserver/<vs_session_id> */
-const char* ac_make_wowza_url(char *url, size_t size, const char* vs_url, int port, const char* vs_session_id);
+const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, const char* vs_url, int port, const char* vs_session_id);
 
 #endif /* IPCAMTENVIS_AC_WOWZA_H */

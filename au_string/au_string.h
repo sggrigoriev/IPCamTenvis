@@ -32,6 +32,9 @@ char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_
 /* Return position in the msg when subs starts. Else return -1. */
 int au_findSubstr(const char* msg, const char* subs, int case_sencitive);
 
+/* Return first position out of chars set */
+int au_findFirstOutOfSet(const char* msg, const char* set);
+
 /* If msg starts from digit, return substr before furst non-digit. Else return empty str */
 const char* au_getNumber(char* buf, size_t size, const char* msg);
 

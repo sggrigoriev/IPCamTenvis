@@ -32,6 +32,8 @@
 
 #include "ac_cloud.h"
 
+#define AC_PLAYER_VIDEO_PORT 1935
+
 #define AC_HTTP_MAIN_STREAMING_INTERFACE1   "/cloud/json/settingsServer/streaming?deviceId="
 #define AC_HTTP_MAIN_STREAMING_POSTFIX1     "&connected=false"
 #define AC_HTTP_CLOUD_AUTH_PREFIX           "PPCAuthorization: esp token="
@@ -271,7 +273,8 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, s
     if(!parse_video_settings(answer, &rc, &ssl, v_url, v_size, port2, sizeof(port2), v_sess, vs_size)) goto on_error;
     if(!au_strcpy(w_sess, v_sess, ws_size)) goto on_error;
 
-    *v_port = atoi(port2);
+//    *v_port = atoi(port2);
+    *v_port = AC_PLAYER_VIDEO_PORT;
 
     if(!create_conn_string(conn, sizeof(conn), &ssl, ag_getMainURL(), NULL, AC_HTTP_MAIN_STREAMING_INTERFACE3, NULL, ag_getProxyID(), NULL)) goto on_error;
     if(!get_cloud_settings(conn, NULL, answer, sizeof(answer))) goto on_error;

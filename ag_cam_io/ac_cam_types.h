@@ -22,7 +22,6 @@
 #ifndef IPCAMTENVIS_AC_CAM_TYPES_H
 #define IPCAMTENVIS_AC_CAM_TYPES_H
 
-#define AC_PLAYER_VIDEO_PORT 1935
 #define AC_FAKE_CLIENT_PORT 11038
 
 #define AC_RTSP_MAX_URL_SIZE        4097
@@ -41,6 +40,7 @@
 #define AC_TIMEOUT          "timeout="
 #define AC_PLAY_RANGE       "npt=0.000-"
 #define AC_VIDEO_TRACK      "0"
+#define AC_AUDIO_TRACK      "1"
 #define AC_STREAMING_TCP    1
 #define AC_STREAMING_UDP    0
 #define AC_RTSP_HEAD        "rtsp://"
@@ -63,6 +63,9 @@
 #define AC_RTSP_VS_ORIGIN   "- 0 0 IN IP4 127.0.0.1"
 #define AC_RTSP_CD_IP4      "IP4 "
 
+#define AC_RTSP_SERVER_PORT "server_port="
+#define AC_RTSP_SOURCE_IP   "source="
+
 typedef enum {
     AC_CAMERA,
     AC_WOWZA
@@ -79,14 +82,24 @@ typedef enum {
     AC_STATE_ON_ERROR
 } t_ac_rtsp_states;
 
+typedef struct {
+    char* ip;
+    int port;
+} t_ac_rtsp_ipport;
+
+typedef struct {
+    t_ac_rtsp_ipport src;
+    t_ac_rtsp_ipport dst;
+} t_ac_rtsp_pair_ipport;
+
 typedef struct _ACRTSPSession {
     t_ac_rtsp_device device;
     t_ac_rtsp_states state;
     char* url;
     char* rtsp_session_id;
     int CSeq;                   /* NB! this is NEXT number */
-    int video_port;
-    int audio_port;
+    t_ac_rtsp_pair_ipport video_pair;
+    t_ac_rtsp_pair_ipport audio_pair;
 /* Implementation-specific */
     void* session;
 } t_at_rtsp_session;

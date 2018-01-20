@@ -23,37 +23,76 @@
 #include <assert.h>
 
 #include "pu_logger.h"
+#include "lib_tcp.h"        /* for lib_tcp_local_ip */
 
 #include "ag_defaults.h"
+#include "ac_cam_types.h"
+#include "ac_tcp.h"         /* for at_tcp_get_eth */
 #include "ac_alfapro.h"
 #include "ac_wowza.h"
 
 #include "ac_rtsp.h"
 
-static char* make_url(const char* url, const char* session_id) {
-    size_t len = strlen(url) + strlen(session_id) + strlen(AC_RTSP_HEAD)+1;
-    char* ret = calloc(len, 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: memory allocation error!", __FUNCTION__);
-        return NULL;
-    }
-    strcpy(ret, AC_RTSP_HEAD);
-    strcat(ret, url);
-    strcat(ret, session_id);
-    return ret;
-}
 
 /*******************************************************************************************/
 
-t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device) {
+t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* url, const char* session_id) {
+    assert(url); assert(session_id);
+    t_at_rtsp_session* sess = calloc(sizeof(t_at_rtsp_session), 1);
+    if(!sess) {
+        pu_log(LL_ERROR, "%s Memory allocation error at %d", __FUNCTION__, __LINE__);
+        goto on_error;
+    }
+    sess->device = device;
+    sess->state = AC_STATE_UNDEF;
+    if(sess->url = strdup(url), !sess->url) {
+        pu_log(LL_ERROR, "%s Memory allocation error at %d", __FUNCTION__, __LINE__);
+        goto on_error;
+    }
+    int rc;
+
     switch (device) {
-        case AC_CAMERA:
-            return ac_alfaProInit();
+        case AC_CAMERA: {
+            char eth_name[10] = {0};
+            char local_ip[16] = {0};
+            at_tcp_get_eth("0.0.0.0", eth_name, sizeof(eth_name));
+            if(!strlen(eth_name)) goto on_error;
+            lib_tcp_local_ip(eth_name, local_ip, sizeof(local_ip));
+            if(!strlen(local_ip)) goto on_error;
+
+            rc = ac_alfaProInit(sess);
+            if (sess->video_pair.dst.ip = strdup(local_ip), !sess->video_pair.dst.ip) {
+                pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+                goto on_error;
+            }
+            if (sess->audio_pair.dst.ip = strdup(local_ip), !sess->audio_pair.dst.ip) {
+                pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+                goto on_error;
+            }
+            sess->video_pair.dst.port = AC_FAKE_CLIENT_PORT;
+            sess->audio_pair.dst.port = AC_FAKE_CLIENT_PORT+2;
+        }
+            break;
         case AC_WOWZA:
-            return ac_WowzaInit();
+            sess->video_pair.src.port = AC_FAKE_CLIENT_PORT;
+            sess->audio_pair.src.port = AC_FAKE_CLIENT_PORT+2;
+            rc = ac_WowzaInit(sess, session_id);
+            break;
         default:
-            pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, device);
-            return NULL;
+            pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
+            rc = 0;
+            break;
+    }
+    if(rc) {
+        return sess;
+    }
+
+on_error:
+    if(sess) {
+        if(sess->url) free(sess->url);
+        if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
+        if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
+        free(sess);
     }
     return NULL;
 }
@@ -70,48 +109,19 @@ void ac_rtsp_down(t_at_rtsp_session* sess) {
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
             break;
     }
-}
+    if(sess->url) free(sess->url);
+    if(sess->video_pair.src.ip) free(sess->video_pair.src.ip);
+    if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
+    if(sess->video_pair.src.ip) free(sess->video_pair.src.ip);
+    if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
 
-int ac_open_session(t_at_rtsp_session* sess, const char* url, const char* session_id) {
-    assert(sess); assert(url); assert(session_id);
+    if(sess->audio_pair.src.ip) free(sess->audio_pair.src.ip);
+    if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
+    if(sess->audio_pair.src.ip) free(sess->audio_pair.src.ip);
+    if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
 
-    if(sess->url = make_url(url, session_id), !sess->url) goto on_error;
-
-    switch(sess->device) {
-        case AC_CAMERA:
-            if(!ac_alfaProOpenSession(sess)) goto on_error;
-            break;
-        case AC_WOWZA:
-            if(!ac_WowzaOpenSession(sess, session_id)) goto on_error;
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            break;
-    }
-    return 1;
-on_error:
-    pu_log(LL_ERROR, "%s: Error on open session for device %d.", __FUNCTION__, sess->device);
-    ac_close_session(sess);
-    return 0;
-}
-void ac_close_session(t_at_rtsp_session* sess) {
-    assert(sess);
-
-    if(sess->url) {
-        free(sess->url);
-        sess->url = NULL;
-    }
-    switch(sess->device) {
-        case AC_CAMERA:
-            ac_alfaProCloseSession(sess);
-             break;
-        case AC_WOWZA:
-            ac_WowzaCloseSession(sess);
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            break;
-    }
+    if(sess->rtsp_session_id) free(sess->rtsp_session_id);
+    free(sess);
 }
 
 int ac_req_options(t_at_rtsp_session* sess) {
@@ -152,14 +162,15 @@ int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description) {
 
     return ac_WowzaAnnounce(sess, dev_description);
 }
-int ac_req_setup(t_at_rtsp_session* sess, int client_port) {
+int ac_req_setup(t_at_rtsp_session* sess) {
     assert(sess);
 
     switch(sess->device) {
         case AC_CAMERA:
-            return ac_alfaProSetup(sess, client_port);
+            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
+            return ac_alfaProSetup(sess, AC_ALFA_AUDIO_SETUP);
         case AC_WOWZA:
-            return ac_WowzaSetup(sess, client_port);
+            return ac_WowzaSetup(sess);
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
             return 0;

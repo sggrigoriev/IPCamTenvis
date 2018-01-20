@@ -21,9 +21,10 @@
 
 #include <memory.h>
 #include <errno.h>
-#include <ag_converter/ao_cmd_data.h>
-#include <lib_timer.h>
+#include <curl/curl.h>  /* for global init/deinit */
+#include <gst/gst.h>    /* for gloal init/deinit */
 
+#include "lib_timer.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
 
@@ -34,11 +35,11 @@
 #include "ao_cmd_proxy.h"
 
 #include "at_proxy_rw.h"
+#include "at_wud_write.h"
 #include "at_cam_video.h"
 
-
 #include "at_main_thread.h"
-#include "at_wud_write.h"
+
 
 #define AT_THREAD_NAME  "IPCamTenvis"
 
@@ -67,6 +68,25 @@ static void send_wd() {
         pu_queue_push(to_wud, buf, strlen(buf)+1);
 }
 static int main_thread_startup() {
+/* Cutle & Gstreamer initiations */
+    {
+        CURLcode res = CURLE_OK;
+
+        if (res = curl_global_init(CURL_GLOBAL_ALL), res != CURLE_OK) {
+            pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", res);
+            return 0;
+        }
+    }
+
+    {
+        GError *err = NULL;
+        if (!gst_init_check(NULL, NULL, &err) || err != NULL) {
+            pu_log(LL_ERROR, "%s: Error GST init: %s", __FUNCTION__, err->message);
+            g_error_free(err);
+            return 0;
+        }
+    }
+
 /* Queues initiation */
     aq_init_queues();
 
@@ -104,6 +124,9 @@ static void main_thread_shutdown() {
     at_stop_video_mgr();
 
     aq_erase_queues();
+/* Curle & gstreamer douwned */
+    curl_global_cleanup();
+    gst_deinit();
 }
 static void process_proxy_message(char* msg) {
     t_ao_msg data;

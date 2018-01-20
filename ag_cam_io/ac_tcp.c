@@ -25,11 +25,47 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <assert.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 
 #include "pu_logger.h"
 #include "lib_tcp.h"
 
 #include "ac_tcp.h"
+
+const char* at_tcp_get_eth(const char* local_ip, char* eth_name, size_t size) {
+    assert(local_ip); assert(eth_name); assert(size<4);
+
+    eth_name[0] = '\0';
+    struct ifaddrs *ifaddr, *ifa;
+    int family, s, n;
+    char host[NI_MAXHOST];
+
+    if (getifaddrs(&ifaddr) == -1) {
+        pu_log(LL_ERROR, "%s: error calling 'getifaddrs'. RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        return eth_name;
+    }
+
+    /* Walk through linked list, maintaining head pointer so we can free list later */
+    for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+        if ((ifa->ifa_addr == NULL) || (family != AF_INET))
+            continue;
+
+        family = ifa->ifa_addr->sa_family;
+        if(s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST), s) {
+            pu_log(LL_ERROR, "%s: error calling 'getnameinfo'. RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+            goto on_exit;
+        }
+        if(!strcmp(host, local_ip)) {
+            strncpy(eth_name, ifa->ifa_name, size-1);
+            goto on_exit;
+        }
+    }
+on_exit:
+    freeifaddrs(ifaddr);
+    return eth_name;
+}
 
 const char* ac_tcp_read(int sock, char* buf, size_t size, int stop) {
     ssize_t rc = 0;

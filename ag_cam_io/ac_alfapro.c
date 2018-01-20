@@ -23,17 +23,17 @@
 #include <curl/curl.h>
 
 #include "pu_logger.h"
+#include "lib_tcp.h"
 
 #include "au_string.h"
 #include "ac_http.h"
-
+#include "ag_settings.h"
 
 #include "ac_alfapro.h"
+#include "ac_cam_types.h"
 
 #define AC_LOW_RES          "11"
 #define AC_HI_RES           "12"
-
-#define AC_SERVER_PORT      "server_port="
 
 typedef struct {
     CURL* h;
@@ -123,49 +123,45 @@ static const char* make_transport_string(char* buf, size_t size, int port, int t
     return buf;
 }
 
+static int get_video_port(const char* msg) {
+    int pos =  au_findSubstr(msg, AC_RTSP_SERVER_PORT, AU_NOCASE);
+    if(pos < 0) return 0;
+    char num[20] = {0};
+    au_getNumber(num, sizeof(num), msg+pos+strlen(AC_RTSP_SERVER_PORT));
+    if(!strlen(num)) return 0;
+
+    return atoi(num);
+}
+static const char* get_source_ip(char* ip, size_t size, const char* msg) {
+    int pos = au_findSubstr(msg, AC_RTSP_SOURCE_IP, AU_NOCASE);
+    ip[0] = '\0';
+    if(pos < 0) return ip;
+    int start = pos + strlen(AC_RTSP_SOURCE_IP);
+    int finish = au_findFirstOutOfSet(msg+start, "0123456789.") + start;
+    if(finish < 0) return ip;
+    if((finish - start+1) > size) return ip;
+    memcpy(ip, msg+start, finish-start);
+    ip[finish-start] = '\0';
+    return ip;
+}
+
 /*************************************************************************/
-t_at_rtsp_session* ac_alfaProInit() {
-    CURLcode res;
-
-    t_at_rtsp_session* ret = calloc(sizeof(t_at_rtsp_session), 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Memory allocation error on %d", __FUNCTION__, __LINE__);
-        goto on_error;
-    }
-    ret->device = AC_CAMERA;
-
-    if(res = curl_global_init(CURL_GLOBAL_ALL), res != CURLE_OK) {
-        pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", res);
-        goto on_error;
-    }
-    return ret;
-on_error:
-    if(ret) free(ret);
-    return NULL;
-}
-
-void ac_alfaProDown(t_at_rtsp_session* sess) {
-    AT_DT_NR(sess->device, AC_CAMERA);
-    curl_global_cleanup();
-    free(sess);
-}
-
-int ac_alfaProOpenSession(t_at_rtsp_session* sess) {
-    t_curl_session *cs = NULL;
+int ac_alfaProInit(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_CAMERA, 0);
+
+    CURLcode res = CURLE_OK;
+    t_curl_session *cs = NULL;
 
     if(cs = calloc(sizeof(t_curl_session),1), !cs) {
         pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
-        return 0;
+        goto on_error;
     }
     if(cs->h = curl_easy_init(), !cs->h) {
         pu_log(LL_ERROR, "%s: curl_easy_init.", __FUNCTION__);
-        free(cs);
-        return 0;
+        goto on_error;
     }
 
     sess->session = cs;
-    CURLcode res;
 
     curl_easy_setopt(cs->h, CURLOPT_VERBOSE, 1L);
     if(res = curl_easy_setopt(cs->h, CURLOPT_URL, sess->url), res != CURLE_OK) goto on_error;
@@ -174,19 +170,24 @@ int ac_alfaProOpenSession(t_at_rtsp_session* sess) {
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERFUNCTION, writer), res != CURLE_OK) goto on_error;
-
-    if (res = curl_easy_setopt(cs->h, CURLOPT_WRITEFUNCTION, writer), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(cs->h, CURLOPT_WRITEFUNCTION, writer), res != CURLE_OK) err_report(res);
 
     return 1;
 on_error:
-    free(cs);
-    sess->session = NULL;
-    pu_log(LL_ERROR, "%s: Errors on curl_easy_setopt. RC = %d", __FUNCTION__, res);
+    if(cs) {
+        if (cs->h) {
+            curl_easy_cleanup(cs->h);
+            sess->session = NULL;
+            pu_log(LL_ERROR, "%s: Errors on curl_easy_setopt. RC = %d", __FUNCTION__, res);
+        }
+        free(cs);
+    }
     return 0;
 }
 
-void ac_alfaProCloseSession(t_at_rtsp_session* sess) {
+void ac_alfaProDown(t_at_rtsp_session* sess) {
     AT_DT_NR(sess->device, AC_CAMERA);
+
     t_curl_session* cs = sess->session;
     if (cs->h) curl_easy_cleanup(cs->h);
     free(cs);
@@ -242,7 +243,7 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
     return 1;
 }
 
-int ac_alfaProSetup(t_at_rtsp_session* sess, int client_port) {
+int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
     char header[1000] = {0};
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
@@ -255,14 +256,14 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int client_port) {
     char uri[AC_RTSP_HEADER_SIZE];
 
     if(!au_strcpy(cs->track, AC_TRACK, sizeof(cs->track))) return err_report(res);
-    if(!au_strcat(cs->track, AC_VIDEO_TRACK, sizeof(cs->track))) return err_report(res); /* save "trackID=0" for use in PLAY command */
+    if(!au_strcat(cs->track, (media_type==AC_ALFA_VIDEO_SETUP)?AC_VIDEO_TRACK:AC_AUDIO_TRACK, sizeof(cs->track))) return err_report(res); /* save "trackID=0" for use in PLAY command */
 
 
     if(!au_strcpy(uri, sess->url, sizeof(uri))) return err_report(res);
     if(!au_strcat(uri, "/", sizeof(uri))) return err_report(res);
     if(!au_strcat(uri, cs->track, sizeof(uri))) return err_report(res);                  /* Add to url "/trackID=0" */
 
-    make_transport_string(transport, sizeof(transport), client_port, AC_STREAMING_UDP);
+    make_transport_string(transport, sizeof(transport), (media_type == AC_ALFA_VIDEO_SETUP)?sess->video_pair.dst.port:sess->audio_pair.dst.port, AC_STREAMING_UDP);
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
 
@@ -275,6 +276,27 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int client_port) {
 
     pu_log(LL_INFO, "%s: Header = \n%s", __FUNCTION__, header);
 
+    int port = get_video_port(header);
+    if(!port) {
+        pu_log(LL_ERROR, "%s: Can not get media port from camera transport string", __FUNCTION__);
+        return 0;
+    }
+
+    char lip[16] = {0};
+    get_source_ip(lip, sizeof(lip), header);
+    char* ipd = strdup(strlen(lip)?lip:ag_getCamIP());
+    if(!ipd) {
+        pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
+        return 0;
+    }
+    if(media_type == AC_ALFA_VIDEO_SETUP) {
+        sess->video_pair.src.port = port;
+        sess->video_pair.src.ip = ipd;
+    }
+    else {  /* AC_ALFA_AUDIO_SETUP */
+        sess->audio_pair.src.port = port;
+        sess->audio_pair.src.ip = ipd;
+    }
     return 1;
 }
 
@@ -338,16 +360,16 @@ const char* ac_makeAlfaProURL(char *url, size_t size, const char* ip, int port, 
         pu_log(LL_ERROR, "%s: uri size too small!", __FUNCTION__);
         return url;
     }
-
+    strcpy(url, "rtsp://");
     if(strlen(login) && strlen(pwd)) {
-        if(!au_strcpy(url, login, size)) return 0;
+        if(!au_strcat(url, login, size)) return 0;
         if(!au_strcat(url, ":", size)) return 0;
         if(!au_strcat(url, pwd, size)) return 0;
         if(!au_strcat(url, "@", size)) return 0;
         if(!au_strcat(url, ip, size)) return 0;
     }
     else {
-        if(!au_strcpy(url, ip, size)) return 0;
+        if(!au_strcat(url, ip, size)) return 0;
     }
     if(!au_strcat(url, ":", size)) return 0;
     if(!au_strcat(url, s_port, size)) return 0;

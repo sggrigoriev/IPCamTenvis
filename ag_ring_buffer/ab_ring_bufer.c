@@ -106,7 +106,7 @@ int ab_init(size_t max_chunks) {
     return 1;
 }
 void ab_close() {
-    assert(buf_initialized);
+    if(!buf_initialized) return;
     buf_initialized = 0;
 
     while(read_index != write_index) {
