@@ -307,8 +307,8 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
     GstRTSPTransport *transport = NULL;
     rc = gst_rtsp_transport_new (&transport); AC_GST_ANAL(rc);
 
-    transport->client_port.min = sess->video_pair.src.port;
-    transport->client_port.max = sess->video_pair.src.port+1;
+    transport->client_port.min = sess->video_pair.src.port.rtp;
+    transport->client_port.max = sess->video_pair.src.port.rtcp;
     transport->lower_transport = GST_RTSP_LOWER_TRANS_UDP;
     transport->mode_play = TRUE;
     transport->mode_record = TRUE;
@@ -347,7 +347,8 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
     rc = gst_rtsp_transport_new (&transport); AC_GST_ANAL(rc);
     rc = gst_rtsp_transport_parse(text_transport, transport); AC_GST_ANAL(rc);
 //Save server port
-    sess->video_pair.dst.port = transport->server_port.min;
+    sess->video_pair.dst.port.rtp = transport->server_port.min;
+    sess->video_pair.dst.port.rtcp = transport->server_port.max;
     if(sess->video_pair.dst.ip = strdup(transport->source), !sess->video_pair.dst.ip) {
         pu_log(LL_ERROR, "%s: Memory allocation error on %d", __FUNCTION__, __LINE__);
         goto on_error;

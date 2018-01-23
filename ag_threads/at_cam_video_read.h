@@ -30,7 +30,7 @@
  * Start getting cideo stream from the camera
  * @return - 1 is OK, 0 if not
  */
-int at_start_video_read(const char* src_addr, int src_port, const char* dst_addr, int dst_port);
+int at_start_video_read(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst);
 /*****************************
  * Stop read streaming (join)
  */

@@ -24,14 +24,29 @@
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include <fcntl.h>
+#include <assert.h>
 #include <sys/select.h>
+#include <netdb.h>
+
 
 #include "pu_logger.h"
 
 #include "ab_ring_bufer.h"
-
+#include "ac_cam_types.h"
 #include "ac_udp.h"
 
+#define AC_UDP_MAX(a,b) ((a>b)?a:b)
+/*
+static const char* get_ip_from_sock(int sock, char* ip, size_t ip_size) {
+    struct sockaddr_in addr;
+    ip[0] = '\0';
+    socklen_t len = sizeof(struct sockaddr_in);
+    int ret = getsockname(sock, (struct sockaddr*)&addr, &len);
+    if(!ret)
+        inet_ntop(AF_INET, &addr.sin_addr, ip, ip_size);
+    return ip;
+}
+*/
 int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin, int async) {
     int ret = -1;
 
@@ -58,42 +73,74 @@ int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* 
     }
     return ret;
 }
-int ac_udp_server_connection(const char* my_ip, uint16_t my_port, const char* other_ip, uint16_t other_port, struct sockaddr_in* smy, struct sockaddr_in* sother, int async) {
-    int ret = -1;
+/* Copypizded from https://stackoverflow.com/questions/9741392/can-you-bind-and-connect-both-ends-of-a-udp-connection */
+int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port) {
+    int sockfd = -1;
+    struct addrinfo hints, *remote_info = NULL, *home_info = NULL, *p = NULL;
+    int ret = 0;
 
-    pu_log(LL_DEBUG, "%s: source ip = %s, source port = %d, dest ip = %s, dest port = %d", __FUNCTION__, other_ip, other_port, my_ip, my_port);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;        //UDP communication
 
-    memset(smy, 0, sizeof(struct sockaddr_in));
-    smy->sin_family = AF_INET;
-    smy->sin_addr.s_addr = inet_addr(my_ip);
-    smy->sin_port = htons(my_port);
-
-    memset(sother, 0, sizeof(struct sockaddr_in));
-    sother->sin_family = AF_INET;
-    sother->sin_addr.s_addr = inet_addr(other_ip);
-    sother->sin_port = htons(other_port);
-
-    if((ret=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        pu_log(LL_ERROR, "%s: Open UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
+    /*For remote address*/
+    int rc = -1;
+    char asc_port[10];
+    snprintf(asc_port, sizeof(asc_port)-1, "%d", remote_port);
+    if ((rc = getaddrinfo(remote_ip, asc_port, &hints, &remote_info)) != 0) {
+        pu_log(LL_ERROR, "%s: getaddr info for remote peer: %s", __FUNCTION__, gai_strerror(rc));
+        goto on_exit;
     }
-    if(async) {
-        int sock_flags = fcntl(ret, F_GETFL);
-        if (sock_flags < 0) {
-            return -1;
+
+    // loop through all the results and make a socket
+    for(p = remote_info; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            pu_log(LL_ERROR, "%s: Error open socket %s - %d", __FUNCTION__, strerror(errno), errno);
+            continue;
         }
-        if (fcntl(ret, F_SETFL, sock_flags | O_NONBLOCK) < 0) {
-            return -1;
-        }
+        /*Taking first entry from getaddrinfo*/
+        break;
     }
-    int rc_bind;
-    if (rc_bind = bind(ret, (const struct sockaddr *)smy, sizeof(struct sockaddr_in)), rc_bind < 0) {
-        pu_log(LL_ERROR, "%s: Binding UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
+    /*Failed to get socket to all entries*/
+    if (p == NULL) {
+        pu_log(LL_ERROR, "%s: Failed to get socket", __FUNCTION__);
+        goto on_exit;
+    }
 
+    /*For home address*/
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;  //UDP communication
+    hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
+
+    snprintf(asc_port, sizeof(asc_port)-1, "%d", home_port);
+    if ((rc = getaddrinfo(NULL, asc_port, &hints, &home_info)) != 0) {
+        pu_log(LL_ERROR, "%s: getaddr info for home peer: %s", __FUNCTION__, gai_strerror(rc));
+        goto on_exit;
     }
-    return ret;
+
+    /*Bind this datagram socket to home address info */
+    if((rc = bind(sockfd, home_info->ai_addr, home_info->ai_addrlen)) != 0) {
+        pu_log(LL_ERROR, "%s: Error bind socket %s", __FUNCTION__, gai_strerror(rc));
+        goto on_exit;
+    }
+
+    /*Connect this datagram socket to remote address info */
+    if((rc= connect(sockfd, p->ai_addr, p->ai_addrlen)) != 0) {
+        pu_log(LL_ERROR, "%s: Error connect socket %s - %d", __FUNCTION__, strerror(errno), errno);
+        goto on_exit;
+    }
+    ret = 1;
+on_exit:
+    if(remote_info)
+        freeaddrinfo(remote_info);
+
+    if(home_info)
+        freeaddrinfo(home_info);
+
+    return (ret)?sockfd:-1;
 }
+
 void ac_close_connection(int sock) {
     if(sock > 0) {
         shutdown(sock, SHUT_RDWR);
@@ -102,37 +149,46 @@ void ac_close_connection(int sock) {
 }
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-ssize_t ac_udp_read(int sock, struct sockaddr_in* sother, t_ab_byte* buf, size_t size, int to) {
-    ssize_t res;
+t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size, int to) {
+    t_ac_udp_read_result rc={-1,0};
 
 /*Build set for select */
     struct timeval tv = {to, 0};
     fd_set readset;
     FD_ZERO(&readset);
 
-    FD_SET(sock, &readset);
+    FD_SET(socks.rtcp, &readset);
+    FD_SET(socks.rtp, &readset);
 
-    if(sock < 0) {
-        pu_log(LL_ERROR, "%s: FD_SET error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
-    }
-    res = select(sock + 1, &readset, NULL, NULL, &tv);
-    if(res < 0) {    /* Error. nothing to read */
+
+    rc.rc = select(AC_UDP_MAX(socks.rtcp, socks.rtp) + 1, &readset, NULL, NULL, &tv);
+    if(rc.rc < 0) {    // Error. nothing to read
         pu_log(LL_ERROR, "%s: select error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
+        return rc;
     }
-    if(res == 0) return 0;   /*timeout */
-    socklen_t slen = sizeof(struct sockaddr_in);
-    if((res = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)sother, &slen) < 0)) {
+    if(rc.rc == 0) return rc; // timeout
+
+    int sock;
+    if(FD_ISSET(socks.rtcp, &readset)) {
+        rc.src = 0;
+        sock = socks.rtcp;
+    }
+    else {
+        rc.src = 1;
+        sock = socks.rtp;
+    }
+
+    if(rc.rc = recv(sock, buf, size, 0), rc.rc < 0) {
         pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
     }
-    if(res == size) {
+    if(rc.rc == size) {
         pu_log(LL_WARNING, "%s: Read buffer too small - data truncated!", __FUNCTION__);
     }
-    return res;
+
+    return rc;
 }
-int ac_udp_write(int sock, const t_ab_byte* buf, size_t size, const struct sockaddr_in* addr) {
-    if(sendto(sock, buf, size, 0, (const struct sockaddr *)addr, sizeof(addr)) < 0) {
+int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
+    if(send(sock, buf, size, 0) < 0) {
         pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return 0;
     }

@@ -25,15 +25,25 @@
 #include <stdio.h>
 #include <stdint.h>
 
-typedef struct sockaddr_in t_struct_sockaddr_in;
+#include "ab_ring_bufer.h"
 
-/* Return -1 if error or opened socket if OK */
-int ac_udp_client_connection(const char* ip, uint16_t port, t_struct_sockaddr_in* sin, int async);
-int ac_udp_server_connection(const char* my_ip, uint16_t my_port, const char* other_ip, uint16_t other_port, struct sockaddr_in* smy, struct sockaddr_in* sother, int async);
+#include "ac_cam_types.h"
+
+typedef struct {
+    ssize_t rc;
+    int src;
+} t_ac_udp_read_result;
+
+/* Return 0 if error or opened socket if OK
+ * NB! use send & recv for the so
+ *
+*/
+int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port);
+
 void ac_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-ssize_t ac_udp_read(int sock, struct sockaddr_in* sother, t_ab_byte* buf, size_t size, int to);
-int ac_udp_write(int sock, const t_ab_byte* buf, size_t size, const t_struct_sockaddr_in* addr);
+t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size, int to);
+int ac_udp_write(int sock, const t_ab_byte* buf, size_t size);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */

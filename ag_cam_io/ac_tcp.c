@@ -35,11 +35,11 @@
 #include "ac_tcp.h"
 
 const char* at_tcp_get_eth(const char* local_ip, char* eth_name, size_t size) {
-    assert(local_ip); assert(eth_name); assert(size<4);
+    assert(local_ip); assert(eth_name); assert(size>=4);
 
     eth_name[0] = '\0';
     struct ifaddrs *ifaddr, *ifa;
-    int family, s, n;
+    int s, n;
     char host[NI_MAXHOST];
 
     if (getifaddrs(&ifaddr) == -1) {
@@ -49,10 +49,9 @@ const char* at_tcp_get_eth(const char* local_ip, char* eth_name, size_t size) {
 
     /* Walk through linked list, maintaining head pointer so we can free list later */
     for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
-        if ((ifa->ifa_addr == NULL) || (family != AF_INET))
+        if ((ifa->ifa_addr == NULL) || (ifa->ifa_addr->sa_family != AF_INET))
             continue;
 
-        family = ifa->ifa_addr->sa_family;
         if(s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST), s) {
             pu_log(LL_ERROR, "%s: error calling 'getnameinfo'. RC = %d - %s", __FUNCTION__, errno, strerror(errno));
             goto on_exit;

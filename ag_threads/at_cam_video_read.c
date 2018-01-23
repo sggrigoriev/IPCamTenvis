@@ -22,6 +22,8 @@
 #include <pthread.h>
 #include <malloc.h>
 #include <netinet/in.h>
+#include <ag_cam_io/ac_cam_types.h>
+#include <ag_cam_io/ac_udp.h>
 
 #include "pu_logger.h"
 
@@ -40,10 +42,7 @@
  * Local data
  */
 static volatile int stop = 1;
-
-static int sock;
-static struct sockaddr_in s_src={0};
-static struct sockaddr_in s_dst={0};
+static t_rtsp_pair socks = {-1,-1};
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -53,13 +52,18 @@ static void* the_thread(void* params);
 /*********************************************
  * Global functions
  */
-
-int at_start_video_read(const char* src_addr, int src_port, const char* dst_addr, int dst_port) {
+/* Here src - remote peer and destination - home */
+int at_start_video_read(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst) {
     if(at_is_video_read_run()) return 1;
-    if((sock = ac_udp_server_connection(dst_addr, dst_port, src_addr, src_port, &s_dst, &s_src, 0)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
+    if((socks.rtp = ac_udp_p2p_connection(src.ip, src.port.rtp, dst.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for RTP stream. Bye.", AT_THREAD_NAME);
         return 0;
     }
+    if((socks.rtcp = ac_udp_p2p_connection(src.ip, src.port.rtcp, dst.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for RTCP stream. Bye.", AT_THREAD_NAME);
+        return 0;
+    }
+
     stop = 0;
     if(pthread_attr_init(&attr)) {stop = 1; return 0;}
     if(pthread_create(&id, &attr, &the_thread, NULL)) {stop = 1; return 0;}
@@ -75,6 +79,9 @@ void at_stop_video_read() {
     stop = 0;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
+
+    if(socks.rtp >= 0) close(socks.rtp);
+    if(socks.rtcp >= 0) close(socks.rtcp);
 }
 
 int at_is_video_read_run() {
@@ -92,19 +99,21 @@ static void* the_thread(void* params) {
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
             goto on_stop;
         }
-        ssize_t sz = 0;
-        while(!stop && !sz) {
-            sz = ac_udp_read(sock, &s_src, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 1);
+        t_ac_udp_read_result ret = {0,0};
+        while(!stop && !ret.rc) {
+            ret = ac_udp_read(socks, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 60);
 //            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
         }
-        switch(sz) {
+        switch(ret.rc) {
             case 0:                        /* Timeout + stop */
             case -1:
                 free(buf);
                 goto on_stop;
-            default: break;                 /* Got smth - continue processing */
+            default:
+                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
+                break;                 /* Got smth - continue processing */
         }
-        t_ab_put_rc rc = ab_putBlock(sz, buf);  /* The buffer will be freed on reader size - video_write thread */
+        t_ab_put_rc rc = ab_putBlock(ret.rc, ret.src, buf);  /* The buffer will be freed on reader size - video_write thread */
         switch (rc) {
             case AB_OK:
                 break;
@@ -117,8 +126,11 @@ static void* the_thread(void* params) {
         }
     }
     on_stop:
-        ac_close_connection(sock);
-        sock = -1;
-        pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
+        ac_close_connection(socks.rtp);
+        socks.rtp = -1;
+        ac_close_connection(socks.rtcp);
+        socks.rtcp = -1;
+
+    pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
         pthread_exit(NULL);
 }

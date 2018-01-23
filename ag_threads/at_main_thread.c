@@ -140,17 +140,13 @@ static void process_proxy_message(char* msg) {
                 ag_saveProxyID(data.in_connection_state.proxy_device_id);
                 ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
                 ag_saveMainURL(data.in_connection_state.main_url);
-                if (!at_start_video_mgr()) {
-                    video_on = 0;
-                    pu_log(LL_ERROR, "%s: Video Manager start failed. No video - get clean-up your room!", AT_THREAD_NAME);
-                } else {
-                    video_on = 1;
+                if(!video_on) { /* Have to sart */
+                    if (!at_start_video_mgr()) {
+                        pu_log(LL_ERROR, "%s: Video Manager start failed. No video - get clean-up your room!", AT_THREAD_NAME);
+                    } else {
+                        video_on = 1;
+                    }
                 }
-            }
-            else {  /* Proxy is ofline */
-                video_on = 0;
-                at_stop_video_mgr();
-                pu_log(LL_ERROR, "%s: Video Manager stop due to offline status", AT_THREAD_NAME);
             }
             break;
         case AO_IN_PZT:

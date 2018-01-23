@@ -27,7 +27,7 @@
  * Run streaming into cloud
  * @return - 1 if OK, 0 if not
  */
-int at_start_video_write(const char* addr, int port);
+int at_start_video_write(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst);
 /**************************
  * Stop the thread (join)
  */
