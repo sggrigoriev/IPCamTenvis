@@ -8,7 +8,6 @@ set(GCC_STANDARD $ENV{STANDARD})
 message (Platform = $ENV{PLATFORM})
 
 set(AGENT_PLATFORM $ENV{PLATFORM})
-set(AGENT_PLATFORM ubuntu)
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
