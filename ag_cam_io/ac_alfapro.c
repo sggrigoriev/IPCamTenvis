@@ -171,6 +171,10 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
     if(res = curl_easy_setopt(cs->h, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERFUNCTION, writer), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_WRITEFUNCTION, writer), res != CURLE_OK) err_report(res);
+    if(strlen(ag_getCurloptCAPath())) {
+        if(res = curl_easy_setopt(cs->h, CURLOPT_CAPATH, ag_getCurloptCAPath()), res != CURLE_OK) err_report(res);
+    }
+    if(res = curl_easy_setopt(cs->h, CURLOPT_SSL_VERIFYPEER, (long)ag_getCurloptSSLVerifyer()), res != CURLE_OK) err_report(res);
 
     return 1;
 on_error:

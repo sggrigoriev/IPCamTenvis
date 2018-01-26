@@ -27,6 +27,8 @@
 
 #include "au_string.h"
 #include "ag_defaults.h"
+#include "ag_settings.h"
+
 #include "ac_http.h"
 
 
@@ -90,6 +92,13 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
         h->slist = curl_slist_append(h->slist, auth_string);
         if(curlResult = curl_easy_setopt(h->h, CURLOPT_HTTPHEADER, h->slist), curlResult != CURLE_OK) goto out;
     }
+
+    if(strlen(ag_getCurloptCAPath())) {
+        if(curlResult = curl_easy_setopt(h->h, CURLOPT_CAPATH, ag_getCurloptCAPath()), curlResult != CURLE_OK) goto out;
+    }
+    if(curlResult = curl_easy_setopt(h->h, CURLOPT_SSL_VERIFYPEER, (long)ag_getCurloptSSLVerifyer()), curlResult != CURLE_OK) goto out;
+
+
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_ERRORBUFFER, h->err_buf), curlResult != CURLE_OK) goto out;
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_WRITEFUNCTION, writer), curlResult != CURLE_OK) goto out;
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_WRITEDATA, &h->wr_buf), curlResult != CURLE_OK) goto out;

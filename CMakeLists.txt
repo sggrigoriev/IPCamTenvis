@@ -5,10 +5,8 @@ set(CMAKE_C_STANDARD 90)
 
 set(GCC_STANDARD $ENV{STANDARD})
 
-message (Platform = $ENV{PLATFORM})
-
 set(AGENT_PLATFORM $ENV{PLATFORM})
-set(AGENT_PLATFORM ubuntu)
+#set(AGENT_PLATFORM ubuntu)
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 

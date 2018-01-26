@@ -105,7 +105,7 @@ static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
 
-static int          curlopt_ssl_verifyer = 0;
+static int          curlopt_ssl_verifyer = 1;
 static char         curlopt_ca_path[LIB_HTTP_MAX_URL_SIZE] = {0};
 
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE] = {0};
@@ -299,7 +299,7 @@ static void initiate_defaults() {
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
 
-    curlopt_ssl_verifyer = 0;
+    curlopt_ssl_verifyer = 1;
     curlopt_ca_path[0] = '\0';
 }
 
