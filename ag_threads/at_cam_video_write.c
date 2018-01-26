@@ -22,6 +22,7 @@
 #include <malloc.h>
 #include <ag_ring_buffer/ab_ring_bufer.h>
 #include <netinet/in.h>
+#include <ag_cam_io/ac_cam_types.h>
 
 #include "pu_logger.h"
 
@@ -38,8 +39,8 @@
  */
 static volatile int stop = 1;
 
-static int sock;
-static struct sockaddr_in sin={0};
+static t_rtsp_pair socks = {-1,-1};
+
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -50,11 +51,15 @@ static void* the_thread(void* params);
 /*********************************************
  * Global functions
  */
-
-int at_start_video_write(const char* addr, int port) {
+/* Here src - home and destination - remote peer */
+int at_start_video_write(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst) {
     if(at_is_video_write_run()) return 1;
-    if((sock = ac_udp_client_connection(addr, port, &sin, 0)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket. Bye.", AT_THREAD_NAME);
+    if((socks.rtp = ac_udp_p2p_connection(dst.ip, dst.port.rtp, src.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for RTP stream. Bye.", AT_THREAD_NAME);
+        return 0;
+    }
+    if((socks.rtcp = ac_udp_p2p_connection(dst.ip, dst.port.rtcp, src.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for RTCP stream. Bye.", AT_THREAD_NAME);
         return 0;
     }
     stop = 0;
@@ -72,6 +77,9 @@ void at_stop_video_write() {
     stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
+
+    if(socks.rtp >= 0) close(socks.rtp);
+    if(socks.rtcp >= 0) close(socks.rtcp);
 }
 
 int at_is_video_write_run() {
@@ -93,15 +101,15 @@ static void* the_thread(void* params) {
 //            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
             continue;
         }
-        if(!ac_udp_write(sock, ret.data, ret.ls_size, &sin)) {
+        int sock = (ret.first)?socks.rtp:socks.rtcp;
+        if(!ac_udp_write(sock, ret.data, ret.ls_size)) {
             free(ret.data);
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
             break;
         }
+        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
         free(ret.data);
     }
-    ac_close_connection(sock);
-    sock= -1;
-    pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
+     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

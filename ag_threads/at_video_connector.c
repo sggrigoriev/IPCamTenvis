@@ -83,8 +83,8 @@ on_error:
 }
 
 static int start_streaming(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out) {
-    if(!at_start_video_read(video_in.src.ip, video_in.src.port, video_in.dst.ip, video_in.dst.port)) return 0;
-    if(!at_start_video_write(video_out.dst.ip, video_out.dst.port)) return 0;
+    if(!at_start_video_write(video_out.src, video_out.dst)) return 0;
+    if(!at_start_video_read(video_in.src, video_in.dst)) return 0;
 
     return 1;
 }
@@ -121,14 +121,14 @@ static t_ac_rtsp_states process_setup() {    /* NB! Video stream only!*/
     if(!ac_req_setup(CAM_SESSION)) return AC_STATE_ON_ERROR;
     if(!ac_req_setup(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
+    if(!start_streaming(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair)) return AC_STATE_ON_ERROR;
+
     return AC_STATE_START_PLAY;
 }
 static t_ac_rtsp_states process_play() {
 
     if(!ac_req_play(CAM_SESSION)) return AC_STATE_ON_ERROR;
     if(!ac_req_play(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
-
-    if(!start_streaming(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair)) return AC_STATE_ON_ERROR;
 
     return AC_STATE_PLAYING;
 }

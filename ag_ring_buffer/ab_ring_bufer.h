@@ -32,6 +32,7 @@
 typedef unsigned char t_ab_byte;
 typedef struct {
     size_t ls_size;
+    int first;              /* 1 for RTP, 0 for RTCP stream */
     t_ab_byte* data;
 } t_ab_block;
 typedef enum {
@@ -65,7 +66,7 @@ const t_ab_block ab_getBlock(unsigned long to_sec);
  * @param data  pointer to the data to be saved
  * @return t_ab_put_rc (see the description on t_ab_put_rc)
  */
-t_ab_put_rc ab_putBlock(size_t data_size, t_ab_byte* data);
+t_ab_put_rc ab_putBlock(size_t data_size, int first, t_ab_byte* data);
 
 
 

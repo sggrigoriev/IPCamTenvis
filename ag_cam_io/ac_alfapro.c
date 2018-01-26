@@ -263,7 +263,7 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
     if(!au_strcat(uri, "/", sizeof(uri))) return err_report(res);
     if(!au_strcat(uri, cs->track, sizeof(uri))) return err_report(res);                  /* Add to url "/trackID=0" */
 
-    make_transport_string(transport, sizeof(transport), (media_type == AC_ALFA_VIDEO_SETUP)?sess->video_pair.dst.port:sess->audio_pair.dst.port, AC_STREAMING_UDP);
+    make_transport_string(transport, sizeof(transport), (media_type == AC_ALFA_VIDEO_SETUP)?sess->video_pair.dst.port.rtp:sess->audio_pair.dst.port.rtp, AC_STREAMING_UDP);
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
 
@@ -290,11 +290,13 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
         return 0;
     }
     if(media_type == AC_ALFA_VIDEO_SETUP) {
-        sess->video_pair.src.port = port;
+        sess->video_pair.src.port.rtp = port;
+        sess->video_pair.src.port.rtcp = port+1;
         sess->video_pair.src.ip = ipd;
     }
     else {  /* AC_ALFA_AUDIO_SETUP */
-        sess->audio_pair.src.port = port;
+        sess->audio_pair.src.port.rtp = port;
+        sess->audio_pair.src.port.rtcp = port+1;
         sess->audio_pair.src.ip = ipd;
     }
     return 1;
@@ -309,14 +311,9 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
 
     t_ac_callback_buf header_buf = {head, sizeof(head)};
 
-    char uri[AC_RTSP_HEADER_SIZE];
-    if(!au_strcpy(uri, sess->url, sizeof(uri))) return 0;
-    if(!au_strcat(uri, "/", sizeof(uri))) return 0;
-    if(!au_strcat(uri, cs->track, sizeof(uri))) return 0;  /* Add to url "/trackID=0" */
-
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);;
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) return err_report(res);
+    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_SESSION_ID, sess->rtsp_session_id), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RANGE, AC_PLAY_RANGE), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_PLAY), res != CURLE_OK) return err_report(res);

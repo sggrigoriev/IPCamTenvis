@@ -49,33 +49,31 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* url, const 
         pu_log(LL_ERROR, "%s Memory allocation error at %d", __FUNCTION__, __LINE__);
         goto on_error;
     }
+
     int rc;
 
     switch (device) {
         case AC_CAMERA: {
-            char eth_name[10] = {0};
-            char local_ip[16] = {0};
-            at_tcp_get_eth("0.0.0.0", eth_name, sizeof(eth_name));
-            if(!strlen(eth_name)) goto on_error;
-            lib_tcp_local_ip(eth_name, local_ip, sizeof(local_ip));
-            if(!strlen(local_ip)) goto on_error;
-
             rc = ac_alfaProInit(sess);
-            if (sess->video_pair.dst.ip = strdup(local_ip), !sess->video_pair.dst.ip) {
+            if (sess->video_pair.dst.ip = strdup("0.0.0.0"), !sess->video_pair.dst.ip) {
                 pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
                 goto on_error;
             }
-            if (sess->audio_pair.dst.ip = strdup(local_ip), !sess->audio_pair.dst.ip) {
+            if (sess->audio_pair.dst.ip = strdup("0.0.0.0"), !sess->audio_pair.dst.ip) {
                 pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
                 goto on_error;
             }
-            sess->video_pair.dst.port = AC_FAKE_CLIENT_PORT;
-            sess->audio_pair.dst.port = AC_FAKE_CLIENT_PORT+2;
+            sess->video_pair.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT;
+            sess->video_pair.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT+1;
+            sess->audio_pair.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT+2;
+            sess->audio_pair.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT+3;
         }
             break;
         case AC_WOWZA:
-            sess->video_pair.src.port = AC_FAKE_CLIENT_PORT;
-            sess->audio_pair.src.port = AC_FAKE_CLIENT_PORT+2;
+            sess->video_pair.src.port.rtp = AC_FAKE_CLIENT_WRITE_PORT;
+            sess->video_pair.src.port.rtcp = AC_FAKE_CLIENT_WRITE_PORT+1;
+            sess->audio_pair.src.port.rtp = AC_FAKE_CLIENT_WRITE_PORT+2;
+            sess->audio_pair.src.port.rtcp = AC_FAKE_CLIENT_WRITE_PORT+3;
             rc = ac_WowzaInit(sess, session_id);
             break;
         default:
@@ -112,11 +110,7 @@ void ac_rtsp_down(t_at_rtsp_session* sess) {
     if(sess->url) free(sess->url);
     if(sess->video_pair.src.ip) free(sess->video_pair.src.ip);
     if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
-    if(sess->video_pair.src.ip) free(sess->video_pair.src.ip);
-    if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
 
-    if(sess->audio_pair.src.ip) free(sess->audio_pair.src.ip);
-    if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
     if(sess->audio_pair.src.ip) free(sess->audio_pair.src.ip);
     if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
 

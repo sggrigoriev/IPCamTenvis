@@ -52,7 +52,7 @@ static pthread_mutex_t rw_index_guard;
 
 static int buf_initialized = 0;
 
-static const t_ab_block zero_elem = {0l, NULL};
+static const t_ab_block zero_elem = {0l, 0, NULL};
 
 
 /**********************************************************
@@ -137,32 +137,35 @@ const t_ab_block ab_getBlock(unsigned long to_sec) {
         }
 
     pthread_mutex_unlock(&rw_index_guard);
+//    pu_log(LL_DEBUG, "%s: getBock data = %d, wr = %lu, rd = %lu\t", __FUNCTION__, is_data, write_index, read_index);
     return ret;
 }
-t_ab_put_rc ab_putBlock(size_t data_size, t_ab_byte* data) {
+t_ab_put_rc ab_putBlock(size_t data_size, int first, t_ab_byte* data) {
     assert(buf_initialized);
     assert(data_size);
     assert(data);
 
     t_ab_put_rc ret = AB_OK;
 
-   pthread_mutex_lock(&rw_index_guard);
-        if(!is_data) {
+    pthread_mutex_lock(&rw_index_guard);
+        if(buffer[write_index].data) {      //Overflow case - we rewrite someone else's data
+            ret = AB_OVFERFLOW;
+            free(buffer[write_index].data); //The data will be never received so it has to be freed here
+        }
+        buffer[write_index].ls_size = data_size;
+        buffer[write_index].data = data;
+        buffer[write_index].first = first;
+
+        write_index = shift(write_index);
+
+    if(!is_data) {
             /* send the signal we got smth */
             pthread_mutex_lock(&data_available_cond_mutex);
             is_data = 1;
             pthread_cond_broadcast(&data_available_cond);           /* Who is the first - owns the slippers! */
             pthread_mutex_unlock(&data_available_cond_mutex);
         }
-        write_index = shift(write_index);
-
-        if(buffer[write_index].data) {
-            ret = AB_OVFERFLOW;
-            free(buffer[write_index].data);
-        }
-        buffer[write_index].ls_size = data_size;
-        buffer[write_index].data = data;
-//        printf("putBock data = %d, wr = %lu, rd = %lu\t", is_data, write_index, read_index);
+//        pu_log(LL_DEBUG, "%s: putBock data = %d, wr = %lu, rd = %lu\t", __FUNCTION__, is_data, write_index, read_index);
 
    pthread_mutex_unlock(&rw_index_guard);
     return ret;

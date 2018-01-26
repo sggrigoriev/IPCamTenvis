@@ -22,7 +22,8 @@
 #ifndef IPCAMTENVIS_AC_CAM_TYPES_H
 #define IPCAMTENVIS_AC_CAM_TYPES_H
 
-#define AC_FAKE_CLIENT_PORT 11038
+#define AC_FAKE_CLIENT_READ_PORT 11038
+#define AC_FAKE_CLIENT_WRITE_PORT 11038+4   //38-41 for
 
 #define AC_RTSP_MAX_URL_SIZE        4097
 #define AC_RTSP_HEADER_SIZE         4097
@@ -83,8 +84,13 @@ typedef enum {
 } t_ac_rtsp_states;
 
 typedef struct {
+    int rtp;
+    int rtcp;
+} t_rtsp_pair;
+
+typedef struct {
     char* ip;
-    int port;
+    t_rtsp_pair port;
 } t_ac_rtsp_ipport;
 
 typedef struct {
