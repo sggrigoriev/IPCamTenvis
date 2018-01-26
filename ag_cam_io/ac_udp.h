@@ -30,7 +30,7 @@
 #include "ac_cam_types.h"
 
 typedef struct {
-    ssize_t rc;
+    long rc;
     int src;
 } t_ac_udp_read_result;
 
