@@ -16,30 +16,6 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
- Read vieo stream from camera. Reconnects until stop or success if looses connection
+ Created by gsg on 30/11/17.
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_VIDEO_READ_H
-#define IPCAMTENVIS_AT_CAM_VIDEO_READ_H
-
-
-#include "ao_cmd_data.h"
-
-/***************************
- * Start getting cideo stream from the camera
- * @return - 1 is OK, 0 if not
- */
-int at_start_video_read(t_rtsp_pair rd);
-/*****************************
- * Stop read streaming (join)
- */
-void at_stop_video_read();
-/*****************************
- * Check if read stream runs
- * @return 1 if runs 0 if not
- */
-int at_is_video_read_run();
-
-
-#endif /* IPCAMTENVIS_AT_CAM_VIDEO_READ_H */

@@ -311,8 +311,8 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
 
     transport->client_port.min = sess->video_pair.src.port.rtp;
     transport->client_port.max = sess->video_pair.src.port.rtcp;
-    transport->lower_transport = GST_RTSP_LOWER_TRANS_UDP;
-    transport->mode_play = TRUE;
+    transport->lower_transport = GST_RTSP_LOWER_TRANS_TCP;
+    transport->mode_play = FALSE;
     transport->mode_record = TRUE;
 //    gs->transport->mode_record = TRUE;
     transport->profile = GST_RTSP_PROFILE_AVP;

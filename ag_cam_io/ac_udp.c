@@ -47,32 +47,6 @@ static const char* get_ip_from_sock(int sock, char* ip, size_t ip_size) {
     return ip;
 }
 */
-int ac_udp_client_connection(const char* ip, uint16_t port, struct sockaddr_in* sin, int async) {
-    int ret = -1;
-
-    pu_log(LL_DEBUG, "%s: ip = %s, port = %d", __FUNCTION__, ip, port);
-
-    memset(sin, 0, sizeof(struct sockaddr_in));
-
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = inet_addr(ip);
-    sin->sin_port = htons(port);
-
-    if((ret=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        pu_log(LL_ERROR, "%s: Open UDP socket failed: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return -1;
-    }
-    if(async) {
-        int sock_flags = fcntl(ret, F_GETFL);
-        if (sock_flags < 0) {
-            return -1;
-        }
-        if (fcntl(ret, F_SETFL, sock_flags | O_NONBLOCK) < 0) {
-            return -1;
-        }
-    }
-    return ret;
-}
 /* Copypizded from https://stackoverflow.com/questions/9741392/can-you-bind-and-connect-both-ends-of-a-udp-connection */
 int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port) {
     int sockfd = -1;
@@ -119,6 +93,15 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
         goto on_exit;
     }
 
+    /* Set the socket as async */
+    int sock_flags = fcntl(sockfd, F_GETFL);
+    if (sock_flags < 0) {
+        return -1;
+    }
+    if (fcntl(sockfd, F_SETFL, sock_flags|O_NONBLOCK) < 0) {
+        return -1;
+    }
+
     /*Bind this datagram socket to home address info */
     if((rc = bind(sockfd, home_info->ai_addr, home_info->ai_addrlen)) != 0) {
         pu_log(LL_ERROR, "%s: Error bind socket %s", __FUNCTION__, gai_strerror(rc));
@@ -155,11 +138,11 @@ t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size,
 /*Build set for select */
     struct timeval tv = {to, 0};
     fd_set readset;
+
     FD_ZERO(&readset);
 
-    FD_SET(socks.rtcp, &readset);
     FD_SET(socks.rtp, &readset);
-
+    FD_SET(socks.rtcp, &readset);
 
     rc.rc = select(AC_UDP_MAX(socks.rtcp, socks.rtp) + 1, &readset, NULL, NULL, &tv);
     if(rc.rc < 0) {    // Error. nothing to read
@@ -172,14 +155,16 @@ t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size,
     if(FD_ISSET(socks.rtcp, &readset)) {
         rc.src = 0;
         sock = socks.rtcp;
+        pu_log(LL_DEBUG, "BINGO!!! Got RTCP message!");
     }
     else {
         rc.src = 1;
         sock = socks.rtp;
     }
 
-    if(rc.rc = recv(sock, buf, size, 0), rc.rc < 0) {
+    if(rc.rc = read(sock, buf, size), rc.rc < 0) {
         pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        if(errno == ECONNREFUSED) rc.rc = 0; //Let it try again
     }
     if(rc.rc == size) {
         pu_log(LL_WARNING, "%s: Read buffer too small - data truncated!", __FUNCTION__);
@@ -188,7 +173,7 @@ t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size,
     return rc;
 }
 int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
-    if(send(sock, buf, size, 0) < 0) {
+    if(write(sock, buf, size) < 0) {
         pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
         return 0;
     }

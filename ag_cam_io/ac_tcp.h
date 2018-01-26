@@ -23,13 +23,14 @@
 #define IPCAMTENVIS_AC_TCP_H
 
 #include <stdio.h>
+#include <ag_ring_buffer/ab_ring_bufer.h>
 
 /* TODO: shift the function to lib_tcp */
 /* returns interface name for local_ip */
 const char* at_tcp_get_eth(const char* local_ip, char* eth_name, size_t size);
 
 const char* ac_tcp_read(int sock, char* buf, size_t size, int stop);
-int ac_tcp_write(int sock, const char* msg, int stop);
+int ac_tcp_write(int sock, t_ab_byte* msg, size_t len, int stop);
 
 int ac_tcp_client_connect(const char* ip, int port);
 #endif /* IPCAMTENVIS_AC_TCP_H */

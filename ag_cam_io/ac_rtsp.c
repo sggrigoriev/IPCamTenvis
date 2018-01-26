@@ -23,15 +23,17 @@
 #include <assert.h>
 
 #include "pu_logger.h"
-#include "lib_tcp.h"        /* for lib_tcp_local_ip */
 
 #include "ag_defaults.h"
 #include "ac_cam_types.h"
-#include "ac_tcp.h"         /* for at_tcp_get_eth */
 #include "ac_alfapro.h"
 #include "ac_wowza.h"
+#include "at_cam_video_write.h"
+#include "at_cam_video_read.h"
 
 #include "ac_rtsp.h"
+#include "ac_udp.h"
+#include "ac_tcp.h"
 
 
 /*******************************************************************************************/
@@ -161,8 +163,8 @@ int ac_req_setup(t_at_rtsp_session* sess) {
 
     switch(sess->device) {
         case AC_CAMERA:
-            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
-            return ac_alfaProSetup(sess, AC_ALFA_AUDIO_SETUP);
+//            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
+            return ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP);
         case AC_WOWZA:
             return ac_WowzaSetup(sess);
         default:
@@ -199,4 +201,84 @@ int ac_req_teardown(t_at_rtsp_session* sess) {
     }
     return 0;
 }
+
+int ac_start_rtsp_streaming(t_rtsp_pair in, t_rtsp_pair out) {
+    if(!at_start_video_write(out)) goto on_error;
+    if(!at_start_video_read(in)) goto on_error;
+
+    return 1;
+on_error:
+    ac_close_connection(in.rtp);
+    ac_close_connection(in.rtcp);
+    ac_close_connection(out.rtp);
+    ac_close_connection(out.rtcp);
+
+    return 0;
+}
+void ac_stop_rtsp_streaming() {
+    at_stop_video_read();
+    at_stop_video_write();
+}
+
+static const uint8_t RTP_INIT_REQ[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static const uint8_t RTCP_INIT_REQ[] = {0x80, 0xc9, 0, 01, 0, 0, 0, 0};
+
+int ac_open_connecion(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out, t_rtsp_pair* in, t_rtsp_pair* out) {
+    in->rtp = -1; in->rtcp = -1; out->rtp = -1, out->rtcp = -1;
+//Camera
+    if((in->rtp = ac_udp_p2p_connection(video_in.src.ip, video_in.src.port.rtp, video_in.dst.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((in->rtcp = ac_udp_p2p_connection(video_in.src.ip, video_in.src.port.rtcp, video_in.dst.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Cam-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_in.src.ip, video_in.src.port.rtp, video_in.dst.port.rtp, video_in.src.ip, video_in.src.port.rtcp, video_in.dst.port.rtcp);
+
+//Player - UDP connection
+    if((out->rtp = ac_udp_p2p_connection(video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((out->rtcp = ac_udp_p2p_connection(video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Player-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp, video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp);
+
+/*
+//Player - TCP connection
+    if((out->rtp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((out->rtcp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Player-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp, video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp);
+*/
+/*
+//Initial RTP/RTCP request to Cam
+    if (!ac_udp_write(in->rtp, RTP_INIT_REQ, sizeof(RTP_INIT_REQ))) {
+        pu_log(LL_ERROR, "%s: RTP setup failed", __FUNCTION__);
+        goto on_error;
+    }
+    if (!ac_udp_write(in->rtcp, RTCP_INIT_REQ, sizeof(RTCP_INIT_REQ))) {
+        pu_log(LL_ERROR, "%s: RTCP setup failed", __FUNCTION__);
+        goto on_error;
+    }
+*/
+    return 1;
+on_error:
+    if(in->rtp >= 0) ac_close_connection(in->rtp);
+    if(in->rtcp >= 0) ac_close_connection(in->rtcp);
+    if(out->rtp >= 0) ac_close_connection(out->rtp);
+    if(out->rtcp >= 0) ac_close_connection(out->rtcp);
+    in->rtp = -1; in->rtcp = -1; out->rtp = -1, out->rtcp = -1;
+    return 0;
+}
+
+
 

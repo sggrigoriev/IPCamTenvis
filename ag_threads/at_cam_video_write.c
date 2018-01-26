@@ -23,6 +23,7 @@
 #include <ag_ring_buffer/ab_ring_bufer.h>
 #include <netinet/in.h>
 #include <ag_cam_io/ac_cam_types.h>
+#include <ag_cam_io/ac_tcp.h>
 
 #include "pu_logger.h"
 
@@ -52,16 +53,9 @@ static void* the_thread(void* params);
  * Global functions
  */
 /* Here src - home and destination - remote peer */
-int at_start_video_write(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst) {
+int at_start_video_write(t_rtsp_pair wr) {
     if(at_is_video_write_run()) return 1;
-    if((socks.rtp = ac_udp_p2p_connection(dst.ip, dst.port.rtp, src.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for RTP stream. Bye.", AT_THREAD_NAME);
-        return 0;
-    }
-    if((socks.rtcp = ac_udp_p2p_connection(dst.ip, dst.port.rtcp, src.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for RTCP stream. Bye.", AT_THREAD_NAME);
-        return 0;
-    }
+    socks = wr;
     stop = 0;
     if(pthread_attr_init(&attr)) {stop = 1; return 0;}
     if(pthread_create(&id, &attr, &the_thread, NULL)) {stop = 1;return 0;}
@@ -102,12 +96,22 @@ static void* the_thread(void* params) {
             continue;
         }
         int sock = (ret.first)?socks.rtp:socks.rtcp;
+
         if(!ac_udp_write(sock, ret.data, ret.ls_size)) {
             free(ret.data);
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
             break;
         }
-        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
+
+/*
+        if(!ac_tcp_write(sock, ret.data, ret.ls_size, stop)) {
+            free(ret.data);
+            pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
+            break;
+        }
+*/
+
+//        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
         free(ret.data);
     }
      pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);

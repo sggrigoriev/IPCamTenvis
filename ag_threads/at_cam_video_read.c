@@ -23,7 +23,6 @@
 #include <malloc.h>
 #include <netinet/in.h>
 #include <ag_cam_io/ac_cam_types.h>
-#include <ag_cam_io/ac_udp.h>
 
 #include "pu_logger.h"
 
@@ -32,6 +31,7 @@
 #include "ac_rtsp.h"
 #include "ag_settings.h"
 #include "ag_defaults.h"
+#include "ac_cam_types.h"
 
 #include "at_cam_video_read.h"
 
@@ -53,17 +53,9 @@ static void* the_thread(void* params);
  * Global functions
  */
 /* Here src - remote peer and destination - home */
-int at_start_video_read(t_ac_rtsp_ipport src, t_ac_rtsp_ipport dst) {
+int at_start_video_read(t_rtsp_pair rd) {
     if(at_is_video_read_run()) return 1;
-    if((socks.rtp = ac_udp_p2p_connection(src.ip, src.port.rtp, dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for RTP stream. Bye.", AT_THREAD_NAME);
-        return 0;
-    }
-    if((socks.rtcp = ac_udp_p2p_connection(src.ip, src.port.rtcp, dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for RTCP stream. Bye.", AT_THREAD_NAME);
-        return 0;
-    }
-
+    socks = rd;
     stop = 0;
     if(pthread_attr_init(&attr)) {stop = 1; return 0;}
     if(pthread_create(&id, &attr, &the_thread, NULL)) {stop = 1; return 0;}
@@ -99,6 +91,7 @@ static void* the_thread(void* params) {
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
             goto on_stop;
         }
+
         t_ac_udp_read_result ret = {0,0};
         while(!stop && !ret.rc) {
             ret = ac_udp_read(socks, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 60);
@@ -110,7 +103,7 @@ static void* the_thread(void* params) {
                 free(buf);
                 goto on_stop;
             default:
-                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
+//                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
                 break;                 /* Got smth - continue processing */
         }
         t_ab_put_rc rc = ab_putBlock(ret.rc, ret.src, buf);  /* The buffer will be freed on reader size - video_write thread */

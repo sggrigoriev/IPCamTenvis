@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <gst/sdp/gstsdp.h>
 #include <ag_cam_io/ac_cam_types.h>
+#include <ag_cam_io/ac_udp.h>
 
 #include "pu_logger.h"
 
@@ -82,17 +83,6 @@ on_error:
     return 0;
 }
 
-static int start_streaming(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out) {
-    if(!at_start_video_write(video_out.src, video_out.dst)) return 0;
-    if(!at_start_video_read(video_in.src, video_in.dst)) return 0;
-
-    return 1;
-}
-static void stop_streaming() {
-    at_stop_video_read();
-    at_stop_video_write();
-}
-
 static void say_disconnected_to_vm() {
     pu_log(LL_INFO, "%s: %s", AT_THREAD_NAME, __FUNCTION__);
 }
@@ -116,19 +106,21 @@ on_exit:
     if(description) free(description);
     return rc;
 }
-static t_ac_rtsp_states process_setup() {    /* NB! Video stream only!*/
+static t_ac_rtsp_states process_setup(t_rtsp_pair* cam_io, t_rtsp_pair* player_io) {    /* NB! Video stream only!*/
 
     if(!ac_req_setup(CAM_SESSION)) return AC_STATE_ON_ERROR;
     if(!ac_req_setup(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
-    if(!start_streaming(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair)) return AC_STATE_ON_ERROR;
+    if(!ac_open_connecion(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair, cam_io, player_io)) return AC_STATE_ON_ERROR;
 
     return AC_STATE_START_PLAY;
 }
-static t_ac_rtsp_states process_play() {
+static t_ac_rtsp_states process_play(t_rtsp_pair cam_io, t_rtsp_pair player_io) {
 
     if(!ac_req_play(CAM_SESSION)) return AC_STATE_ON_ERROR;
     if(!ac_req_play(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
+
+    if(!ac_start_rtsp_streaming(cam_io, player_io)) return AC_STATE_ON_ERROR;
 
     return AC_STATE_PLAYING;
 }
@@ -137,7 +129,7 @@ static void process_stop() {
     ac_req_teardown(CAM_SESSION);
     ac_req_teardown(PLAYER_SESSION);
 
-    stop_streaming();
+    ac_stop_rtsp_streaming();
 }
 
 static void* vc_thread(void* params) {
@@ -154,6 +146,8 @@ on_reconnect:
     state = AC_STATE_CONNECT;
 
     while(!stop && (state != AC_STATE_ON_ERROR)) {
+        t_rtsp_pair cam_io = {-1,-1};
+        t_rtsp_pair player_io = {-1,-1};
         switch(state) {
             case AC_STATE_CONNECT:
                 pu_log(LL_DEBUG, "%s: State CONNECT processing", AT_THREAD_NAME);
@@ -165,11 +159,11 @@ on_reconnect:
                 break;
             case AC_STATE_SETUP:
                 pu_log(LL_DEBUG, "%s: State SETUP processing", AT_THREAD_NAME);
-                state = process_setup(); /* Save VS & CAM UDP ports */
+                state = process_setup(&cam_io, &player_io); /* Save VS & CAM UDP ports */
                 break;
             case AC_STATE_START_PLAY:
                 pu_log(LL_DEBUG, "%s: State START PLAY processing", AT_THREAD_NAME);
-                state = process_play();
+                state = process_play(cam_io, player_io);
                 break;
             case AC_STATE_PLAYING:
 //                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
