@@ -299,7 +299,7 @@ static void initiate_defaults() {
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
 
-    curlopt_ssl_verifyer = 1;
+    curlopt_ssl_verifyer = DEFAULT_IPCAM_SSL_VERIFYER;
     curlopt_ca_path[0] = '\0';
 }
 
