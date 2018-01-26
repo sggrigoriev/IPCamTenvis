@@ -5,6 +5,10 @@ set(CMAKE_C_STANDARD 90)
 
 set(GCC_STANDARD $ENV{STANDARD})
 
+set(AGENT_PLATFORM $ENV{PLATFORM})
+
+if(AGENT_PLATFORM STREQUAL "Ubuntu")
+
 #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
 #add_definitions( -DLOCAL_TEST)
 
@@ -29,7 +33,40 @@ set(REQUIRED_LIBRARIES
         ssl
         crypto
 )
+elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
+#    set(CMAKE_VERBOSE_MAKEFILE ON)
+    set(CMAKE_SYSTEM_NAME Linux)
+
+    set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
+    set(SYSROOT_PATH $ENV{SYSROOT})
+    set(PP_SDK_PATH $ENV{SDK_PATH})
+    set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
+    set(COMPILER_PREFIX arm-hisiv500-linux-uclibcgnueabi-)
+    set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
+    set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
+    set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
+
+    set(REQUIRED_LIBRARIES
+            curl
+            m
+            pthread
+            nopoll
+            ssl
+            crypto)
+    message(STATUS "Compiling for hiSilicon CPU (${CMAKE_SYSROOT})")
+
+
+
+
+endif()
 #all include paths
 include_directories(
         ./
@@ -49,8 +86,8 @@ include_directories(
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
-        ${gst_INCLUDE_DIRS}
-        /usr/local/include/nopoll
+#        ${gst_INCLUDE_DIRS}
+#        /usr/local/include/nopoll
 )
 
 #Agent
@@ -101,6 +138,8 @@ file (GLOB SOURCE_FILES_LOCAL_TEST
         ${PROXY_LIBS_PATH}/json/*.c
 )
 
+if(AGENT_PLATFORM STREQUAL "Ubuntu")
+
 add_executable(Tenvis ${SOURCE_FILES})
 target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 
@@ -109,3 +148,41 @@ target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
 
 add_executable(local_test ${SOURCE_FILES_LOCAL_TEST})
 target_link_libraries(local_test ${REQUIRED_LIBRARIES})
+elseif(AGENT_PLATFORM STREQUAL "hisilicon")
+    add_executable(Tenvis ${SOURCE_FILES})
+    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
+
+            ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstcheck-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstcontroller-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstfft-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstnet-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstpbutils-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstreamer-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstriff-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstrtp-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstrtsp-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstsdp-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgsttag-1.0.a
+            ${SYSROOT_PATH}/usr/lib/libgstvideo-1.0.a
+
+            ${SYSROOT_PATH}/usr/lib/libglib-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libgio-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libglib-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libgobject-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libglib-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libgettextlib.a
+            ${SYSROOT_PATH}/usr/lib/libgmodule-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libglib-2.0.a
+            ${SYSROOT_PATH}/usr/lib/libz.a
+            ${SYSROOT_PATH}/usr/lib/libgettextlib.a
+
+            ${SYSROOT_PATH}/usr/lib/libintl.a
+            ${SYSROOT_PATH}/usr/lib/libffi.a
+            ${SYSROOT_PATH}/usr/lib/libcurl.a
+            ${SYSROOT_PATH}/usr/lib/libdl.so.0
+
+            )
+endif()

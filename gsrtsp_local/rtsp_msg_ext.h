@@ -9,7 +9,9 @@
 #define IPCAMTENVIS_RTSP_MSG_EXT_H
 
 
+#include <gst/gstconfig.h>
 #include <gst/rtsp/gstrtsp.h>
+#include <gst/rtsp/gstrtspmessage.h>
 
 typedef struct _GstRTSPAuthCredential GstRTSPAuthCredential;
 typedef struct _GstRTSPAuthParam GstRTSPAuthParam;
