@@ -5,9 +5,12 @@ set(CMAKE_C_STANDARD 90)
 
 set(GCC_STANDARD $ENV{STANDARD})
 
-set(AGENT_PLATFORM $ENV{PLATFORM})
+message (Platform = $ENV{PLATFORM})
 
-if(AGENT_PLATFORM STREQUAL "Ubuntu")
+set(AGENT_PLATFORM $ENV{PLATFORM})
+set(AGENT_PLATFORM ubuntu)
+
+if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
 #add_definitions( -DLOCAL_TEST)
@@ -54,6 +57,7 @@ include_directories(
         ${gst_INCLUDE_DIRS}
         /usr/local/include/nopoll
 )
+    message(STATUS "Compiling for ubuntu)")
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 #    set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -156,7 +160,7 @@ file (GLOB SOURCE_FILES_LOCAL_TEST
         ${PROXY_LIBS_PATH}/json/*.c
 )
 
-if(AGENT_PLATFORM STREQUAL "Ubuntu")
+if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     add_executable(Tenvis ${SOURCE_FILES})
     target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})

@@ -73,4 +73,7 @@ static void print_Agent_start_params() {
 
     pu_log(LL_INFO, "\tStreaming buffers amount: %d", ag_getVideoChunksAmount());
     pu_log(LL_INFO, "\tStreaming buffer size: %d", ag_getStreamBufferSize());
+
+    pu_log(LL_INFO, "\tCurlopt SSL Verify Peer: %d", ag_getCurloptSSLVerifyer());
+    pu_log(LL_INFO, "\tCurlopt CA Path: %s", ag_getCurloptCAPath());
 }

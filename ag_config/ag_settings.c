@@ -67,6 +67,9 @@
 #define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
 #define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
 
+#define AGENT_CURLOPT_CAPATH        "CURLOPT_CAPATH"
+#define AGENT_CURLOPT_SSL_VERIFYPEER "CURLOPT_SSL_VERIFYPEER"
+
 /*************************************************************************
     Some macros
 */
@@ -101,6 +104,9 @@ static char         cam_password[129];
 static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
+
+static int          curlopt_ssl_verifyer = 0;
+static char         curlopt_ca_path[LIB_HTTP_MAX_URL_SIZE] = {0};
 
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE] = {0};
 /***********************************************************************
@@ -189,6 +195,13 @@ const char*     ag_getCamPassword() {
     AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
 
+const char* ag_getCurloptCAPath() {
+    return curlopt_ca_path;
+}
+int ag_getCurloptSSLVerifyer() {
+    return curlopt_ssl_verifyer;
+}
+
 void ag_saveProxyAuthToken(const char* token) {
     if(token) au_strcpy(proxy_auth_token, token, sizeof(proxy_auth_token));
 }
@@ -248,6 +261,9 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
 
+    if(!getUintValue(cfg, AGENT_CURLOPT_SSL_VERIFYPEER, (unsigned int* )&curlopt_ssl_verifyer)) AGS_ERR;
+    if(!getStrValue(cfg, AGENT_CURLOPT_CAPATH, curlopt_ca_path, sizeof(curlopt_ca_path)))       AGS_ERR;
+
     cJSON_Delete(cfg);
 
     pthread_mutex_unlock(&local_mutex);
@@ -282,6 +298,9 @@ static void initiate_defaults() {
 
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
+
+    curlopt_ssl_verifyer = 0;
+    curlopt_ca_path[0] = '\0';
 }
 
 /*
