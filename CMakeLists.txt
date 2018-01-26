@@ -33,6 +33,27 @@ set(REQUIRED_LIBRARIES
         ssl
         crypto
 )
+include_directories(
+        ./
+        ag_cam_io
+        ag_converter
+        ag_config
+        ag_threads
+        ag_queues
+        ag_ring_buffer
+        au_string
+        gsrtsp_local
+        ${PROXY_LIBS_PATH}/pu_logger
+        ${PROXY_LIBS_PATH}/presto_commands
+        ${PROXY_LIBS_PATH}/pc_config
+        ${PROXY_LIBS_PATH}/pu_queues
+        ${PROXY_LIBS_PATH}/libtimer
+        ${PROXY_LIBS_PATH}/libhttpcomm
+        ${PROXY_LIBS_PATH}/libtcp
+        ${PROXY_LIBS_PATH}/json
+        ${gst_INCLUDE_DIRS}
+        /usr/local/include/nopoll
+)
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 #    set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -61,14 +82,9 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             nopoll
             ssl
             crypto)
-    message(STATUS "Compiling for hiSilicon CPU (${CMAKE_SYSROOT})")
 
 
-
-
-endif()
-#all include paths
-include_directories(
+    include_directories(
         ./
         ag_cam_io
         ag_converter
@@ -86,9 +102,11 @@ include_directories(
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
-#        ${gst_INCLUDE_DIRS}
-#        /usr/local/include/nopoll
-)
+        #        ${gst_INCLUDE_DIRS}
+        #        /usr/local/include/nopoll
+    )
+    message(STATUS "Compiling for hiSilicon CPU (${CMAKE_SYSROOT})")
+endif()
 
 #Agent
 file (GLOB SOURCE_FILES
@@ -140,17 +158,18 @@ file (GLOB SOURCE_FILES_LOCAL_TEST
 
 if(AGENT_PLATFORM STREQUAL "Ubuntu")
 
-add_executable(Tenvis ${SOURCE_FILES})
-target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
-
-add_executable(ab_test ${SOURCE_FILES_AB_TEST})
-target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
-
-add_executable(local_test ${SOURCE_FILES_LOCAL_TEST})
-target_link_libraries(local_test ${REQUIRED_LIBRARIES})
-elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_executable(Tenvis ${SOURCE_FILES})
-    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
+    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
+
+    add_executable(ab_test ${SOURCE_FILES_AB_TEST})
+    target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
+
+    add_executable(local_test ${SOURCE_FILES_LOCAL_TEST})
+    target_link_libraries(local_test ${REQUIRED_LIBRARIES})
+
+elseif(AGENT_PLATFORM STREQUAL "hisilicon")
+            add_executable(Tenvis ${SOURCE_FILES})
+            target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
 
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
