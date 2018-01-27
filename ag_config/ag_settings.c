@@ -67,7 +67,7 @@
 #define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
 #define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
 
-#define AGENT_CURLOPT_CAPATH        "CURLOPT_CAPATH"
+#define AGENT_CURLOPT_CAINFO        "CURLOPT_INFO"
 #define AGENT_CURLOPT_SSL_VERIFYPEER "CURLOPT_SSL_VERIFYPEER"
 
 /*************************************************************************
@@ -105,8 +105,8 @@ static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
 
-static int          curlopt_ssl_verifyer = 1;
-static char         curlopt_ca_path[LIB_HTTP_MAX_URL_SIZE] = {0};
+static int          curlopt_ssl_verify_peer = 1;
+static char         curlopt_ca_info[LIB_HTTP_MAX_URL_SIZE] = {0};
 
 static char         conf_fname[LIB_HTTP_MAX_URL_SIZE] = {0};
 /***********************************************************************
@@ -195,11 +195,11 @@ const char*     ag_getCamPassword() {
     AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
 
-const char* ag_getCurloptCAPath() {
-    return curlopt_ca_path;
+const char* ag_getCurloptCAInfo() {
+    return curlopt_ca_info;
 }
-int ag_getCurloptSSLVerifyer() {
-    return curlopt_ssl_verifyer;
+int ag_getCurloptSSLVerifyPeer() {
+    return curlopt_ssl_verify_peer;
 }
 
 void ag_saveProxyAuthToken(const char* token) {
@@ -261,8 +261,8 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
 
-    if(!getUintValue(cfg, AGENT_CURLOPT_SSL_VERIFYPEER, (unsigned int* )&curlopt_ssl_verifyer)) AGS_ERR;
-    if(!getStrValue(cfg, AGENT_CURLOPT_CAPATH, curlopt_ca_path, sizeof(curlopt_ca_path)))       AGS_ERR;
+    if(!getUintValue(cfg, AGENT_CURLOPT_SSL_VERIFYPEER, (unsigned int* )&curlopt_ssl_verify_peer)) AGS_ERR;
+    if(!getStrValue(cfg, AGENT_CURLOPT_CAINFO, curlopt_ca_info, sizeof(curlopt_ca_info)))       AGS_ERR;
 
     cJSON_Delete(cfg);
 
@@ -299,8 +299,8 @@ static void initiate_defaults() {
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
 
-    curlopt_ssl_verifyer = DEFAULT_IPCAM_SSL_VERIFYER;
-    curlopt_ca_path[0] = '\0';
+    curlopt_ssl_verify_peer = DEFAULT_IPCAM_SSL_VERIFY_PEER;
+    curlopt_ca_info[0] = '\0';
 }
 
 /*

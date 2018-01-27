@@ -93,10 +93,10 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
         if(curlResult = curl_easy_setopt(h->h, CURLOPT_HTTPHEADER, h->slist), curlResult != CURLE_OK) goto out;
     }
 
-    if(strlen(ag_getCurloptCAPath())) {
-        if(curlResult = curl_easy_setopt(h->h, CURLOPT_CAPATH, ag_getCurloptCAPath()), curlResult != CURLE_OK) goto out;
+    if(strlen(ag_getCurloptCAInfo())) {
+        if(curlResult = curl_easy_setopt(h->h, CURLOPT_CAINFO, ag_getCurloptCAInfo()), curlResult != CURLE_OK) goto out;
     }
-    if(curlResult = curl_easy_setopt(h->h, CURLOPT_SSL_VERIFYPEER, (long)ag_getCurloptSSLVerifyer()), curlResult != CURLE_OK) goto out;
+    if(curlResult = curl_easy_setopt(h->h, CURLOPT_SSL_VERIFYPEER, (long)ag_getCurloptSSLVerifyPeer()), curlResult != CURLE_OK) goto out;
 
 
     if(curlResult = curl_easy_setopt(h->h, CURLOPT_ERRORBUFFER, h->err_buf), curlResult != CURLE_OK) goto out;

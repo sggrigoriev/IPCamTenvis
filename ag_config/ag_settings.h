@@ -74,8 +74,8 @@ const char* ag_getProxyAuthToken();
 void ag_saveMainURL(const char* mu);
 const char* ag_getMainURL();
 
-const char* ag_getCurloptCAPath();
-int ag_getCurloptSSLVerifyer();
+const char* ag_getCurloptCAInfo();
+int ag_getCurloptSSLVerifyPeer();
 
 int ag_load_config(const char* cfg_file_name);
 

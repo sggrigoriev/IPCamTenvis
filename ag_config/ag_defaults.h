@@ -78,7 +78,7 @@
 #define DEFAULT_WC_STOP_PLAY            "STOP"
 #define DEFAULT_CLOUD_CONN_STRING       "https://sbox.presencepro.com/cloud/json/settingsServer/streaming"
 
-#define DEFAULT_IPCAM_SSL_VERIFYER      1
+#define DEFAULT_IPCAM_SSL_VERIFY_PEER      1
 
 #define AG_DBG  pu_log(LL_DEBUG, "%s: %d", __FUNCTION__, __LINE__)
 
