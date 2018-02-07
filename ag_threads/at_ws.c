@@ -138,9 +138,9 @@ static void *ws_read_thread(void *pvoid) {
         if(send_3rd) {
             send_3rd = 0;
             n = sprintf((char*)buff, "{\"sessionId\":\"%s\",\"params\":[{\"name\":\"ppc.streamStatus\",\"setValue\":\"%s\",\"forward\":1}]}", args->session_id, args->session_id);
-            pu_log(LL_DEBUG, "%s: To Web Socket after START command received-2: %s", "WS_THREAD", buff);
+            pu_log(LL_DEBUG, "%s: To Web Socket after START command received: %s", "WS_THREAD", buff);
             if (nopoll_conn_send_text (conn, buff, n) != n) {
-                pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
+                pu_log(LL_ERROR,"%s: failed to send ",__FUNCTION__);
             }
         }
      }
