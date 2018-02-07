@@ -1,3 +1,9 @@
+# **********************************************
+# DO NOT FORGET TO DEFINE ENVIRONMENT VARIABLES
+# - SDK_PATH
+# - PLATFORM
+# **********************************************
+
 cmake_minimum_required(VERSION 3.5)
 project(IPCamTenvis)
 
@@ -8,24 +14,27 @@ set(GCC_STANDARD $ENV{STANDARD})
 set(AGENT_PLATFORM $ENV{PLATFORM})
 #set(AGENT_PLATFORM ubuntu)
 
+
+set(PP_SDK_PATH $ENV{SDK_PATH})
+set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
+
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
-#add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
-#add_definitions( -DLOCAL_TEST)
+    #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
+    #add_definitions( -DLOCAL_TEST)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)
 
-message("gst_FOUND = ${gst_FOUND}")
-message("gst_LIBRARIES = ${gst_LIBRARIES}")
-message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
+    message("gst_FOUND = ${gst_FOUND}")
+    message("gst_LIBRARIES = ${gst_LIBRARIES}")
+    message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
 
-PRESTO_PLATFORM STREQUAL "ubuntu"
-message(STATUS "Compiling for the X86")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
-set(PROXY_LIBS_PATH ${PROJECT_SOURCE_DIR}/../../../Presto_new/lib)
-set(REQUIRED_LIBRARIES
+    #PRESTO_PLATFORM STREQUAL "ubuntu"
+    message(STATUS "Compiling for the X86")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
+    set(REQUIRED_LIBRARIES
         ${gst_LIBRARIES}
         curl
         m
@@ -33,8 +42,8 @@ set(REQUIRED_LIBRARIES
         nopoll
         ssl
         crypto
-)
-include_directories(
+    )
+    include_directories(
         ./
         ag_cam_io
         ag_converter
@@ -54,17 +63,15 @@ include_directories(
         ${PROXY_LIBS_PATH}/json
         ${gst_INCLUDE_DIRS}
         /usr/local/include/nopoll
-)
+    )
     message(STATUS "Compiling for ubuntu)")
+
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 #    set(CMAKE_VERBOSE_MAKEFILE ON)
     set(CMAKE_SYSTEM_NAME Linux)
-
     set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
     set(SYSROOT_PATH $ENV{SYSROOT})
-    set(PP_SDK_PATH $ENV{SDK_PATH})
-    set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
     set(COMPILER_PREFIX arm-hisiv500-linux-uclibcgnueabi-)
     set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
     set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
@@ -73,8 +80,6 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
     set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
     set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-
-
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
 
     set(REQUIRED_LIBRARIES
