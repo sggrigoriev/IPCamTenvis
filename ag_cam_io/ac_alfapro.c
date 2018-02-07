@@ -32,14 +32,20 @@
 #include "ac_alfapro.h"
 #include "ac_cam_types.h"
 
-#define AC_LOW_RES          "11"
-#define AC_HI_RES           "12"
+#define AC_LOW_RES          "12"
+#define AC_HI_RES           "11"
 
 typedef struct {
     CURL* h;
     char track[AC_RTSP_TRACK_SIZE];
+    t_ac_callback_buf header_buf;
+    t_ac_callback_buf body_buf;
 } t_curl_session;
 
+#define AC_BUF_SIZE 1000
+
+static char __head__[AC_BUF_SIZE];
+static char __body__[AC_BUF_SIZE];
 
 static size_t writer(void *ptr, size_t size, size_t nmemb, void *userp) {
     t_ac_callback_buf* dataToRead = (t_ac_callback_buf *)userp;
@@ -169,8 +175,21 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
     if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, 0L), res != CURLE_OK) goto on_error;
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
+
+    cs->header_buf.buf = __head__;
+    cs->header_buf.sz = 0;
+    cs->body_buf.buf = __body__;
+    cs->body_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
+    memset(cs->body_buf.buf, 0, AC_BUF_SIZE);
+
     if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERFUNCTION, writer), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &cs->header_buf), res != CURLE_OK) return err_report(res);
+
     if(res = curl_easy_setopt(cs->h, CURLOPT_WRITEFUNCTION, writer), res != CURLE_OK) err_report(res);
+    if (res = curl_easy_setopt(cs->h, CURLOPT_WRITEDATA, &cs->body_buf), res != CURLE_OK) return err_report(res);
+    if (res = curl_easy_setopt(cs->h, CURLOPT_BUFFERSIZE, AC_BUF_SIZE), res != CURLE_OK) return err_report(res);
+
     if(strlen(ag_getCurloptCAInfo())) {
         if(res = curl_easy_setopt(cs->h, CURLOPT_CAINFO, ag_getCurloptCAInfo()), res != CURLE_OK) err_report(res);
     }
@@ -199,42 +218,30 @@ void ac_alfaProDown(t_at_rtsp_session* sess) {
 }
 
 int ac_alfaProOptions(t_at_rtsp_session* sess) {
-    char head[200]={0};
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    t_ac_callback_buf header_buf = {head, sizeof(head)};
-
-    if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_OPTIONS), res != CURLE_OK) return err_report(res);
 
     res = curl_easy_perform(cs->h);
     if(ac_http_analyze_perform(res, cs->h,  __FUNCTION__) != CURLE_OK) return err_report(res);
 
-    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, head);
+    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
+
+    cs->header_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
 
     return 1;
 }
 
 int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
-
-    char header[1000] = {0};
     t_curl_session* cs = sess->session;
     CURLcode res = CURLE_OK;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
-
-    descr[0] = '\0';
-    t_ac_callback_buf body_buf = {descr, size};
-    t_ac_callback_buf header_buf = {header, sizeof(header)};
-
-    if (res = curl_easy_setopt(cs->h, CURLOPT_WRITEDATA, &body_buf), res != CURLE_OK) return err_report(res);
-    if (res = curl_easy_setopt(cs->h, CURLOPT_BUFFERSIZE, size), res != CURLE_OK) return err_report(res);
-
-    if (res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
 
     if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) return err_report(res);
     if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long) CURL_RTSPREQ_DESCRIBE), res != CURLE_OK) return err_report(res);
@@ -242,19 +249,23 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
     res = curl_easy_perform(cs->h);
     if (ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
 
-    pu_log(LL_INFO, "%s: Header = \n%sBody = \n%s", __FUNCTION__, header, descr);
+    pu_log(LL_INFO, "%s: Header = \n%sBody = \n%s", __FUNCTION__, cs->header_buf.buf, cs->body_buf.buf);
+
+    strncpy(descr, cs->body_buf.buf, size-1);
+
+    cs->header_buf.sz = 0;
+    cs->body_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
+    memset(cs->body_buf.buf, 0, AC_BUF_SIZE);
 
     return 1;
 }
 
 int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
-    char header[1000] = {0};
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
-
-    t_ac_callback_buf header_buf = {header, sizeof(header)};
 
     char transport[AC_RTSP_TRANSPORT_SIZE];
     char uri[AC_RTSP_HEADER_SIZE];
@@ -269,8 +280,6 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
 
     make_transport_string(transport, sizeof(transport), (media_type == AC_ALFA_VIDEO_SETUP)?sess->video_pair.dst.port.rtp:sess->audio_pair.dst.port.rtp, AC_STREAMING_UDP);
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
-
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_TRANSPORT, transport), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_SETUP), res != CURLE_OK) return err_report(res);
@@ -278,16 +287,20 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
     res = curl_easy_perform(cs->h);
     if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
 
-    pu_log(LL_INFO, "%s: Header = \n%s", __FUNCTION__, header);
+    pu_log(LL_INFO, "%s: Header = \n%s", __FUNCTION__, cs->header_buf.buf);
 
-    int port = get_video_port(header);
+    int port = get_video_port(cs->header_buf.buf);
     if(!port) {
         pu_log(LL_ERROR, "%s: Can not get media port from camera transport string", __FUNCTION__);
         return 0;
     }
 
     char lip[16] = {0};
-    get_source_ip(lip, sizeof(lip), header);
+    get_source_ip(lip, sizeof(lip), cs->header_buf.buf);
+
+    cs->header_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
+
     char* ipd = strdup(strlen(lip)?lip:ag_getCamIP());
     if(!ipd) {
         pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
@@ -307,18 +320,12 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
 }
 
 int ac_alfaProPlay(t_at_rtsp_session* sess) {
-    char head[1000] = {0};
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    t_ac_callback_buf header_buf = {head, sizeof(head)};
-
-    if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);;
-
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) return err_report(res);
-    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_SESSION_ID, sess->rtsp_session_id), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RANGE, AC_PLAY_RANGE), res != CURLE_OK) return err_report(res);
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_PLAY), res != CURLE_OK) return err_report(res);
 
@@ -327,27 +334,28 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
 
     curl_easy_setopt(cs->h, CURLOPT_RANGE, NULL);
 
-    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, head);
+    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
+
+    cs->header_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
 
     return 1;
 }
 
 int ac_alfaProTeardown(t_at_rtsp_session* sess) {
-    char head[1000]= {0};
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    t_ac_callback_buf header_buf = {head, sizeof(head)};
-
-    if(res = curl_easy_setopt(cs->h, CURLOPT_HEADERDATA, &header_buf), res != CURLE_OK) return err_report(res);
-
     if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_TEARDOWN), res != CURLE_OK) return err_report(res);
     res = curl_easy_perform(cs->h);
     if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
 
-    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, head);
+    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
+
+    cs->header_buf.sz = 0;
+    memset(cs->header_buf.buf, 0, AC_BUF_SIZE);
 
     return 1;
 }

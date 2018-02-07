@@ -20,7 +20,7 @@ message("gst_FOUND = ${gst_FOUND}")
 message("gst_LIBRARIES = ${gst_LIBRARIES}")
 message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
 
-#PRESTO_PLATFORM STREQUAL "ubuntu"
+PRESTO_PLATFORM STREQUAL "ubuntu"
 message(STATUS "Compiling for the X86")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)

@@ -38,12 +38,14 @@
 /**********************************************************
  * Local data types & data
  */
+static int nowait = 0 ;
 static size_t buf_len = 0;
 
 static t_ab_block* buffer = NULL;
 
-static volatile size_t read_index;
-static volatile size_t write_index;
+static size_t read_index;
+static size_t write_index;
+static volatile size_t valid_data_amt;
 
 static volatile int is_data = 0;
 static pthread_mutex_t data_available_cond_mutex;
@@ -73,15 +75,31 @@ static volatile size_t shift(volatile size_t index);
  */
 static int wait_for_data(unsigned long to_sec);
 
+static t_ab_block non_blocking_read() {
+    if(!valid_data_amt) return zero_elem;
+    t_ab_block ret = buffer[read_index];
+    read_index = (read_index+1)%buf_len;
+    valid_data_amt -= 1;
+    return ret;
+}
+static t_ab_put_rc non_blocking_write(t_ab_block* blk) {
+    if(valid_data_amt >= buf_len) return AB_OVFERFLOW;
+    valid_data_amt += 1;
+    buffer[write_index] = *blk;
+    write_index = (write_index+1)%buf_len;
+    return AB_OK;
+}
+
 /**********************************************************
  * Pubic functions definition
  */
-int ab_init(size_t max_chunks) {
+int ab_init(int no_block, size_t max_chunks) {
+    nowait = no_block;
     if(buf_initialized) {
         pu_log(LL_ERROR, "ab_init: Ring buffer already initialized.");
         return 0;
     }
-    if(max_chunks < 2) {
+    if(max_chunks < 3) {
         pu_log(LL_ERROR, "ab_init: Buffer initialized with one data chunk. No R/W concurrency allowed!");
         return 0;
     }
@@ -91,6 +109,7 @@ int ab_init(size_t max_chunks) {
 
     buf_len = max_chunks;
     is_data = 0;
+    valid_data_amt = 0;
 
     read_index = 0;
     write_index = 0;
@@ -119,12 +138,14 @@ void ab_close() {
     buffer = NULL;
 }
 const t_ab_block ab_getBlock(unsigned long to_sec) {
-    assert(buf_initialized);
+    if(nowait) return non_blocking_read();
+
     t_ab_block ret = zero_elem;
 
     if(!is_data) {                              /* To prevent wait call for most cases. */
         if(!wait_for_data(to_sec)) return ret;   /* timeout */
     }
+
     pthread_mutex_lock(&rw_index_guard);
         ret = buffer[read_index];
         buffer[read_index] = zero_elem;
@@ -140,10 +161,8 @@ const t_ab_block ab_getBlock(unsigned long to_sec) {
 //    pu_log(LL_DEBUG, "%s: getBock data = %d, wr = %lu, rd = %lu\t", __FUNCTION__, is_data, write_index, read_index);
     return ret;
 }
-t_ab_put_rc ab_putBlock(size_t data_size, int first, t_ab_byte* data) {
-    assert(buf_initialized);
-    assert(data_size);
-    assert(data);
+t_ab_put_rc ab_putBlock(t_ab_block* blk) {
+    if(nowait) return non_blocking_write(blk);
 
     t_ab_put_rc ret = AB_OK;
 
@@ -152,18 +171,16 @@ t_ab_put_rc ab_putBlock(size_t data_size, int first, t_ab_byte* data) {
             ret = AB_OVFERFLOW;
             free(buffer[write_index].data); //The data will be never received so it has to be freed here
         }
-        buffer[write_index].ls_size = data_size;
-        buffer[write_index].data = data;
-        buffer[write_index].first = first;
+        buffer[write_index] = *blk;
 
         write_index = shift(write_index);
 
     if(!is_data) {
             /* send the signal we got smth */
-            pthread_mutex_lock(&data_available_cond_mutex);
+        pthread_mutex_lock(&data_available_cond_mutex);
             is_data = 1;
-            pthread_cond_broadcast(&data_available_cond);           /* Who is the first - owns the slippers! */
-            pthread_mutex_unlock(&data_available_cond_mutex);
+        pthread_cond_broadcast(&data_available_cond);           /* Who is the first - owns the slippers! */
+        pthread_mutex_unlock(&data_available_cond_mutex);
         }
 //        pu_log(LL_DEBUG, "%s: putBock data = %d, wr = %lu, rd = %lu\t", __FUNCTION__, is_data, write_index, read_index);
 

@@ -93,7 +93,7 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
         goto on_exit;
     }
 
-    /* Set the socket as async */
+    // Set the socket as async
     int sock_flags = fcntl(sockfd, F_GETFL);
     if (sock_flags < 0) {
         return -1;
@@ -109,7 +109,7 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
     }
 
     /*Connect this datagram socket to remote address info */
-    if((rc= connect(sockfd, p->ai_addr, p->ai_addrlen)) != 0) {
+    if(connect(sockfd, p->ai_addr, p->ai_addrlen) != 0) {
         pu_log(LL_ERROR, "%s: Error connect socket %s - %d", __FUNCTION__, strerror(errno), errno);
         goto on_exit;
     }
@@ -133,9 +133,10 @@ void ac_close_connection(int sock) {
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
 t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size, int to) {
+
     t_ac_udp_read_result rc={-1,0};
 
-/*Build set for select */
+// Build set for select
     struct timeval tv = {to, 0};
     fd_set readset;
 

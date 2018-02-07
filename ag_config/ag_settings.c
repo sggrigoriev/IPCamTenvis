@@ -24,14 +24,14 @@
 #include <memory.h>
 
 #include <cJSON.h>
-#include <au_string/au_string.h>
 #include "pu_logger.h"
 #include "pc_config.h"
 #include "pr_commands.h"
 
-#include "ag_defaults.h"
 #include "ac_rtsp.h"
+#include "au_string.h"
 #include "ao_cma_cam.h"
+#include "ag_defaults.h"
 #include "ag_settings.h"
 
 /************************************************************************

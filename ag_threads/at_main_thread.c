@@ -33,6 +33,7 @@
 
 #include "ao_cmd_data.h"
 #include "ao_cmd_proxy.h"
+#include "pr_commands.h"
 
 #include "at_proxy_rw.h"
 #include "at_wud_write.h"

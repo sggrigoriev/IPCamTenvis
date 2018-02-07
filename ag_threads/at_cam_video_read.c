@@ -84,7 +84,11 @@ int at_is_video_read_run() {
  * Local functions
  */
 static void* the_thread(void* params) {
+    struct timespec to = {0,0};
+    struct timespec rem;
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
+    size_t buf_size = ag_getStreamBufferSize();
+
     while(!stop) {
         t_ab_byte* buf = malloc(ag_getStreamBufferSize());
         if(!buf) {
@@ -94,7 +98,7 @@ static void* the_thread(void* params) {
 
         t_ac_udp_read_result ret = {0,0};
         while(!stop && !ret.rc) {
-            ret = ac_udp_read(socks, buf, DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, 60);
+            ret = ac_udp_read(socks, buf, buf_size, 10);
 //            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
         }
         switch(ret.rc) {
@@ -106,17 +110,23 @@ static void* the_thread(void* params) {
 //                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
                 break;                 /* Got smth - continue processing */
         }
-        t_ab_put_rc rc = ab_putBlock(ret.rc, ret.src, buf);  /* The buffer will be freed on reader size - video_write thread */
+
+        t_ab_put_rc rc;
+        t_ab_block blk = {ret.rc, ret.src, buf};
+try_again:
+        rc = ab_putBlock(&blk);  // The buffer will be freed on reader size - video_write thread
         switch (rc) {
             case AB_OK:
                 break;
             case AB_OVFERFLOW:
                 pu_log(LL_WARNING, "%s: ideo buffer overflow. Some content is lost", AT_THREAD_NAME);
-                break;
-            default:
+//                nanosleep(&to, &rem);
+                goto try_again;
+             default:
                 pu_log(LL_ERROR, "%s unrecognized code %d received from ab_putBlock()", AT_THREAD_NAME, rc);
                 break;
         }
+
     }
     on_stop:
         ac_close_connection(socks.rtp);

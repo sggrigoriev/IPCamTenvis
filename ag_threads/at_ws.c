@@ -41,6 +41,8 @@ typedef struct _ws_args {
     char session_id[128];
 } ws_args;
 
+static volatile int send_3rd = 0;
+
 static volatile int stop = 1;
 static pthread_t ws_thread_id;
 pu_queue_t* from_ws;
@@ -77,6 +79,7 @@ static void messageHandler (noPollCtx  * ctx,
              case 1:
                 pu_queue_push(from_ws, DEFAULT_WC_START_PLAY, strlen(DEFAULT_WC_START_PLAY)+1);
                  pu_log(LL_DEBUG, "%s: send START", __FUNCTION__);
+                 send_3rd = 1;
                 break;
              default:
                  break;
@@ -117,11 +120,13 @@ static void *ws_read_thread(void *pvoid) {
     }
     /* send 1's magic whisper */
     size_t n = sprintf( (char *)buff, "{\"sessionId\": \"%s\"}", args->session_id);
+    pu_log(LL_DEBUG, "%s: To Web Socket-1: %s", "WS_THREAD", buff);
     if (nopoll_conn_send_text (conn, buff, n) != n) {
         pu_log(LL_ERROR,"%s: failed to send 1",__FUNCTION__);
     }
     /* send 2'nd magic whisper */
     n = sprintf( (char *)buff, "{\"params\":[{\"name\":\"ppc.streamStatus\", \"value\":\"%s\"}]}", args->session_id);
+    pu_log(LL_DEBUG, "%s: To Web Socket-2: %s", "WS_THREAD", buff);
     if (nopoll_conn_send_text (conn, buff, n) != n) {
         pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
     }
@@ -130,6 +135,19 @@ static void *ws_read_thread(void *pvoid) {
     // wait for messages
     while (!stop) {
         nopoll_loop_wait(ctx, 10);
+        if(send_3rd) {
+            send_3rd = 0;
+            n = sprintf((char*)buff, "{\"sessionId\":\"%s\",\"params\":[{\"name\":\"ppc.streamStatus\",\"value\":\"1\",\"forward\":1}]}", args->session_id);
+            pu_log(LL_DEBUG, "%s: To Web Socket after START command received-1: %s", "WS_THREAD", buff);
+            if (nopoll_conn_send_text (conn, buff, n) != n) {
+                pu_log(LL_ERROR,"%s: failed to send 1",__FUNCTION__);
+            }
+            n = sprintf((char*)buff, "{\"sessionId\":\"%s\",\"params\":[{\"name\":\"ppc.streamStatus\",\"value\":\"%s\",\"forward\":1}]}", args->session_id, args->session_id);
+            pu_log(LL_DEBUG, "%s: To Web Socket after START command received-2: %s", "WS_THREAD", buff);
+            if (nopoll_conn_send_text (conn, buff, n) != n) {
+                pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
+            }
+        }
      }
     pu_log(LL_DEBUG,"%s: exiting\n", __FUNCTION__);
 

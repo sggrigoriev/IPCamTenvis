@@ -45,10 +45,11 @@ typedef enum {
  * Initialise ring buffer.
  * NB1. Total size in bytes = max_cunks*chunk_size + ((sizeof(size_t)+(sizeof(t_ab_byre*))*max_chunks)
  * NB2. Buffer can not take more than chunk_size bytes in one shot!
+ * @param no_block - if 1 no rewrite oldest data on overflow state. Also no waits inside!
  * @param max_chunks - max amount of chunks stored ar one time
  * @return - 1 if OK, 0 if not (worng input params or memory allocation problems
  */
-int ab_init(size_t max_chunks);
+int ab_init(int no_block, size_t max_chunks);
 /****************************************
  * Closes the ring buffer
  */
@@ -66,7 +67,7 @@ const t_ab_block ab_getBlock(unsigned long to_sec);
  * @param data  pointer to the data to be saved
  * @return t_ab_put_rc (see the description on t_ab_put_rc)
  */
-t_ab_put_rc ab_putBlock(size_t data_size, int first, t_ab_byte* data);
+t_ab_put_rc ab_putBlock(t_ab_block* blk);
 
 
 

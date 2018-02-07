@@ -21,8 +21,8 @@
 
 #include <string.h>
 #include <ctype.h>
-#include <au_string/au_string.h>
 
+#include "cJSON.h"
 #include "pu_logger.h"
 #include "lib_http.h"
 

@@ -163,8 +163,8 @@ int ac_req_setup(t_at_rtsp_session* sess) {
 
     switch(sess->device) {
         case AC_CAMERA:
-//            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
-            return ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP);
+            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
+            return ac_alfaProSetup(sess, AC_ALFA_AUDIO_SETUP);
         case AC_WOWZA:
             return ac_WowzaSetup(sess);
         default:
@@ -203,8 +203,8 @@ int ac_req_teardown(t_at_rtsp_session* sess) {
 }
 
 int ac_start_rtsp_streaming(t_rtsp_pair in, t_rtsp_pair out) {
-    if(!at_start_video_write(out)) goto on_error;
     if(!at_start_video_read(in)) goto on_error;
+    if(!at_start_video_write(out)) goto on_error;
 
     return 1;
 on_error:

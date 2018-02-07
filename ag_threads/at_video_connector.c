@@ -65,7 +65,7 @@ static void shutdown_proc() {
 }
 static int init_proc() {
     /* Setup the ring buffer for video streaming */
-    if(!ab_init(ag_getVideoChunksAmount())) {
+    if(!ab_init(0, ag_getVideoChunksAmount())) {
         pu_log(LL_ERROR, "%s: Videostreaming buffer allocation error", __FUNCTION__);
         return 0;
     }
@@ -145,9 +145,10 @@ on_reconnect:
     }
     state = AC_STATE_CONNECT;
 
+    t_rtsp_pair cam_io = {-1,-1};
+    t_rtsp_pair player_io = {-1,-1};
+
     while(!stop && (state != AC_STATE_ON_ERROR)) {
-        t_rtsp_pair cam_io = {-1,-1};
-        t_rtsp_pair player_io = {-1,-1};
         switch(state) {
             case AC_STATE_CONNECT:
                 pu_log(LL_DEBUG, "%s: State CONNECT processing", AT_THREAD_NAME);

@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ag_config/ag_settings.h>
 
 #include "ab_ring_bufer.h"
 
@@ -36,8 +37,9 @@ void* writer(void* v) {     /* Writer thiead */
         t_ab_byte* ar = malloc(3);
 //        sleep(1);
         i++;
-        ar[0] = i; ar[1] = i;ar[2] = i;
-        switch (ab_putBlock(3, ar)) {
+        ar[0] = i; ar[1] = i; ar[2] = i;
+        t_ab_block ab = {3,1,ar};
+        switch (ab_putBlock(&ab)) {
             case AB_ERROR:
                 printf("writer: ab_putBlock return AB_ERROR\n");
                 break;
@@ -45,7 +47,8 @@ void* writer(void* v) {     /* Writer thiead */
                 printf("writer: ab_putBlock return AB_OK\n");
                 break;
             case AB_OVFERFLOW:
-//                printf("writer: ab_putBlock return AB_OVFERFLOW\n");
+                printf("writer: ab_putBlock return AB_OVFERFLOW\n");
+//                sleep(1);
                 break;
             default:
                 printf("writer: ab_putBlock return something strange...\n");
@@ -57,10 +60,11 @@ void* writer(void* v) {     /* Writer thiead */
 
 void* reader(void* v) {     /* Reader thread */
     while(1) {
-        sleep(1);
+//        sleep(1);
         t_ab_block ret = ab_getBlock(20);
         if(!ret.ls_size) {
             printf("reader: timeout! Nothing to read\n");
+//            sleep(1);
         }
         else {
             printf("reader: received %d\t%d\t%d\n", ret.data[0], ret.data[1], ret.data[2]);
@@ -70,32 +74,14 @@ void* reader(void* v) {     /* Reader thread */
 }
 
 int main() {
-    char* a = "v=0\r\n"
-            "o=- 0 0 IN IP4 127.0.0.1\r\n"
-            "s=\\11\r\n"
-            "c=IN IP4 184.73.181.211\r\n"
-            "t=0 0\r\n"
-            "a=tool:libavformat 57.65.100\r\n"
-            "m=video 0 RTP/AVP 96\r\n"
-            "b=AS:150\r\n"
-            "a=rtpmap:96 MP4V-ES/90000\n"
-            "a=fmtp:96 profile-level-id=1; config=000001B002000001B58913000001000000012000C48D8800CD3C04871443000001B24C61766335372E37352E313030\r\n"
-            "a=control:streamid=0\r\n"
-            "m=audio 0 RTP/AVP 97\r\n"
-            "b=AS:64\r\n"
-            "a=rtpmap:97 MPEG4-GENERIC/48000/2\r\n"
-            "a=fmtp:97 profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=119056E500\r\n"
-            "a=control:streamid=1\r\n\r\n";
-
-    size_t la = strlen(a);
-    printf("%lu  ", la);
-    exit(0);
 
     void *ret;
-    ab_init(20);
+    ab_init(0, 20);
 
     pthread_attr_init(&writer_attr);
     pthread_create(&writer_id, &writer_attr, &writer, NULL);
+
+    sleep(1);
 
     pthread_attr_init(&reader_attr);
     pthread_create(&reader_id, &reader_attr, &reader, NULL);
