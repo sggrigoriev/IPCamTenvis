@@ -196,8 +196,11 @@ gst_rtsp_message_parse_auth_credentials (GstRTSPMessage * msg,
     return (GstRTSPAuthCredential **) g_ptr_array_free (auth_credentials, FALSE);
 }
 
-
+#if 0
 static void     /* NB! In the source it was global function */
+#else
+void     /* NB! In the source it was global function */
+#endif
 gst_rtsp_auth_param_free (GstRTSPAuthParam * param)
 {
     if (param != NULL) {
@@ -206,6 +209,7 @@ gst_rtsp_auth_param_free (GstRTSPAuthParam * param)
         g_free (param);
     }
 }
+
 static void
 gst_rtsp_auth_credential_free (GstRTSPAuthCredential * credential)
 {
