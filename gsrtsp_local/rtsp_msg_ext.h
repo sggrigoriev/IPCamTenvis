@@ -13,9 +13,10 @@
 #include <gst/rtsp/gstrtsp.h>
 #include <gst/rtsp/gstrtspmessage.h>
 
-//typedef struct _GstRTSPAuthCredential GstRTSPAuthCredential;
-//typedef struct _GstRTSPAuthParam GstRTSPAuthParam;
 #if 0
+typedef struct _GstRTSPAuthCredential GstRTSPAuthCredential;
+typedef struct _GstRTSPAuthParam GstRTSPAuthParam;
+
 struct _GstRTSPAuthCredential {
     GstRTSPAuthMethod scheme;
 
