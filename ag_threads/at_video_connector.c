@@ -35,6 +35,7 @@
 #include "ac_alfapro.h"
 
 #include "at_video_connector.h"
+#include "at_ws.h"
 
 #define AT_THREAD_NAME "VIDEO_CONNECTOR"
 
@@ -121,6 +122,8 @@ static t_ac_rtsp_states process_play(t_rtsp_pair cam_io, t_rtsp_pair player_io) 
     if(!ac_req_play(PLAYER_SESSION)) return AC_STATE_ON_ERROR;
 
     if(!ac_start_rtsp_streaming(cam_io, player_io)) return AC_STATE_ON_ERROR;
+
+    send_2nd_whisper();     //Sends the second magic message to WS
 
     return AC_STATE_PLAYING;
 }

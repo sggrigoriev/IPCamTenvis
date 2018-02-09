@@ -28,4 +28,6 @@ int is_ws_run();
 
 void stop_ws();
 
+void send_2nd_whisper();
+
 #endif /* IPCAMTENVIS_AT_WS_H */

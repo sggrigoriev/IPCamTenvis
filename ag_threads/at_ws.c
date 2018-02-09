@@ -41,7 +41,10 @@ typedef struct _ws_args {
     char session_id[128];
 } ws_args;
 
-static volatile int send_3rd = 0;
+static noPollConn * conn;
+static ws_args *args;
+
+static pthread_mutex_t lock;
 
 static volatile int stop = 1;
 static pthread_t ws_thread_id;
@@ -66,9 +69,11 @@ static void messageHandler (noPollCtx  * ctx,
     char ping[3] = "{}\n";
 
     if(strstr((char*)(msg->payload),":10")!=NULL) {
+        pthread_mutex_lock(&lock);
         if (nopoll_conn_send_text (conn, ping, 2) != 2) {
             pu_log(LL_WARNING, "%s:unable to send ping respose\n",__FUNCTION__);
         }
+        pthread_mutex_unlock(&lock);
     }
     else {
          switch(start_connector(msg->payload)) {
@@ -79,7 +84,6 @@ static void messageHandler (noPollCtx  * ctx,
              case 1:
                 pu_queue_push(from_ws, DEFAULT_WC_START_PLAY, strlen(DEFAULT_WC_START_PLAY)+1);
                  pu_log(LL_DEBUG, "%s: send START", __FUNCTION__);
-                 send_3rd = 1;
                 break;
              default:
                  break;
@@ -91,9 +95,10 @@ static void messageHandler (noPollCtx  * ctx,
 static void *ws_read_thread(void *pvoid) {
 
     char buff[512];
-    ws_args *args;
+
 
     args = (ws_args*)pvoid;
+    pthread_mutex_init(&lock, NULL);
 
     pu_log(LL_DEBUG, "%s: args->hostname = %s args->port = %s args->path = %s args->session_id = %s", __FUNCTION__, args->hostname, args->port, args->path, args->session_id);
 
@@ -107,7 +112,7 @@ static void *ws_read_thread(void *pvoid) {
     /* call to create a connection */
     //noPollConn * conn = nopoll_conn_new (ctx, "sbox1.presencepro.com", "8080", NULL, "/streaming/camera", NULL, NULL);
     pu_log(LL_DEBUG,"%s: connecting to %s:%s%s",__FUNCTION__,args->hostname,args->port,args->path);
-    noPollConn * conn = nopoll_conn_new (ctx, args->hostname, args->port, NULL, args->path, NULL, NULL);
+    conn = nopoll_conn_new (ctx, args->hostname, args->port, NULL, args->path, NULL, NULL);
 
     if (!nopoll_conn_is_ok (conn)) {
         pu_log(LL_ERROR,"%s: unable to create websocket",__FUNCTION__);
@@ -121,31 +126,19 @@ static void *ws_read_thread(void *pvoid) {
     /* send 1's magic whisper */
     size_t n = sprintf( (char *)buff, "{\"sessionId\": \"%s\"}", args->session_id);
     pu_log(LL_DEBUG, "%s: To Web Socket-1: %s", "WS_THREAD", buff);
+
+    pthread_mutex_lock(&lock);
     if (nopoll_conn_send_text (conn, buff, n) != n) {
         pu_log(LL_ERROR,"%s: failed to send 1",__FUNCTION__);
     }
-    /* send 2'nd magic whisper */
-    n = sprintf( (char *)buff, "{\"params\":[{\"name\":\"ppc.streamStatus\", \"value\":\"%s\"}]}", args->session_id);
-    pu_log(LL_DEBUG, "%s: To Web Socket-2: %s", "WS_THREAD", buff);
-    if (nopoll_conn_send_text (conn, buff, n) != n) {
-        pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
-    }
+    pthread_mutex_unlock(&lock);
+
     /* configure callback */
     nopoll_ctx_set_on_msg (ctx, messageHandler, NULL);
     // wait for messages
     while (!stop) {
         nopoll_loop_wait(ctx, 10);
-/*
-        if(send_3rd) {
-            send_3rd = 0;
-            n = sprintf((char*)buff, "{\"sessionId\":\"%s\",\"params\":[{\"name\":\"ppc.streamStatus\",\"setValue\":\"%s\",\"forward\":1}]}", args->session_id, args->session_id);
-            pu_log(LL_DEBUG, "%s: To Web Socket after START command received: %s", "WS_THREAD", buff);
-            if (nopoll_conn_send_text (conn, buff, n) != n) {
-                pu_log(LL_ERROR,"%s: failed to send ",__FUNCTION__);
-            }
-        }
-*/
-     }
+    }
     pu_log(LL_DEBUG,"%s: exiting\n", __FUNCTION__);
 
     nopoll_conn_close(conn);
@@ -199,6 +192,19 @@ void stop_ws()
 
 int is_ws_run() {
     return !stop;
+}
+
+void send_2nd_whisper() {
+    char buff[512];
+    /* send 2'nd magic whisper */
+    size_t n = sprintf( (char *)buff, "{\"params\":[{\"name\":\"ppc.streamStatus\", \"value\":\"%s\"}]}", args->session_id);
+    pu_log(LL_DEBUG, "%s: To Web Socket-2: %s", "WS_THREAD", buff);
+
+    pthread_mutex_lock(&lock);
+    if (nopoll_conn_send_text (conn, buff, n) != n) {
+        pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
+    }
+    pthread_mutex_unlock(&lock);
 }
 
 
