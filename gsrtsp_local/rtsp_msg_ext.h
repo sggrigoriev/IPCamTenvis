@@ -13,7 +13,7 @@
 #include <gst/rtsp/gstrtsp.h>
 #include <gst/rtsp/gstrtspmessage.h>
 
-#if 0
+#ifdef GST_EXT
 typedef struct _GstRTSPAuthCredential GstRTSPAuthCredential;
 typedef struct _GstRTSPAuthParam GstRTSPAuthParam;
 

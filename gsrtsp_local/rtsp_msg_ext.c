@@ -196,7 +196,7 @@ gst_rtsp_message_parse_auth_credentials (GstRTSPMessage * msg,
     return (GstRTSPAuthCredential **) g_ptr_array_free (auth_credentials, FALSE);
 }
 
-#if 0
+#ifdef GST_EXT
 static void     /* NB! In the source it was global function */
 #else
 void     /* NB! In the source it was global function */

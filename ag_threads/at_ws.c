@@ -135,6 +135,7 @@ static void *ws_read_thread(void *pvoid) {
     // wait for messages
     while (!stop) {
         nopoll_loop_wait(ctx, 10);
+/*
         if(send_3rd) {
             send_3rd = 0;
             n = sprintf((char*)buff, "{\"sessionId\":\"%s\",\"params\":[{\"name\":\"ppc.streamStatus\",\"setValue\":\"%s\",\"forward\":1}]}", args->session_id, args->session_id);
@@ -143,6 +144,7 @@ static void *ws_read_thread(void *pvoid) {
                 pu_log(LL_ERROR,"%s: failed to send ",__FUNCTION__);
             }
         }
+*/
      }
     pu_log(LL_DEBUG,"%s: exiting\n", __FUNCTION__);
 

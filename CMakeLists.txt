@@ -18,10 +18,16 @@ set(AGENT_PLATFORM $ENV{PLATFORM})
 set(PP_SDK_PATH $ENV{SDK_PATH})
 set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
 
+message("path = $ENV{SDK_PATH}")
+
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
     #add_definitions( -DLOCAL_TEST)
+
+    if($ENV{NO_GST_PLAGINS} STREQUAL "1")       # To separate build for env with gst plugins installed
+        add_definitions( -DGST_EXT )
+    endif()
 
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)

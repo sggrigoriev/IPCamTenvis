@@ -111,7 +111,7 @@ static t_mgr_state process_ws_message(const char* msg) {
             pu_log(LL_ERROR, "%s Wideo Socket sent unnknown message %s. Ignored", __FUNCTION__, msg);
             break;
         default:
-            pu_log(LL_ERROR, "%s: Unexpected thread state %d instead of %d or %d. Ignored", __FUNCTION__);
+            pu_log(LL_ERROR, "%s: Unexpected thread state %d instead of %d(LISTEN) or %d(PLAY). Ignored", __FUNCTION__, own_status, AT_LISTEN, AT_PLAY);
             break;
     }
     return own_status;
