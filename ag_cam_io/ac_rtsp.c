@@ -163,8 +163,7 @@ int ac_req_setup(t_at_rtsp_session* sess) {
 
     switch(sess->device) {
         case AC_CAMERA:
-            if(!ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP)) return 0;
-            return ac_alfaProSetup(sess, AC_ALFA_AUDIO_SETUP);
+            return ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP);
         case AC_WOWZA:
             return ac_WowzaSetup(sess);
         default:

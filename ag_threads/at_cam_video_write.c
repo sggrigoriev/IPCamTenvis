@@ -93,7 +93,7 @@ static void* the_thread(void* params) {
     struct timespec rem;
 
     while(!stop) {
-        const t_ab_block ret = ab_getBlock(1);
+        t_ab_block ret = ab_getBlock(1);
         if(!ret.ls_size) {
 //            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
 //            nanosleep(&to, &rem);
@@ -103,6 +103,7 @@ static void* the_thread(void* params) {
 
         if(!ac_udp_write(sock, ret.data, ret.ls_size)) {
             free(ret.data);
+            ret.data = NULL;
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
             break;
         }
@@ -115,7 +116,7 @@ static void* the_thread(void* params) {
         }
 */
 //        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
-        free(ret.data);
+        if(ret.data) free(ret.data);
     }
      pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);

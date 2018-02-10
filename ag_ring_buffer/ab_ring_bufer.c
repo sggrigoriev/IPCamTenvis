@@ -170,6 +170,7 @@ t_ab_put_rc ab_putBlock(t_ab_block* blk) {
         if(buffer[write_index].data) {      //Overflow case - we rewrite someone else's data
             ret = AB_OVFERFLOW;
             free(buffer[write_index].data); //The data will be never received so it has to be freed here
+            buffer[write_index].data = NULL;
         }
         buffer[write_index] = *blk;
 
