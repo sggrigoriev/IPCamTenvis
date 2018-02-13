@@ -170,7 +170,6 @@ on_reconnect:
                 state = process_play(cam_io, player_io);
                 break;
             case AC_STATE_PLAYING:
-//                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
                 sleep(1);
                 if(!at_is_video_read_run() || !at_is_video_write_run()) {       //Streaming restart
                     pu_log(LL_ERROR, "%s: Streaming %s cancelled due to error. Stream forward restart", AT_THREAD_NAME,
