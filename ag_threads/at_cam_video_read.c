@@ -66,9 +66,12 @@ int at_start_video_read(t_rtsp_pair rd) {
 void at_stop_video_read() {
     void *ret;
 
-    if(!at_is_video_read_run()) return;
+    if(!at_is_video_read_run()) {
+        pu_log(LL_WARNING, "%s is already down", AT_THREAD_NAME);
+        return;
+    }
 
-    stop = 0;
+    stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
 
@@ -113,15 +116,15 @@ static void* the_thread(void* params) {
 
         t_ab_put_rc rc;
         t_ab_block blk = {ret.rc, ret.src, buf};
-try_again:
+
         rc = ab_putBlock(&blk);  // The buffer will be freed on reader size - video_write thread
         switch (rc) {
             case AB_OK:
                 break;
             case AB_OVFERFLOW:
-                pu_log(LL_WARNING, "%s: ideo buffer overflow. Some content is lost", AT_THREAD_NAME);
+                pu_log(LL_WARNING, "%s: video buffer overflow. Some content is lost", AT_THREAD_NAME);
 //                nanosleep(&to, &rem);
-                goto try_again;
+                break;
              default:
                 pu_log(LL_ERROR, "%s unrecognized code %d received from ab_putBlock()", AT_THREAD_NAME, rc);
                 break;
@@ -135,5 +138,5 @@ try_again:
         socks.rtcp = -1;
 
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
-        pthread_exit(NULL);
+    pthread_exit(NULL);
 }

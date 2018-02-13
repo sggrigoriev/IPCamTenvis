@@ -172,6 +172,20 @@ on_reconnect:
             case AC_STATE_PLAYING:
 //                pu_log(LL_DEBUG, "%s: State PLAYING...", AT_THREAD_NAME);
                 sleep(1);
+                if(!at_is_video_read_run() || !at_is_video_write_run()) {       //Streaming restart
+                    pu_log(LL_ERROR, "%s: Streaming %s cancelled due to error. Stream forward restart", AT_THREAD_NAME,
+                           !at_is_video_read_run()?"from Camera":"to video server");
+
+                    ac_stop_rtsp_streaming();
+                    if(!ac_open_connecion(CAM_SESSION->video_pair, PLAYER_SESSION->video_pair, &cam_io, &player_io)) {
+                        pu_log(LL_ERROR, "%s Can't reopen connections for video streaming", AT_THREAD_NAME);
+                        state = AC_STATE_ON_ERROR;
+                    }
+                    if(!at_start_video_read(cam_io) || !at_start_video_write(player_io)) {
+                        pu_log(LL_ERROR, "%s Can't restart %s", AT_THREAD_NAME, !at_is_video_read_run()?"video read":"video write");
+                        state = AC_STATE_ON_ERROR;
+                    }
+                 }
                 break;
              default:
                 pu_log(LL_ERROR, "%s: Unknown state = %d. Exiting", AT_THREAD_NAME, state);

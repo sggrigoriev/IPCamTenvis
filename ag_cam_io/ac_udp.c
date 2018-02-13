@@ -89,22 +89,32 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
 
     snprintf(asc_port, sizeof(asc_port)-1, "%d", home_port);
     if ((rc = getaddrinfo(NULL, asc_port, &hints, &home_info)) != 0) {
-        pu_log(LL_ERROR, "%s: getaddr info for home peer: %s", __FUNCTION__, gai_strerror(rc));
+        pu_log(LL_ERROR, "%s: getaddr info for home peer: %s - %d", __FUNCTION__, strerror(errno), errno);
+        goto on_exit;
+    }
+
+    int32_t on = 1;
+    /*use the socket even if the address is busy (by previously killed process for ex) */
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)) < 0) {
+        pu_log(LL_ERROR, "%s: setsockopt error: %s - %d", __FUNCTION__, strerror(errno), errno);
         goto on_exit;
     }
 
     // Set the socket as async
     int sock_flags = fcntl(sockfd, F_GETFL);
     if (sock_flags < 0) {
-        return -1;
+        pu_log(LL_ERROR, "%s: fcntl Get Flags error: %s - %d", __FUNCTION__, strerror(errno), errno);
+        goto on_exit;
     }
+
     if (fcntl(sockfd, F_SETFL, sock_flags|O_NONBLOCK) < 0) {
-        return -1;
+        pu_log(LL_ERROR, "%s: fcntl Set Flags error: %s - %d", __FUNCTION__, strerror(errno), errno);
+        goto on_exit;
     }
 
     /*Bind this datagram socket to home address info */
     if((rc = bind(sockfd, home_info->ai_addr, home_info->ai_addrlen)) != 0) {
-        pu_log(LL_ERROR, "%s: Error bind socket %s", __FUNCTION__, gai_strerror(rc));
+        pu_log(LL_ERROR, "%s: Error bind socket: %s - %d", __FUNCTION__, strerror(errno), errno);
         goto on_exit;
     }
 
@@ -175,7 +185,8 @@ t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size,
 }
 int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
     if(write(sock, buf, size) < 0) {
-        pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s. Buffer size = %d", __FUNCTION__, errno, strerror(errno), size);
+
         return 0;
     }
     return 1;

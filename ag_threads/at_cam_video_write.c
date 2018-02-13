@@ -66,7 +66,10 @@ int at_start_video_write(t_rtsp_pair wr) {
 void at_stop_video_write() {
     void *ret;
 
-    if(!at_is_video_write_run()) return;
+    if(!at_is_video_write_run())  {
+        pu_log(LL_WARNING, "%s is already down", AT_THREAD_NAME);
+        return;
+    }
 
     stop = 1;
     pthread_join(id, &ret);

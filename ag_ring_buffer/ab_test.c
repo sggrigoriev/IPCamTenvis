@@ -82,14 +82,14 @@ int main() {
     pthread_create(&writer_id, &writer_attr, &writer, NULL);
 
     sleep(1);
-
+/*
     pthread_attr_init(&reader_attr);
     pthread_create(&reader_id, &reader_attr, &reader, NULL);
 
 
     pthread_join(reader_id, &ret);
     pthread_attr_destroy(&reader_attr);
-
+*/
     pthread_join(writer_id, &ret);
     pthread_attr_destroy(&writer_attr);
 
