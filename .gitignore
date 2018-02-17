@@ -1,0 +1,37 @@
+# Directories named build
+build/
+.idea*
+cmake*
+# Any compiled python files
+*.pyc
+*.pyo
+# Any compiled C files
+*.o
+*.so
+*.d
+#*.a
+# Any unit test results
+unittest*
+# Any compiled Java files
+*.class
+*.jar
+*.war
+.classpath
+.project
+# Object files
+*.o
+
+# Libraries
+*.lib
+#*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app

@@ -77,7 +77,10 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
     add_definitions( -DGST_EXT)
 
-    set(CMAKE_VERBOSE_MAKEFILE ON)
+    file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
+
+#    set(CMAKE_VERBOSE_MAKEFILE ON)
     set(CMAKE_SYSTEM_NAME Linux)
     set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
     set(SYSROOT_PATH $ENV{SYSROOT})
