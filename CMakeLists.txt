@@ -74,18 +74,21 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
-#    set(CMAKE_VERBOSE_MAKEFILE ON)
+
+    add_definitions( -DGST_EXT)
+
+    set(CMAKE_VERBOSE_MAKEFILE ON)
     set(CMAKE_SYSTEM_NAME Linux)
     set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
     set(SYSROOT_PATH $ENV{SYSROOT})
     set(COMPILER_PREFIX arm-hisiv500-linux-uclibcgnueabi-)
     set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
-    set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
+#    set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
     set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+#    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+#    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+#    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+#    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
 
     set(REQUIRED_LIBRARIES
@@ -107,18 +110,20 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
         ag_ring_buffer
         au_string
         gsrtsp_local
-        ${PROXY_LIBS_PATH}/pu_logger
-        ${PROXY_LIBS_PATH}/presto_commands
-        ${PROXY_LIBS_PATH}/pc_config
-        ${PROXY_LIBS_PATH}/pu_queues
-        ${PROXY_LIBS_PATH}/libtimer
-        ${PROXY_LIBS_PATH}/libhttpcomm
-        ${PROXY_LIBS_PATH}/libtcp
-        ${PROXY_LIBS_PATH}/json
+        ${PP_SDK_PATH}/lib/pu_logger
+        ${PP_SDK_PATH}/lib/presto_commands
+            ${PP_SDK_PATH}/lib/pc_config
+            ${PP_SDK_PATH}/lib/pu_queues
+            ${PP_SDK_PATH}/lib/libtimer
+            ${PP_SDK_PATH}/lib/libhttpcomm
+            ${PP_SDK_PATH}/lib/libtcp
+            ${PP_SDK_PATH}/lib/json
+            ${SYSROOT_PATH}/usr/include
         #        ${gst_INCLUDE_DIRS}
         #        /usr/local/include/nopoll
     )
-    message(STATUS "Compiling for hiSilicon CPU (${CMAKE_SYSROOT})")
+    message(STATUS "Compiling for hiSilicon CPU (${TOOLCHAIN_PATH}/target/usr)")
+    message(STATUS "sysroot is (${SYSROOT_PATH})")
 endif()
 
 #Agent
