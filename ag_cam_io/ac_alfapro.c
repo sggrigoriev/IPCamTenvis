@@ -169,7 +169,9 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
 
     sess->session = cs;
 
+#ifdef CURLOPT_VERBOSE
     curl_easy_setopt(cs->h, CURLOPT_VERBOSE, 1L);
+#endif
     if(res = curl_easy_setopt(cs->h, CURLOPT_URL, sess->url), res != CURLE_OK) goto on_error;
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, 0L), res != CURLE_OK) goto on_error;

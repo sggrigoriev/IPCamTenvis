@@ -54,7 +54,12 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
     int ret = 0;
 
     memset(&hints, 0, sizeof hints);
+#if 0
     hints.ai_family = AF_UNSPEC;
+#else
+    hints.ai_family = AF_INET;
+#endif
+
     hints.ai_socktype = SOCK_DGRAM;        //UDP communication
 
     /*For remote address*/
@@ -68,8 +73,12 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
 
     // loop through all the results and make a socket
     for(p = remote_info; p != NULL; p = p->ai_next) {
+#if 0
         if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-            pu_log(LL_ERROR, "%s: Error open socket %s - %d", __FUNCTION__, strerror(errno), errno);
+#else
+        if ((sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
+#endif
+                    pu_log(LL_ERROR, "%s: Error open socket %s - %d", __FUNCTION__, strerror(errno), errno);
             continue;
         }
         /*Taking first entry from getaddrinfo*/
@@ -83,7 +92,11 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
 
     /*For home address*/
     memset(&hints, 0, sizeof hints);
+#if 0
     hints.ai_family = AF_UNSPEC;
+#else
+    hints.ai_family = AF_INET;
+#endif
     hints.ai_socktype = SOCK_DGRAM;  //UDP communication
     hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
 
