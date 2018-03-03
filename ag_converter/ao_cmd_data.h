@@ -34,10 +34,17 @@ typedef enum {
     AO_UNDEF,
     AO_IN_PROXY_ID,             /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
     AO_IN_CONNECTION_STATE,     /* Off line or on line */
-    AO_VIDEO_START,             /* Command to start/stop video broadcusting */
-
-    AO_IN_PZT,                   /* PZT command - ot implemented */
+    AO_WS_ANSWER                 /* Answer from WS */
 } t_ao_msg_type;
+
+typedef enum {
+    AO_WS_UNDEF,
+    AO_WS_PING,
+    AO_WS_START,
+    AO_WS_STOP,
+    AO_WS_NOT_INTERESTING,
+    AO_WS_ERROR
+} t_ao_ws_msg_type;
 
 typedef struct {
     char url[LIB_HTTP_MAX_URL_SIZE];
@@ -54,22 +61,18 @@ typedef struct {
     char            main_url[LIB_HTTP_MAX_URL_SIZE];
 } t_ao_in_connection_state;
 
-/* AO_VIDEO_START */
+/* AO_WS_ANSWER */
 typedef struct {
-    t_ao_msg_type   msg_type;
-    int             start;        /* 0 - stop, 1 - start */
-} t_ao_in_video_start;
+    t_ao_msg_type       command_type;
+    int                 rc;             /* if rc != 0 - smth goes wrong and the rest of data invalid */
+    t_ao_ws_msg_type    ws_msg_type;      /* if start_stop ==1 - start, if 0 - stop */
+} t_ao_ws_answer;
 
-/* AO_IN_PZT */
-typedef struct {
-    t_ao_msg_type    msg_type;
-} t_ao_in_pzt;
 
 typedef union {
     t_ao_msg_type               command_type;
     t_ao_in_connection_state    in_connection_state;
-    t_ao_in_video_start         in_start_video;
-    t_ao_in_pzt                 in_pzt;
+    t_ao_ws_answer              ws_answer;
 } t_ao_msg;
 
 #endif /* IPCAMTENVIS_AO_CMD_DATA_H */

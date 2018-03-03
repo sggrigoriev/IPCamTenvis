@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 People Power Company
+ *  Copyright 2018 People Power Company
  *
  *  This code was developed with funding from People Power Company
  *
@@ -16,16 +16,11 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 07/12/17.
+ Created by gsg on 25/02/18.
 */
 
-#ifndef IPCAMTENVIS_AT_WS_H
-#define IPCAMTENVIS_AT_WS_H
+#include "ac_cam.h"
 
-int at_ws_start(const char *host, int port, const char *path, const char *session_id);
-int at_is_ws_run();
-void at_ws_stop();
-
-int at_ws_send(const char* msg);
-
-#endif /* IPCAMTENVIS_AT_WS_H */
+int ac_cam_init() {
+    return 0;
+}

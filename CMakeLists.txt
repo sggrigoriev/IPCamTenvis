@@ -24,7 +24,8 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
     #add_definitions( -DLOCAL_TEST)
-    add_definitions(-DCURLOPT_VERBOSE)
+
+    #add_definitions(-DCURLOPT_VERBOSE)         # Switches on CURL trace for AlfaPro RTSP session
 
     if($ENV{NO_GST_PLAGINS} STREQUAL "1")       # To separate build for env with gst plugins installed
         add_definitions( -DGST_EXT )

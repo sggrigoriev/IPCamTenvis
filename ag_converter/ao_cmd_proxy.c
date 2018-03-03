@@ -104,7 +104,7 @@ t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data) {
     data->command_type = AO_UNDEF;
 
     if(obj = cJSON_Parse(msg), !obj) {
-        pu_log(LL_ERROR, "%s: Error parsing %s", msg);
+        pu_log(LL_ERROR, "%s: Error parsing %s", __FUNCTION__, msg);
         return data->command_type;
     }
 

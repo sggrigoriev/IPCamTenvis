@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 People Power Company
+ *  Copyright 2018 People Power Company
  *
  *  This code was developed with funding from People Power Company
  *
@@ -16,30 +16,39 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 17/10/17.
-
+ Created by gsg on 25/02/18.
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_CONTROL_H
-#define IPCAMTENVIS_AT_CAM_CONTROL_H
+#ifndef IPCAMTENVIS_AC_VIDEO_H
+#define IPCAMTENVIS_AC_VIDEO_H
 
-/*******************************************
- * Initiates camera IO, start cam_read, cam_write and own thread
- * returns if cam_control stops
+/*
+ * 1. Get streaming & WS connection parameters
+ * 2. Make initial Cam setuo
+ * 3. Run WebSocket interface
+ * 4. Run Cam's async interface (phase - II
  */
-int at_start_cam_control();
+int ac_connect_video();
 
-/*******************************************
- * Stops own thread and both child threads
+void ac_disconnect_video();
+
+/*
+ * Rus video streaming (and audio - later
  */
-void at_stop_cam_control();
+int ac_start_video();
 
-/********************************************
- * Set the flag to stop main thread
+/*
+ * Stops videostreaming
  */
-void at_set_stop_cam_control();
 
-int is_cam_control_run();
+void ac_stop_video();
+
+/*
+ * Return 1 if treaming threads work
+ */
+int ac_streaming_run();
 
 
-#endif /* IPCAMTENVIS_AT_CAM_CONTROL_H */
+void ac_send_stream_confirmation();
+
+#endif /* IPCAMTENVIS_AC_VIDEO_H */

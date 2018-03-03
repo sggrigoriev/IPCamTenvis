@@ -92,8 +92,8 @@ int at_is_video_write_run() {
 
 static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start!", AT_THREAD_NAME);
-    struct timespec to = {0,0};
-    struct timespec rem;
+//    struct timespec to = {0,0};
+//    struct timespec rem;
 
     while(!stop) {
         t_ab_block ret = ab_getBlock(1);
@@ -118,7 +118,7 @@ static void* the_thread(void* params) {
             break;
         }
 */
-//        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
+        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
         if(ret.data) free(ret.data);
     }
      pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);

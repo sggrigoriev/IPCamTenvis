@@ -27,6 +27,9 @@
 #include <nopoll_private.h>
 #include <pthread.h>
 #include <ag_config/ag_defaults.h>
+#include <ag_converter/ao_cmd_data.h>
+#include <ag_converter/ao_cmd_cloud.h>
+#include <assert.h>
 
 #include "pu_queue.h"
 #include "pu_logger.h"
@@ -34,179 +37,145 @@
 #include "aq_queues.h"
 #include "at_ws.h"
 
-typedef struct _ws_args {
-    char hostname[128];
-    char port[6];
-    char path[128];
-    char session_id[128];
-} ws_args;
+#define AT_THREAD_NAME  "WS Thread"
 
+static noPollCtx *ctx;
 static noPollConn * conn;
-static ws_args *args;
 
 static pthread_mutex_t lock;
 
 static volatile int stop = 1;
 static pthread_t ws_thread_id;
-pu_queue_t* from_ws;
-/* this handler fires on every message
- * {"resultCode":0,"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}],"viewers":[{"id":"17","status":1}]} <-- should not respond
- * messageHandler {"resultCode":10} <-- should respond "{}"
- *
- * */
-static int start_connector(const char* msg) {
-    if(strstr(msg, "\"setValue\":\"1\"")) return 1;
-    if(strstr(msg, "\"setValue\":\"0\"")) return 0;
-    pu_log(LL_ERROR, "%s: Can't find \"set value\" token. Message ignored", __FUNCTION__);
-    return -1;
-}
-static void messageHandler (noPollCtx  * ctx,
-                                noPollConn * conn,
-                                noPollMsg  * msg,
-                                noPollPtr    user_data)
-{
-    pu_log(LL_DEBUG, "%s %s\n",__FUNCTION__,(char*)(msg->payload));
-    char ping[3] = "{}\n";
+static pthread_attr_t threadAttr;
 
-    if(strstr((char*)(msg->payload),":10")!=NULL) {
-        pthread_mutex_lock(&lock);
-        if (nopoll_conn_send_text (conn, ping, 2) != 2) {
-            pu_log(LL_WARNING, "%s:unable to send ping respose\n",__FUNCTION__);
-        }
-        pthread_mutex_unlock(&lock);
+pu_queue_t* from_ws;
+
+/*
+ * this handler fires on every message
+*/
+static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, noPollPtr user_data) {
+    const char ping[3] = "{}";
+    t_ao_msg data;
+    t_ao_msg_type msg_type;
+
+    pu_log(LL_DEBUG, "%s: From WS: %s", AT_THREAD_NAME, msg->payload);
+
+    msg_type = ao_cloud_decode(msg->payload, &data);
+    if(msg_type != AO_WS_ANSWER) {
+        pu_log(LL_ERROR, "%s: received unrecognized message. Ignored", AT_THREAD_NAME);
+        return;
+    }
+    if(data.ws_answer.ws_msg_type == AO_WS_PING) {
+        at_ws_send(ping);
     }
     else {
-         switch(start_connector(msg->payload)) {
-            case 0:
-                pu_queue_push(from_ws, DEFAULT_WC_STOP_PLAY, strlen(DEFAULT_WC_STOP_PLAY)+1);
-                 pu_log(LL_DEBUG, "%s: send STOP", __FUNCTION__);
-                break;
-             case 1:
-                pu_queue_push(from_ws, DEFAULT_WC_START_PLAY, strlen(DEFAULT_WC_START_PLAY)+1);
-                 pu_log(LL_DEBUG, "%s: send START", __FUNCTION__);
-                break;
-             default:
-                 break;
-        }
-
-    }
-
+        pu_queue_push(from_ws, msg->payload, (size_t)msg->payload_size);
+     }
 }
-static void *ws_read_thread(void *pvoid) {
 
-    char buff[512];
+static void *ws_thread(void *pvoid) {
 
-
-    args = (ws_args*)pvoid;
-    pthread_mutex_init(&lock, NULL);
-
-    pu_log(LL_DEBUG, "%s: args->hostname = %s args->port = %s args->path = %s args->session_id = %s", __FUNCTION__, args->hostname, args->port, args->path, args->session_id);
-
-    noPollCtx *ctx = nopoll_ctx_new ();
-    nopoll_log_enable(ctx,nopoll_false);
-    if (!ctx) {
-        pu_log(LL_ERROR, "%s unable to create context",__FUNCTION__);
-    }
-    from_ws = aq_get_gueue(AQ_FromWS);
-
-    /* call to create a connection */
-    //noPollConn * conn = nopoll_conn_new (ctx, "sbox1.presencepro.com", "8080", NULL, "/streaming/camera", NULL, NULL);
-    pu_log(LL_DEBUG,"%s: connecting to %s:%s%s",__FUNCTION__,args->hostname,args->port,args->path);
-    conn = nopoll_conn_new (ctx, args->hostname, args->port, NULL, args->path, NULL, NULL);
-
-    if (!nopoll_conn_is_ok (conn)) {
-        pu_log(LL_ERROR,"%s: unable to create websocket",__FUNCTION__);
-    }
-    /* wait until connection is ready */
-    if (!nopoll_conn_wait_until_connection_ready(conn, 5) ) { //todo
-        pu_log(LL_ERROR,"%s: failed to connect",__FUNCTION__);
-        stop = 1;
-        return (0);
-    }
-    /* send 1's magic whisper */
-    size_t n = sprintf( (char *)buff, "{\"sessionId\": \"%s\"}", args->session_id);
-    pu_log(LL_DEBUG, "%s: To Web Socket-1: %s", "WS_THREAD", buff);
-
-    pthread_mutex_lock(&lock);
-    if (nopoll_conn_send_text (conn, buff, n) != n) {
-        pu_log(LL_ERROR,"%s: failed to send 1",__FUNCTION__);
-    }
-    pthread_mutex_unlock(&lock);
-
-    /* configure callback */
-    nopoll_ctx_set_on_msg (ctx, messageHandler, NULL);
+    pu_log(LL_DEBUG,"%s: start", AT_THREAD_NAME);
     // wait for messages
     while (!stop) {
         nopoll_loop_wait(ctx, 10);
     }
-    pu_log(LL_DEBUG,"%s: exiting\n", __FUNCTION__);
+    pu_log(LL_DEBUG,"%s: exiting\n", AT_THREAD_NAME);
 
-    nopoll_conn_close(conn);
     stop = 1;
     pthread_exit(NULL);
 }
 
-pthread_attr_t threadAttr;
-
-int start_ws(const char *host, int port,const char *path, const char *session_id) {
-
-    ws_args *argz;
-    char s_port[20];
-
-    if(is_ws_run()) {
+int at_ws_start(const char *host, int port,const char *path, const char *session_id) {
+    if(at_is_ws_run()) {
         pu_log(LL_ERROR, "WS THREAD already run. Start ignored");
         return 1;
     }
-
     if(!host || !port || !path || !session_id) {
         pu_log(LL_ERROR, "%s: One of arguments is NULL exiting\n", __FUNCTION__);
         return 0;
     }
+
+    pu_log(LL_INFO, "%s: Starting Web Socket interface...", AT_THREAD_NAME);
+
+
+// Initiation section
+    pthread_mutex_init(&lock, NULL);
+
+    pu_log(LL_DEBUG, "%s: host = %s port = %d path = %s session_id = %s", AT_THREAD_NAME, host, port, path, session_id);
+
+    ctx = NULL;
+    noPollCtx *ctx = nopoll_ctx_new ();
+    nopoll_log_enable(ctx, nopoll_false);
+    if (!ctx) {
+        pu_log(LL_ERROR, "%s unable to create context",AT_THREAD_NAME);
+        goto on_error;
+    }
+    from_ws = aq_get_gueue(AQ_FromWS);
+    /* call to create a connection */
+    //noPollConn * conn = nopoll_conn_new (ctx, "sbox1.presencepro.com", "8080", NULL, "/streaming/camera", NULL, NULL);
+    pu_log(LL_DEBUG,"%s: connecting to %s:%d%s", AT_THREAD_NAME, host, port, path);
+    char s_port[20];
     sprintf(s_port, "%d", port);
-    argz = calloc(1,sizeof(ws_args));
-    strcpy(argz->hostname,host);
-    strcpy(argz->port,s_port);
-    strcpy(argz->path,path);
-    strcpy(argz->session_id,session_id);
+    conn = NULL;
+    conn = nopoll_conn_new (ctx, host, s_port, NULL, path, NULL, NULL);
 
-    pu_log(LL_INFO, "%s: Starting Web Socket interface...",__FUNCTION__);
+    if (!nopoll_conn_is_ok (conn)) {
+        pu_log(LL_ERROR,"%s: unable to create websocket", AT_THREAD_NAME);
+        goto on_error;
+    }
+    /* wait until connection is ready */
+    if (!nopoll_conn_wait_until_connection_ready(conn, 5) ) { //todo
+        pu_log(LL_ERROR,"%s: failed to connect", AT_THREAD_NAME);
+        goto on_error;
+    }
+    /* Cam connection request */
+    char buf[512] = {0};
+    at_ws_send(ao_connection_request(buf, sizeof(buf), session_id));
 
+    /* configure callback */
+    nopoll_ctx_set_on_msg (ctx, messageHandler, NULL);
+//Thread function start
     stop = 0;
     pthread_attr_init(&threadAttr);
-    pthread_create(&ws_thread_id, &threadAttr, &ws_read_thread, (void*)argz);
+    pthread_create(&ws_thread_id, &threadAttr, &ws_thread, NULL);
 
     return 1;
+on_error:
+    if(conn) nopoll_conn_close(conn);
+    if(ctx) nopoll_ctx_unref(ctx);
+    return 0;
 }
 
-void stop_ws()
-{
+void at_ws_stop() {
     void* ret;
-    if(!is_ws_run()) {
-        pu_log(LL_ERROR, "WS THERAD is not running. Stop ignored");
+    if(!at_is_ws_run()) {
+        pu_log(LL_ERROR, "%s is not running. Stop ignored", AT_THREAD_NAME);
         return;
     }
     stop = 1;
     pthread_join(ws_thread_id, &ret);
     pthread_attr_destroy(&threadAttr);
+
+    if(conn) nopoll_conn_close(conn);
+    if(ctx) nopoll_ctx_unref(ctx);
 }
 
-int is_ws_run() {
+int at_is_ws_run() {
     return !stop;
 }
 
-void send_2nd_whisper() {
-    char buff[512];
-    /* send 2'nd magic whisper */
-    size_t n = sprintf( (char *)buff, "{\"params\":[{\"name\":\"ppc.streamStatus\", \"value\":\"%s\"}]}", args->session_id);
-    pu_log(LL_DEBUG, "%s: To Web Socket-2: %s", "WS_THREAD", buff);
-
+int at_ws_send(const char* msg) {
+    assert(msg);
+    pu_log(LL_DEBUG, "%s: sending to Web Socket %s", AT_THREAD_NAME, msg);
+    long size = (long)strlen(msg)+1;
     pthread_mutex_lock(&lock);
-    if (nopoll_conn_send_text (conn, buff, n) != n) {
-        pu_log(LL_ERROR,"%s: failed to send 2",__FUNCTION__);
+
+    if (nopoll_conn_send_text (conn, msg, size) != size) {
+        pu_log(LL_WARNING, "%s:unable to send %s to Web Socket", AT_THREAD_NAME, msg);
     }
     pthread_mutex_unlock(&lock);
+
+    return 1;
 }
-
-
-
 

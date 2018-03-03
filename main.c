@@ -23,11 +23,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <curl/curl.h>  /* for global init/deinit */
+#include <gst/gst.h>    /* for gloal init/deinit */
+
 #include "pu_logger.h"
 
 #include "ag_settings.h"
 #include "agent_release_version.h"
 #include "at_main_thread.h"
+
+/* Cutle & Gstreamer initiations */
+static int gst_and_curl_startup() {
+    CURLcode res = CURLE_OK;
+
+    if (res = curl_global_init(CURL_GLOBAL_ALL), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", res);
+        goto on_error;
+    }
+    GError *err = NULL;
+    if (!gst_init_check(NULL, NULL, &err) || err != NULL) {
+        pu_log(LL_ERROR, "%s: Error GST init: %s", __FUNCTION__, err->message);
+        g_error_free(err);
+        goto on_error;
+    }
+    return 1;
+    on_error:
+    curl_global_cleanup();
+    return 0;
+}
+
 
 /* Help for Agent start parameters syntax */
 static void print_Agent_start_params();
@@ -39,6 +63,11 @@ int main() {
 
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
     print_Agent_start_params();
+
+    if(!gst_and_curl_startup()) {
+        pu_log(LL_ERROR, "Curl/Gstreamer init error. Exiting\n");
+        exit(-1);
+    }
 
     at_main_thread();   /*Main Agent'd work cycle is hear */
 

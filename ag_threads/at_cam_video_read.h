@@ -24,6 +24,7 @@
 #define IPCAMTENVIS_AT_CAM_VIDEO_READ_H
 
 
+#include "ac_cam_types.h"
 #include "ao_cmd_data.h"
 
 /***************************

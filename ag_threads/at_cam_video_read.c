@@ -87,8 +87,8 @@ int at_is_video_read_run() {
  * Local functions
  */
 static void* the_thread(void* params) {
-    struct timespec to = {0,0};
-    struct timespec rem;
+//    struct timespec to = {0,0};
+//    struct timespec rem;
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
     size_t buf_size = ag_getStreamBufferSize();
 
@@ -110,7 +110,7 @@ static void* the_thread(void* params) {
                 free(buf);
                 goto on_stop;
             default:
-//                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
+                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
                 break;                 /* Got smth - continue processing */
         }
 

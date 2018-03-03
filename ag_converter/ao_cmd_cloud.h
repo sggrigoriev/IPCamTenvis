@@ -26,6 +26,7 @@
 #include <stddef.h>
 
 #include "ao_cmd_data.h"
+
 /*******************************************************************************
  * Decode cloud/Proxy JSON message into internal structure (ao_cmd_data.h)
  * @param cloud_message - zero-terminated JSON string
@@ -34,13 +35,21 @@
  */
 t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data);
 
-/********************************************************************************************
- * Encode internal structure into cloud/Proxy JSON command
- * @param data - internal structure
- * @param cloud_message - buffer for JSON string
- * @param msg_size - buffer size
- * @return - pointer to the buffer
+/*
+ * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU"}
  */
-const char* ao_cloud_encode(t_ao_msg data, char* cloud_message, size_t msg_size);
+const char* ao_stream_request(char* buf, size_t size, const char* session_id);
+
+/*
+ * Returns {"params":[{"name":"ppc.streamStatus","value":"2dgkaMa8b1RhLlr2cycqStJeU"}]}
+ */
+const char* ao_stream_approve(char* buf, size_t size, const char* session_id);
+
+/*
+ * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU"}
+ */
+const char* ao_connection_request(char* buf, size_t size, const char* session_id);
+
+const char* ao_ws_error(int rc);
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */
