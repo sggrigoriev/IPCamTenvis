@@ -64,8 +64,13 @@
 #define IR_HI_RES                   "HI"
 #define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
 #define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
+#define AGENT_IPCAM_IFACE_MODEL     "IPCAM_IFACE_MODEL"
+#define AGENT_IPCAM_IFACE           "IPCAM_IFACE"
+
 #define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
 #define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
+
+#define SET_SSL_FOR_URL_REQUEST     "SET_SSL_FOR_URL_REQUEST"
 
 #define AGENT_CURLOPT_CAINFO        "CURLOPT_INFO"
 #define AGENT_CURLOPT_SSL_VERIFYPEER "CURLOPT_SSL_VERIFYPEER"
@@ -100,10 +105,14 @@ static unsigned int streaming_buffer_size;
 static t_ao_cam_res ipcam_resolution;
 static char         cam_login[129];
 static char         cam_password[129];
+static char         cam_iface[129];
+static char         cam_iface_model[129];
 
 static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
+
+static int          is_ssl;
 
 static int          curlopt_ssl_verify_peer = 1;
 static char         curlopt_ca_info[LIB_HTTP_MAX_URL_SIZE] = {0};
@@ -194,6 +203,12 @@ const char*     ag_getCamLogin() {
 const char*     ag_getCamPassword() {
     AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
+const char*     ag_getCamIface() {
+    AGS_RET(DEFAULT_IPCAM_IFACE, cam_iface);
+}
+const char*     ag_getCamIfaceModel() {
+    AGS_RET(DEFAULT_IPCAM_IFACE_MODEL, cam_iface_model);
+}
 
 const char* ag_getCurloptCAInfo() {
     return curlopt_ca_info;
@@ -221,6 +236,10 @@ void ag_saveMainURL(const char* mu) {
 }
 const char* ag_getMainURL() {
     return main_url;
+}
+
+int ag_getIsSSL() {
+    AGS_RET(DEFAULT_IS_SSL, is_ssl);
 }
 
 int ag_load_config(const char* cfg_file_name) {
@@ -260,6 +279,10 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                                 AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_IFACE, cam_iface, sizeof(cam_iface)))                      AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_IFACE_MODEL, cam_iface_model, sizeof(cam_iface_model)))    AGS_ERR;
+
+    if(!getUintValue(cfg, SET_SSL_FOR_URL_REQUEST, (unsigned int* )&is_ssl))                    AGS_ERR;
 
     if(!getUintValue(cfg, AGENT_CURLOPT_SSL_VERIFYPEER, (unsigned int* )&curlopt_ssl_verify_peer)) AGS_ERR;
     if(!getStrValue(cfg, AGENT_CURLOPT_CAINFO, curlopt_ca_info, sizeof(curlopt_ca_info)))       AGS_ERR;
@@ -298,6 +321,10 @@ static void initiate_defaults() {
 
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
+    au_strcpy(cam_iface, DEFAULT_IPCAM_IFACE, sizeof(cam_iface)-1);
+    au_strcpy(cam_iface_model, DEFAULT_IPCAM_IFACE_MODEL, sizeof(cam_iface_model)-1);
+
+    is_ssl = DEFAULT_IS_SSL;
 
     curlopt_ssl_verify_peer = DEFAULT_IPCAM_SSL_VERIFY_PEER;
     curlopt_ca_info[0] = '\0';

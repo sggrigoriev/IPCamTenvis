@@ -57,6 +57,8 @@
 #define DEFAULT_IPCAM_RESOLUTION            AO_RES_LO
 #define DEFAULT_IPCAM_LOGIN     ""
 #define DEFAULT_IPCAM_PASSWORD  ""
+#define DEFAULT_IPCAM_IFACE     "cgi-bin"
+#define DEFAULT_IPCAM_IFACE_MODEL   "hi3510"
 /**********************************************************
  * Local test settings
  */
@@ -77,7 +79,9 @@
 #define DEFAULT_WC_STOP_PLAY            "STOP"
 #define DEFAULT_CLOUD_CONN_STRING       "https://sbox.presencepro.com/cloud/json/settingsServer/streaming"
 
-#define DEFAULT_IPCAM_SSL_VERIFY_PEER      1
+#define DEFAULT_IS_SSL                     1
+
+#define DEFAULT_IPCAM_SSL_VERIFY_PEER      0
 
 #define AG_DBG  pu_log(LL_DEBUG, "%s: %d", __FUNCTION__, __LINE__)
 

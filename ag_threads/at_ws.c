@@ -30,6 +30,7 @@
 #include <ag_converter/ao_cmd_data.h>
 #include <ag_converter/ao_cmd_cloud.h>
 #include <assert.h>
+#include <au_string/au_string.h>
 
 #include "pu_queue.h"
 #include "pu_logger.h"
@@ -50,6 +51,18 @@ static pthread_attr_t threadAttr;
 
 pu_queue_t* from_ws;
 
+static int is_secure_conn(const char* host) {
+    char prefix[4]={0};
+    int pos = au_findSubstr(host, ":", AU_NOCASE);
+    if((pos < 0) || (pos > 3)) return 0;
+    strncpy(prefix, host, (size_t)pos);
+    prefix[pos] = '\0';
+    return (strcasecmp(prefix, "wss")==0);
+}
+static const char* cut_head(const char* host) {
+    int pos = au_findSubstr(host, "://", AU_NOCASE);
+    return host + pos + 3;
+}
 /*
  * this handler fires on every message
 */
@@ -106,11 +119,17 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
 
     ctx = NULL;
     noPollCtx *ctx = nopoll_ctx_new ();
-    nopoll_log_enable(ctx, nopoll_false);
     if (!ctx) {
         pu_log(LL_ERROR, "%s unable to create context",AT_THREAD_NAME);
         goto on_error;
     }
+
+#ifdef NOPOLL_TRACE
+    nopoll_log_enable(ctx, nopoll_true);
+#else
+    nopoll_log_enable(ctx, nopoll_false);
+#endif
+
     from_ws = aq_get_gueue(AQ_FromWS);
     /* call to create a connection */
     //noPollConn * conn = nopoll_conn_new (ctx, "sbox1.presencepro.com", "8080", NULL, "/streaming/camera", NULL, NULL);
@@ -118,10 +137,18 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
     char s_port[20];
     sprintf(s_port, "%d", port);
     conn = NULL;
-    conn = nopoll_conn_new (ctx, host, s_port, NULL, path, NULL, NULL);
+    if(!is_secure_conn(host)) {
+        conn = nopoll_conn_new (ctx, cut_head(host), s_port, NULL, path, NULL, NULL);
+    }
+    else {
+        noPollConnOpts* opts = nopoll_conn_opts_new();
+// Alternatives: NOPOLL_METHOD_SSLV23, NOPOLL_METHOD_SSLV3, NOPOLL_METHOD_TLSV1
+        nopoll_conn_opts_set_ssl_protocol(opts, NOPOLL_METHOD_SSLV23);
+        conn = nopoll_conn_tls_new(ctx, opts, cut_head(host), s_port, NULL, path, NULL, NULL);
+    }
 
     if (!nopoll_conn_is_ok (conn)) {
-        pu_log(LL_ERROR,"%s: unable to create websocket", AT_THREAD_NAME);
+        pu_log(LL_ERROR,"%s: unable to create websocket, errno = %d", AT_THREAD_NAME, errno);
         goto on_error;
     }
     /* wait until connection is ready */
@@ -129,11 +156,7 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
         pu_log(LL_ERROR,"%s: failed to connect", AT_THREAD_NAME);
         goto on_error;
     }
-    /* Cam connection request */
-    char buf[512] = {0};
-    at_ws_send(ao_connection_request(buf, sizeof(buf), session_id));
-
-    /* configure callback */
+/* configure callback */
     nopoll_ctx_set_on_msg (ctx, messageHandler, NULL);
 //Thread function start
     stop = 0;

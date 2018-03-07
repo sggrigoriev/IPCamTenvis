@@ -59,6 +59,8 @@ t_ao_cam_res    ag_getCamResolution();
 unsigned int    ag_getStreamBufferSize();
 const char*     ag_getCamLogin();
 const char*     ag_getCamPassword();
+const char*     ag_getCamIface();
+const char*     ag_getCamIfaceModel();
 
 
 time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
@@ -73,6 +75,8 @@ const char* ag_getProxyAuthToken();
 
 void ag_saveMainURL(const char* mu);
 const char* ag_getMainURL();
+
+int ag_getIsSSL();
 
 const char* ag_getCurloptCAInfo();
 int ag_getCurloptSSLVerifyPeer();

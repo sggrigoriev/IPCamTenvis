@@ -12,8 +12,6 @@ set(CMAKE_C_STANDARD 90)
 set(GCC_STANDARD $ENV{STANDARD})
 
 set(AGENT_PLATFORM $ENV{PLATFORM})
-#set(AGENT_PLATFORM ubuntu)
-
 
 set(PP_SDK_PATH $ENV{SDK_PATH})
 set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
@@ -26,6 +24,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     #add_definitions( -DLOCAL_TEST)
 
     #add_definitions(-DCURLOPT_VERBOSE)         # Switches on CURL trace for AlfaPro RTSP session
+   add_definitions(-DNOPOLL_TRACE)              # Enabling nopoll ()Web Socket connection) logging to stdout
 
     if($ENV{NO_GST_PLAGINS} STREQUAL "1")       # To separate build for env with gst plugins installed
         add_definitions( -DGST_EXT )

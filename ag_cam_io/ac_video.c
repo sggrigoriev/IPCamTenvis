@@ -78,14 +78,14 @@ int ac_connect_video() {
     }
 
     if(!at_ws_start(ws_conn.url, ws_conn.port, "/streaming/camera", ws_conn.auth)) {
-        pu_log(LL_ERROR, "%s - %s: Error start WEB socket connector, exit.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Error start WEB socket connector, exit.", __FUNCTION__);
         return 0;
     }
 
     char buf[128];
 
     if(!at_ws_send(ao_stream_request(buf, sizeof(buf), ws_conn.auth))) {
-        pu_log(LL_ERROR, "%s - %s: Error sending stream request to WS, exit.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Error sending stream request to WS, exit.", __FUNCTION__);
         return 0;
     }
 

@@ -297,7 +297,8 @@ int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, s
     if(!parse_ws_settings(answer, host, sizeof(host), port, sizeof(port), alt_port, sizeof(alt_port), path, sizeof(path), &ssl)) goto on_error;
 
 // Construct ws url and port
-    if(ag_getCurloptSSLVerifyPeer()) { //if 0 - got debugging mode to enable wireshark trace!ssl)
+
+    if(ag_getIsSSL()) {         //if 0 - got debugging mode to enable wireshark trace!ssl)
         strncpy(w_url, F_WS_SSL_HEAD, w_size);
         *w_port = atoi(port);
     }

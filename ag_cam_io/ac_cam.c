@@ -18,9 +18,16 @@
 /*
  Created by gsg on 25/02/18.
 */
-
 #include "ac_cam.h"
 
-int ac_cam_init() {
+static int set_fixed_quality() {
+    return 1;
+}
+
+int ac_cam_restart() {
     return 0;
+}
+
+int ac_cam_init() {
+    return set_fixed_quality();
 }

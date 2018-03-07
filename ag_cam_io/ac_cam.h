@@ -26,5 +26,6 @@
  * Make initial settings for the Camera
  */
 int ac_cam_init();
+int ac_cam_restart();
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

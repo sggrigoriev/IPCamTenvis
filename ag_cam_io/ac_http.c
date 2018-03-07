@@ -56,15 +56,12 @@ static size_t writer(void *ptr, size_t size, size_t nmemb, void *userp) {
 }
 
 int ac_http_init() {
-    if (curl_global_init(CURL_GLOBAL_ALL) != 0) {
-        pu_log(LL_ERROR, "%s: Error on cUrl initialiation. Exiting.", __FUNCTION__);
-        return 0;
-    }
+//Initiated in main thread startup Proc gst_and_curl_startup
     return 1;
 }
 
 void ac_http_close() {
-    curl_global_cleanup();
+// global cleanup called in main thread in shutdown proc
 }
 
 t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* auth_string) {

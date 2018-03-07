@@ -187,6 +187,8 @@ static t_agen_what_happened process_ws_message(char* msg) {
 }
 
 static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st) {
+    if(wh == AT_WH_NOTHING) return st;  //Reaction on timeout and other ationless iterations
+
     switch (st) {
         case AT_DISCONNECTED:
             if(wh == AT_WH_CONN_CHANGED) {  /* make all connection procedures */
@@ -322,6 +324,7 @@ void at_main_thread() {
         }
         /*2. Processing status changes */
         status = proceed_action(wtf, status);
+        wtf = AT_WH_NOTHING;                    // Reset action before the next iteration
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
