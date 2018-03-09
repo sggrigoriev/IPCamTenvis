@@ -33,7 +33,7 @@ int ac_connect_video();
 void ac_disconnect_video();
 
 /*
- * Rus video streaming (and audio - later
+ * Rus video streaming (and audio - later)
  */
 int ac_start_video();
 
@@ -49,6 +49,7 @@ void ac_stop_video();
 int ac_streaming_run();
 
 
+void ac_send_stream_initiation();
 void ac_send_stream_confirmation();
 
 #endif /* IPCAMTENVIS_AC_VIDEO_H */

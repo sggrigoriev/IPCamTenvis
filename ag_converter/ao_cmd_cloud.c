@@ -104,16 +104,6 @@ on_finish:
 }
 
 /*
- * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU"}
- */
-const char* ao_stream_request(char* buf, size_t size, const char* session_id) {
-    const char* part1 = "{\"sessionId\":\"";
-    const char* part2 = "\"}";
-    snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
-    return buf;
-}
-
-/*
  * Returns {"params":[{"name":"ppc.streamStatus","value":"2dgkaMa8b1RhLlr2cycqStJeU"}]}
  */
 const char* ao_stream_approve(char* buf, size_t size, const char* session_id) {
@@ -130,6 +120,19 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
     const char* part1 = "{\"sessionId\":\"";
     const char* part2 = "\"}";
     snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
+    return buf;
+}
+
+/*
+ * {"responses": [{"commandId": <command_id> "result": <rc>}]}
+ */
+const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc) {
+    const char* part1 = "{\"responses\": [{\"commandId\": ";
+    const char* part2 = " \"result\": ";
+    const char* part3 = "}]}";
+
+    snprintf(buf, size-1, "%s%d%s%d%s", part1, command_id, part2, rc, part3);
+    buf[size-1] = '\0';
     return buf;
 }
 

@@ -40,6 +40,16 @@ static const char* F_CONN_STRING = "connString";
 static const char* V_CONNECTED = "connected";
 static const char* V_DISCONNECTED = "disconnected";
 
+static const char* F_COMMAND_ARRAY = "commands";
+static const char* F_COMMAND_ID = "commandId";
+static const char* F_PARAMS_ARRAY = "parameters";
+static const char* F_PARAM_NAME = "name";
+static const char* F_STREAM_NAME = "ppc.streamStatus";
+static const char* F_PARAM_VALUE = "value";
+static const char* F_VALUE_START = "1";
+static const char* F_VALUE_STOP = "0";
+
+
 
 /* {gw_gatewayDeviceId":[{"paramsMap":{"deviceId":"<proxy_device_id>"}}]} */
 static int get_old_proxy_msg_with_device_id(cJSON* data) {
@@ -97,6 +107,59 @@ static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
     return 1;
 }
 
+static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
+    cJSON* arr;
+    cJSON* arr_item;
+    cJSON* item;
+    int command_id;
+
+    if(arr = cJSON_GetObjectItem(obj, F_COMMAND_ARRAY), (!arr || arr->type != cJSON_Array) || (cJSON_GetArraySize(arr) < 1)) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_COMMAND_ARRAY);
+        return 0;
+    }
+    arr_item = cJSON_GetArrayItem(arr, 0);
+    if(item = cJSON_GetObjectItem(arr_item, F_COMMAND_ID), !item) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_COMMAND_ID);
+        return 0;
+    }
+    command_id = item->valueint;
+
+    if(arr = cJSON_GetObjectItem(arr_item, F_PARAMS_ARRAY), (!arr || arr->type != cJSON_Array) || (cJSON_GetArraySize(arr) < 1)) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PARAMS_ARRAY);
+        return 0;
+    }
+    arr_item = cJSON_GetArrayItem(arr, 0);
+    if(item = cJSON_GetObjectItem(arr_item, F_PARAM_NAME), !item) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PARAM_NAME);
+        return 0;
+    }
+    if(strcmp(item->valuestring, F_STREAM_NAME) != 0) {
+        pu_log(LL_ERROR, "%s: '%s' field has wrong value %s. Value %s expected", __FUNCTION__, F_PARAM_NAME, item->valuestring, F_STREAM_NAME);
+        return 0;
+    }
+    if(item = cJSON_GetObjectItem(arr_item, F_PARAM_VALUE), !item) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PARAM_VALUE);
+        return 0;
+    }
+    if(item->type != cJSON_String) {
+        pu_log(LL_ERROR, "%s: '%s' field value is not a string.", __FUNCTION__, F_PARAM_VALUE);
+        return 0;
+    }
+    if(strcmp(item->valuestring, F_VALUE_START) == 0) {
+        data->start_it = 1;
+    }
+    else if(strcmp(item->valuestring, F_VALUE_STOP) == 0) {
+        data->start_it = 0;
+    }
+    else {
+        pu_log(LL_ERROR, "%s: '%s' field got unexpected value %s. Only %s or %s are supported.", __FUNCTION__, F_PARAM_VALUE, item->valuestring, F_VALUE_START, F_VALUE_STOP);
+        return 0;
+    }
+    data->msg_type = AO_IN_MANAGE_VIDEO;
+    data->command_id = command_id;
+
+    return 0;
+}
 
 t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data) {
     cJSON* obj;
@@ -112,6 +175,9 @@ t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data) {
         data->command_type = AO_IN_PROXY_ID;
     else if(get_proxy_conn_status(obj, &data->in_connection_state))
         data->command_type = AO_IN_CONNECTION_STATE;
+    else {
+        get_stream_start_stop(obj, &data->in_manage_video);
+    }
 
     cJSON_Delete(obj);
     return data->command_type;

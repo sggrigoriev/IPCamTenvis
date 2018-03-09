@@ -34,6 +34,7 @@ typedef enum {
     AO_UNDEF,
     AO_IN_PROXY_ID,             /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
     AO_IN_CONNECTION_STATE,     /* Off line or on line */
+    AO_IN_MANAGE_VIDEO,          /* Command to start video streaming received from the cloud */
     AO_WS_ANSWER                 /* Answer from WS */
 } t_ao_msg_type;
 
@@ -61,6 +62,12 @@ typedef struct {
     char            main_url[LIB_HTTP_MAX_URL_SIZE];
 } t_ao_in_connection_state;
 
+/* AO_IN_MANAGE_VIDEO */
+typedef struct {
+    t_ao_msg_type   msg_type;
+    int start_it;               /* 0 if stop, 1 if start */
+    int command_id;
+} t_ao_in_manage_video;
 /* AO_WS_ANSWER */
 typedef struct {
     t_ao_msg_type       command_type;
@@ -68,10 +75,10 @@ typedef struct {
     t_ao_ws_msg_type    ws_msg_type;      /* if start_stop ==1 - start, if 0 - stop */
 } t_ao_ws_answer;
 
-
 typedef union {
     t_ao_msg_type               command_type;
     t_ao_in_connection_state    in_connection_state;
+    t_ao_in_manage_video        in_manage_video;
     t_ao_ws_answer              ws_answer;
 } t_ao_msg;
 

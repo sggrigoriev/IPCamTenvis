@@ -51,6 +51,7 @@
 
 typedef enum {AT_DISCONNECTED, AT_CONNECTED, AT_STREAMING} t_agent_status;
 typedef enum {AT_WH_NOTHING, AT_WH_CONN_CHANGED, AT_WH_VSTART_REQUESTED, AT_WH_VSTOP_REQUESTED, AT_WS_RESTART_REQUESTED} t_agen_what_happened;
+typedef enum {AT_NO_SRC, AT_SRC_CLOUD, AT_SRC_WS, AT_SRC_CAM} t_agent_source;
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;         /* main thread events set */
@@ -58,6 +59,7 @@ static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
 static pu_queue_t* to_wud;            /* main_thread -> wud_write  */
 static pu_queue_t* from_cam;         /* cam -> main_thread */
 static pu_queue_t* from_ws;        /* WS -> main_thread */
+static pu_queue_t* to_proxy;        /* main_thread->proxy */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -78,6 +80,7 @@ static int main_thread_startup() {
     aq_init_queues();
 
     from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
+    to_proxy = aq_get_gueue(AQ_ToProxyQueue);           /* main_thred -> proxy_write */
     to_wud = aq_get_gueue(AQ_ToWUD);                    /* main_thread -> proxy_write */
     from_cam = aq_get_gueue(AQ_FromCam);                /* cam_control -> main_thread */
     from_ws = aq_get_gueue(AQ_FromWS);                  /* WS -> main_thread */
@@ -146,6 +149,13 @@ static t_agen_what_happened process_proxy_message(char* msg) {
                 ret = AT_WH_CONN_CHANGED;
         }
             break;
+        case AO_IN_MANAGE_VIDEO: {
+            char buf[128];
+            ret = (data.in_manage_video.start_it) ? AT_WH_VSTART_REQUESTED : AT_WH_VSTOP_REQUESTED;
+            ao_answer_to_command(buf, sizeof(buf), data.in_manage_video.command_id, 0);
+            pu_queue_push(to_proxy, buf, strlen(buf) + 1);
+        }
+            break;
         default:
             pu_log(LL_ERROR, "%s: Can't process message from Proxy. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
             break;
@@ -186,7 +196,7 @@ static t_agen_what_happened process_ws_message(char* msg) {
     return ret;
 }
 
-static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st) {
+static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st, t_agent_source src) {
     if(wh == AT_WH_NOTHING) return st;  //Reaction on timeout and other ationless iterations
 
     switch (st) {
@@ -196,6 +206,7 @@ static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st)
                     pu_log(LL_ERROR, "%s: Error video initiating", AT_THREAD_NAME);
                 }
                 else {
+                    ac_send_stream_initiation();
                     st = AT_CONNECTED;
                 }
             }
@@ -210,6 +221,7 @@ static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st)
                         st = AT_DISCONNECTED;
                     }
                     else {
+                        ac_send_stream_initiation();
                         st = AT_CONNECTED;
                     }
                     break;
@@ -218,7 +230,7 @@ static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st)
                         pu_log(LL_ERROR, "%s: Error video start", AT_THREAD_NAME);
                     }
                     else {
-                        ac_send_stream_confirmation();     //Ask ws thread to send streaming confirmation to the WS
+                        if(src == AT_SRC_WS) ac_send_stream_confirmation();     //Ask ws thread to send streaming confirmation to the WS
                         st = AT_STREAMING;
                     }
                     break;
@@ -238,8 +250,12 @@ static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st)
                         st = AT_DISCONNECTED;
                     }
                     else {
+                        ac_send_stream_initiation();
                         st = AT_CONNECTED;
                     }
+                    break;
+                case AT_WH_VSTART_REQUESTED:    /* We are on streaming already. So we need just to send the confirmation */
+                    if(src == AT_SRC_WS) ac_send_stream_confirmation();
                     break;
                 case AT_WH_VSTOP_REQUESTED:
                     ac_stop_video();
@@ -284,6 +300,7 @@ void at_main_thread() {
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
+        t_agent_source src = AT_NO_SRC;
 
         switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
@@ -294,25 +311,31 @@ void at_main_thread() {
                 else {
                     pu_log(LL_ERROR, "%s: Empty message from the Proxy! Ignored.", AT_THREAD_NAME);
                 }
+                src = AT_SRC_CLOUD;
                 break;
             case AQ_FromWS:
                 if(pu_queue_pop(from_ws, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s", AT_THREAD_NAME, mt_msg);
                     wtf = process_ws_message(mt_msg);
                 }
+                src = AT_SRC_WS;
                 break;
             case AQ_FromCam:
                 pu_log(LL_ERROR, "%s: %s Camera async interface not omplemented yet", AT_THREAD_NAME, mt_msg);
+                src = AT_SRC_CAM;
                 break;
             case AQ_Timeout:
 //                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
+                src = AT_NO_SRC;
                 break;
             case AQ_STOP:
                 main_finish = 1;
                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
+                src = AT_NO_SRC;
                 break;
             default:
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
+                src = AT_NO_SRC;
                 break;
 
         }
@@ -323,7 +346,7 @@ void at_main_thread() {
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
         /*2. Processing status changes */
-        status = proceed_action(wtf, status);
+        status = proceed_action(wtf, status, src);
         wtf = AT_WH_NOTHING;                    // Reset action before the next iteration
     }
     main_thread_shutdown();
