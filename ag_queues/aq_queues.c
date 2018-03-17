@@ -63,3 +63,11 @@ pu_queue_t* aq_get_gueue(int que_number) {
     pthread_mutex_unlock(&own_mutex);
     return ret;
 }
+
+queue_events_t ag_get_non_empty_queue() {
+    queue_events_t i;
+    for(i = AQ_MIN_QUEUE; i <= AQ_MAX_QUEUE;  i++) {
+        if(!pu_queue_empty(aq_get_gueue(i))) return i;
+    }
+    return AQ_Timeout;
+}

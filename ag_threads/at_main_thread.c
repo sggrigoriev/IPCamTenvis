@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <ag_converter/ao_cmd_cloud.h>
 #include <ag_converter/ao_cmd_data.h>
+#include <au_string/au_string.h>
 
 
 #include "lib_timer.h"
@@ -49,9 +50,9 @@
     Main thread global variables
 */
 
-typedef enum {AT_DISCONNECTED, AT_CONNECTED, AT_STREAMING} t_agent_status;
-typedef enum {AT_WH_NOTHING, AT_WH_CONN_CHANGED, AT_WH_VSTART_REQUESTED, AT_WH_VSTOP_REQUESTED, AT_WS_RESTART_REQUESTED} t_agen_what_happened;
-typedef enum {AT_NO_SRC, AT_SRC_CLOUD, AT_SRC_WS, AT_SRC_CAM} t_agent_source;
+typedef enum {AT_DISCONNECTED, AT_CONNECTED, AT_STREAMING} t_vbox_status;
+typedef enum {AT_WH_NOTHING, AT_WH_PING, AT_CONNECT, AT_WH_VSTART, AT_WH_VSTOP, AT_PX_VSTART, AT_PX_VSTOP} t_agent_command;
+
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;         /* main thread events set */
@@ -60,6 +61,7 @@ static pu_queue_t* to_wud;            /* main_thread -> wud_write  */
 static pu_queue_t* from_cam;         /* cam -> main_thread */
 static pu_queue_t* from_ws;        /* WS -> main_thread */
 static pu_queue_t* to_proxy;        /* main_thread->proxy */
+static pu_queue_t* from_stream_rw;         /* from streaming threads to main */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -67,6 +69,12 @@ static volatile int main_finish;        /* stop flag for main thread */
 /*****************************************************************************************
     Local functions deinition
 */
+/*
+ * State machine to manage all this mixt with ws/Proxy incoming commands & management
+ */
+static void vbox_init();
+static void video_box(t_agent_command cmd);
+
 static void send_wd() {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
 
@@ -84,10 +92,12 @@ static int main_thread_startup() {
     to_wud = aq_get_gueue(AQ_ToWUD);                    /* main_thread -> proxy_write */
     from_cam = aq_get_gueue(AQ_FromCam);                /* cam_control -> main_thread */
     from_ws = aq_get_gueue(AQ_FromWS);                  /* WS -> main_thread */
+    from_stream_rw = aq_get_gueue(AQ_FromRW);                  /* Streaming RW tread(s) -> main */
 
     events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
     events = pu_add_queue_event(events, AQ_FromCam);
     events = pu_add_queue_event(events, AQ_FromWS);
+    events = pu_add_queue_event(events, AQ_FromRW);
 
 /* Threads start */
     if(!at_start_proxy_rw()) {
@@ -117,15 +127,15 @@ static void main_thread_shutdown() {
     aq_erase_queues();
 }
 
-static t_agen_what_happened process_proxy_message(char* msg) {
+static t_agent_command process_proxy_message(char* msg) {
     t_ao_msg data;
     t_ao_msg_type msg_type;
-    t_agen_what_happened ret = AT_WH_NOTHING;
+    t_agent_command ret = AT_WH_NOTHING;
 
     switch(msg_type=ao_proxy_decode(msg, &data)) {
         case AO_IN_PROXY_ID:                         /* Stays here for comatibility with M3 Agent */
             break;
-        case AO_IN_CONNECTION_STATE: {
+        case AO_IN_CONNECTION_INFO: {
             int info_changed = 0;
 
             if(data.in_connection_state.is_online) {
@@ -146,12 +156,12 @@ static t_agen_what_happened process_proxy_message(char* msg) {
                 }
             }
             if(info_changed)
-                ret = AT_WH_CONN_CHANGED;
+                ret = AT_CONNECT;
         }
             break;
         case AO_IN_MANAGE_VIDEO: {
             char buf[128];
-            ret = (data.in_manage_video.start_it) ? AT_WH_VSTART_REQUESTED : AT_WH_VSTOP_REQUESTED;
+            ret = (data.in_manage_video.start_it) ? AT_PX_VSTART : AT_PX_VSTOP;
             ao_answer_to_command(buf, sizeof(buf), data.in_manage_video.command_id, 0);
             pu_queue_push(to_proxy, buf, strlen(buf) + 1);
         }
@@ -162,129 +172,65 @@ static t_agen_what_happened process_proxy_message(char* msg) {
     }
     return ret;
 }
-static t_agen_what_happened process_ws_message(char* msg) {
+static t_agent_command process_ws_message(char* msg) {
     t_ao_msg data;
     t_ao_msg_type msg_type;
-    t_agen_what_happened ret = AT_WH_NOTHING;
+    t_agent_command ret = AT_WH_NOTHING;
 
     if(msg_type = ao_cloud_decode(msg, &data), msg_type != AO_WS_ANSWER) {
-        pu_log(LL_ERROR, "%s: Can't process message from Web Spcket. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
+        pu_log(LL_ERROR, "%s: Can't process message from Web Socket. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
         return ret;
     }
-    switch (data.ws_answer.ws_msg_type) {
-        case AO_WS_START:
-            pu_log(LL_INFO, "%s: Start streaming requested by Web Socket", AT_THREAD_NAME);
-            ret = AT_WH_VSTART_REQUESTED;
+    switch(data.ws_answer.ws_msg_type) {
+        case AO_WS_PING:
+            ret = AT_WH_PING;
             break;
-        case AO_WS_STOP:
-            pu_log(LL_INFO, "%s: Stop streaming requested by Web Socket", AT_THREAD_NAME);
-            ret = AT_WH_VSTOP_REQUESTED;
+        case AO_WS_ABOUT_STREAMING: {
+            unsigned int old_viewers_amount = at_ws_get_active_viewers_amount();
+            unsigned int new_viewers_amount = (data.ws_answer.viwers_count < 0) ?
+                                              old_viewers_amount + data.ws_answer.viewers_delta :
+                                              (unsigned int) data.ws_answer.viwers_count;
+
+            if ((data.ws_answer.is_start) || ((new_viewers_amount != 0) && (old_viewers_amount == 0))) {
+                pu_log(LL_INFO, "%s: Sart streaming requested by Web Socket.", AT_THREAD_NAME);
+                ret = AT_WH_VSTART;
+            } else if ((new_viewers_amount == 0) && (old_viewers_amount != 0)) {
+                pu_log(LL_INFO, "%s: Stop streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
+                ret = AT_WH_VSTOP;
+            }
+            at_ws_set_active_viewers_amount(new_viewers_amount);
+            pu_log(LL_DEBUG, "%s: Active viwers amount: %d", AT_THREAD_NAME, new_viewers_amount);
+        }
             break;
         case AO_WS_ERROR:
-            pu_log(LL_ERROR, "%s: Error from Web Socket. RC = %d %s. Message ignored", AT_THREAD_NAME, data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
-            ret = AT_WS_RESTART_REQUESTED;
-            break;
-        case AO_WS_NOT_INTERESTING:
-            pu_log(LL_INFO, "%s: Message %s from Web Socket ignored", AT_THREAD_NAME, msg);
-            ret = AT_WH_NOTHING;
+            pu_log(LL_ERROR, "%s: Error from Web Socket. RC = %d %s. Reconnect", AT_THREAD_NAME,
+                   data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
+            ret = AT_CONNECT;
             break;
         default:
-            pu_log(LL_INFO, "%s: Unrecognized message type %d from Web Socket", AT_THREAD_NAME, data.ws_answer.ws_msg_type);
-            ret = AT_WH_VSTOP_REQUESTED;
+            pu_log(LL_INFO, "%s: Unrecognized message type %d from Web Socket. Ignored", AT_THREAD_NAME, data.ws_answer.ws_msg_type);
             break;
     }
     return ret;
 }
+static t_agent_command process_rw_message(char* msg) {
+    t_ao_msg data;
+    t_ao_msg_type msg_type;
+    t_agent_command ret = AT_WH_NOTHING;
 
-static t_agent_status proceed_action(t_agen_what_happened wh, t_agent_status st, t_agent_source src) {
-    if(wh == AT_WH_NOTHING) return st;  //Reaction on timeout and other ationless iterations
-
-    switch (st) {
-        case AT_DISCONNECTED:
-            if(wh == AT_WH_CONN_CHANGED) {  /* make all connection procedures */
-                if(!ac_connect_video()) {
-                    pu_log(LL_ERROR, "%s: Error video initiating", AT_THREAD_NAME);
-                }
-                else {
-                    ac_send_stream_initiation();
-                    st = AT_CONNECTED;
-                }
-            }
-            break;
-        case AT_CONNECTED:
-            switch (wh) {
-                case AT_WH_CONN_CHANGED:
-                case AT_WS_RESTART_REQUESTED:
-                    ac_disconnect_video();
-                    if(!ac_connect_video()) {
-                        pu_log(LL_ERROR, "%s: Error video reconnect", AT_THREAD_NAME);
-                        st = AT_DISCONNECTED;
-                    }
-                    else {
-                        ac_send_stream_initiation();
-                        st = AT_CONNECTED;
-                    }
-                    break;
-                case AT_WH_VSTART_REQUESTED:
-                    if(!ac_start_video()) {
-                        pu_log(LL_ERROR, "%s: Error video start", AT_THREAD_NAME);
-                    }
-                    else {
-                        if(src == AT_SRC_WS) ac_send_stream_confirmation();     //Ask ws thread to send streaming confirmation to the WS
-                        st = AT_STREAMING;
-                    }
-                    break;
-                default:
-                    pu_log(LL_ERROR, "%s: Action %d not supported in 'CONNECTED' status", AT_THREAD_NAME);
-                    break;
-            }
-            break;
-        case AT_STREAMING:
-            switch (wh) {
-                case AT_WH_CONN_CHANGED:
-                case AT_WS_RESTART_REQUESTED:
-                    ac_stop_video();
-                    ac_disconnect_video();
-                    if(!ac_connect_video()) {
-                        pu_log(LL_ERROR, "%s: Error video reconnect", AT_THREAD_NAME);
-                        st = AT_DISCONNECTED;
-                    }
-                    else {
-                        ac_send_stream_initiation();
-                        st = AT_CONNECTED;
-                    }
-                    break;
-                case AT_WH_VSTART_REQUESTED:    /* We are on streaming already. So we need just to send the confirmation */
-                    if(src == AT_SRC_WS) ac_send_stream_confirmation();
-                    break;
-                case AT_WH_VSTOP_REQUESTED:
-                    ac_stop_video();
-                    st = AT_CONNECTED;
-                    break;
-                default:
-                    pu_log(LL_ERROR, "%s: Action %d not supported in 'STREAMING' status", AT_THREAD_NAME);
-                    break;
-            }
-            if(!ac_streaming_run()) { /* streaming restart required! */
-                ac_stop_video();
-                st = AT_CONNECTED;
-            }
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: Unsupported Agent status %d", AT_THREAD_NAME, st);
-            break;
+    if((msg_type = ao_cloud_decode(msg, &data), msg_type != AO_WS_ANSWER) || (data.ws_answer.ws_msg_type != AO_WS_ERROR)) {
+        pu_log(LL_ERROR, "%s: Can't process message from streaming R/W treads. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
+        return ret;
     }
-    return st;
+    pu_log(LL_ERROR, "%s: Error from streaming R/W treads. RC = %d %s. Reconnect", AT_THREAD_NAME,
+           data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
+    ret = AT_CONNECT;
+    return ret;
 }
-
 /****************************************************************************************
     Global function definition
 */
 void at_main_thread() {
-    t_agent_status status = AT_DISCONNECTED;
-    t_agen_what_happened wtf = AT_WH_NOTHING;
-
-
     main_finish = 0;
 
         if(!main_thread_startup()) {
@@ -294,50 +240,49 @@ void at_main_thread() {
 
     lib_timer_clock_t wd_clock = {0};           /* timer for watchdog sending */
     lib_timer_init(&wd_clock, ag_getAgentWDTO());   /* Initiating the timer for watchdog sendings */
+    vbox_init();
 
-    unsigned int events_timeout = 1; /* Wait until the end of univerce */
+    unsigned int events_timeout = 1; /* Wait until the end of universe */
 
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
-        pu_queue_event_t ev;
-        t_agent_source src = AT_NO_SRC;
+        t_agent_command command = AT_WH_NOTHING;
 
-        switch (ev=pu_wait_for_queues(events, events_timeout)) {
+        pu_queue_event_t ev = ag_get_non_empty_queue(); // INstead of readind one queue until exausted
+        if(ev == AQ_Timeout) ev = pu_wait_for_queues(events, events_timeout);
+
+        switch (ev) {
             case AQ_FromProxyQueue:
                 if(pu_queue_pop(from_poxy, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
-                    wtf = process_proxy_message(mt_msg);
-                }
-                else {
-                    pu_log(LL_ERROR, "%s: Empty message from the Proxy! Ignored.", AT_THREAD_NAME);
-                }
-                src = AT_SRC_CLOUD;
-                break;
+                    command = process_proxy_message(mt_msg);
+                 }
+                 break;
             case AQ_FromWS:
                 if(pu_queue_pop(from_ws, mt_msg, &len)) {
-                    pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s", AT_THREAD_NAME, mt_msg);
-                    wtf = process_ws_message(mt_msg);
+                    pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s, len = %d", AT_THREAD_NAME, mt_msg, len);
+                    command = process_ws_message(mt_msg);
                 }
-                src = AT_SRC_WS;
+                break;
+            case AQ_FromRW:
+                if(pu_queue_pop(from_stream_rw, mt_msg, &len)) {
+                    pu_log(LL_DEBUG, "%s: got message from the streaming threads %s", AT_THREAD_NAME, mt_msg);
+                    command = process_rw_message(mt_msg);
+                }
                 break;
             case AQ_FromCam:
                 pu_log(LL_ERROR, "%s: %s Camera async interface not omplemented yet", AT_THREAD_NAME, mt_msg);
-                src = AT_SRC_CAM;
                 break;
             case AQ_Timeout:
 //                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
-                src = AT_NO_SRC;
                 break;
             case AQ_STOP:
                 main_finish = 1;
                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
-                src = AT_NO_SRC;
                 break;
             default:
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait.", AT_THREAD_NAME, ev);
-                src = AT_NO_SRC;
-                break;
-
+                 break;
         }
          /* Place for own periodic actions */
         /*1. Wathchdog */
@@ -345,12 +290,117 @@ void at_main_thread() {
             send_wd();
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
-        /*2. Processing status changes */
-        status = proceed_action(wtf, status, src);
-        wtf = AT_WH_NOTHING;                    // Reset action before the next iteration
+        video_box(command);
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
+/*************************************************************************************************************
+ * Video box part. Maybe it should lives separately but Mkhail sweared to kill me for new files.
+ * I like my life too much.
+ */
+static t_vbox_status vbox_status;
+static t_agent_command vbox_event;
 
+static void vbox_init() {
+    vbox_status = AT_DISCONNECTED;
+    vbox_event = AT_WH_NOTHING;
+}
+
+static t_agent_command vbox_event_calc(t_agent_command cmd) {
+    switch(cmd) {
+        case AT_CONNECT:
+            vbox_event = AT_CONNECT;
+            break;
+        case AT_WH_VSTART:
+        case AT_WH_VSTOP:
+        case AT_PX_VSTART:
+        case AT_PX_VSTOP:
+            if(vbox_event != AT_CONNECT) vbox_event = cmd;
+            break;
+        default:
+            break;
+    }
+
+    if(vbox_event != AT_WH_NOTHING)
+        pu_log(LL_DEBUG, "%s:%s command came %d; event %d processed", AT_THREAD_NAME, __FUNCTION__, cmd, vbox_event);
+
+
+    return vbox_event;
+}
+
+static void video_box(t_agent_command cmd) {
+    vbox_event = vbox_event_calc(cmd);
+
+    if(cmd == AT_WH_PING) at_ws_send(ao_answer_to_ws_ping());
+
+    switch(vbox_status) {
+        case AT_DISCONNECTED:
+            switch(vbox_event) {
+                case AT_CONNECT:
+                    if(ac_connect_video()) {
+                        ac_send_stream_initiation();
+                        pu_log(LL_INFO, "%s: Video connected", AT_THREAD_NAME);
+                        vbox_status = AT_CONNECTED;
+                        vbox_event = AT_WH_NOTHING; //Mission completed
+                    }
+                    else
+                        pu_log(LL_INFO, "%s: Error video connection", AT_THREAD_NAME);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case AT_CONNECTED:
+            switch(vbox_event) {
+                case AT_CONNECT:
+                    ac_disconnect_video();
+                    pu_log(LL_INFO, "%s: Video disconnected", AT_THREAD_NAME);
+                    vbox_status = AT_DISCONNECTED;
+                    vbox_event = AT_WH_NOTHING;
+                    break;
+                case AT_WH_VSTART:
+                case AT_PX_VSTART:
+                    if(ac_start_video()) {
+                        if(vbox_event == AT_WH_VSTART) ac_send_stream_confirmation();
+                        pu_log(LL_INFO, "%s: Start streaming", AT_THREAD_NAME);
+                        vbox_status = AT_STREAMING;
+                        vbox_event = AT_WH_NOTHING;
+                    }
+                    break;
+                case AT_WH_VSTOP:
+                case AT_PX_VSTOP:
+                    vbox_event = AT_WH_NOTHING;
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case AT_STREAMING:
+            switch(vbox_event) {
+                case AT_CONNECT:
+                    ac_stop_video();
+                    pu_log(LL_INFO, "%s: Stop streaming", AT_THREAD_NAME);
+                    vbox_status = AT_CONNECTED;
+                    break;
+                case AT_WH_VSTART:
+                case AT_PX_VSTART:
+                    vbox_event = AT_WH_NOTHING;
+                    break;
+                case AT_WH_VSTOP:
+                case AT_PX_VSTOP:
+                    ac_stop_video();
+                    pu_log(LL_INFO, "%s: Stop streaming", AT_THREAD_NAME);
+                    vbox_status = AT_CONNECTED;
+                    vbox_event = AT_WH_NOTHING;
+                    break;
+                default:
+                    break;
+            }
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognized Agent's state %d. Ignored", AT_THREAD_NAME, vbox_status);
+            break;
+    }
+}

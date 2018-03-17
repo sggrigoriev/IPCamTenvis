@@ -215,8 +215,8 @@ on_error:
     return 0;
 }
 void ac_stop_rtsp_streaming() {
-    at_stop_video_read();
     at_stop_video_write();
+    at_stop_video_read();
 }
 
 static const uint8_t RTP_INIT_REQ[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};

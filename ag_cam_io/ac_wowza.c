@@ -228,8 +228,10 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
         pu_log(LL_ERROR, "%s: wrong GST message type %d. Expected one is %d", __FUNCTION__, resp.type, GST_RTSP_MESSAGE_RESPONSE);
         goto on_error;
     }
+    if(resp.type_data.response.code == GST_RTSP_STS_OK) goto on_no_auth;    //Video restart w/o reconnection - same session ID
+
     if(resp.type_data.response.code != GST_RTSP_STS_UNAUTHORIZED) {
-        pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(resp.type_data.response.code));
+        pu_log(LL_ERROR, "%s: bad answer: %s", __FUNCTION__, gst_rtsp_status_as_text(resp.type_data.response.code));
         goto on_error;
     }
 //Auth step
@@ -270,6 +272,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     rc = gst_rtsp_connection_send (gs->conn, &req, &gs->io_to); AC_GST_ANAL(rc);    /* Send */
 
     rc = gst_rtsp_connection_receive (gs->conn, &resp, &gs->io_to); AC_GST_ANAL(rc); /* Receive */
+
     if(resp.type != GST_RTSP_MESSAGE_RESPONSE) {
         pu_log(LL_ERROR, "%s: wrong GST message type %d. Expected one is %d", __FUNCTION__, resp.type, GST_RTSP_MESSAGE_RESPONSE);
         goto on_error;
@@ -279,6 +282,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
         goto on_error;
     }
 
+on_no_auth:
     sess->CSeq++;
 
     gst_rtsp_message_unset(&req);
@@ -400,6 +404,39 @@ on_error:
     return 0;
 }
 int ac_WowzaTeardown(t_at_rtsp_session* sess) {
+    AT_DT_RT(sess->device, AC_WOWZA, 0);
+    GstRTSPResult rc;
+    t_gst_session* gs = sess->session;
+    GstRTSPMessage msg = {0};
+    char num[10];
+    snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
+
+    rc = gst_rtsp_message_init (&msg); AC_GST_ANAL(rc);
+    rc = gst_rtsp_message_init_request (&msg, GST_RTSP_TEARDOWN, sess->url); AC_GST_ANAL(rc);
+    rc = gst_rtsp_message_add_header(&msg, GST_RTSP_HDR_CSEQ, num); AC_GST_ANAL(rc);
+    rc = gst_rtsp_message_add_header(&msg, GST_RTSP_HDR_USER_AGENT, AC_RTSP_CLIENT_NAME); AC_GST_ANAL(rc);
+    rc = gst_rtsp_message_add_header(&msg, GST_RTSP_HDR_SESSION, sess->rtsp_session_id); AC_GST_ANAL(rc);
+
+    rc = gst_rtsp_connection_send (gs->conn, &msg, &gs->io_to); AC_GST_ANAL(rc);    /* Send */
+
+    gst_rtsp_message_unset(&msg);
+    rc = gst_rtsp_connection_receive (gs->conn, &msg, &gs->io_to); AC_GST_ANAL(rc); /* Receive */
+    if(msg.type != GST_RTSP_MESSAGE_RESPONSE) {
+        pu_log(LL_ERROR, "%s: wrong GST message type %d. Expected one is %d", __FUNCTION__, msg.type, GST_RTSP_MESSAGE_RESPONSE);
+        goto on_error;
+    }
+    if(msg.type_data.response.code != GST_RTSP_STS_OK) {
+        pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(msg.type_data.response.code));
+        goto on_error;
+    }
+
+    gst_rtsp_message_unset(&msg);
+    sess->CSeq++;
+
+    return 1;
+
+on_error:
+    gst_rtsp_message_unset(&msg);
     return 0;
 }
 

@@ -75,8 +75,6 @@
 
 #define DEFAULT_PPC_VIDEO_FOLDER        "ppcvideoserver"
 
-#define DEFAULT_WC_START_PLAY           "START"
-#define DEFAULT_WC_STOP_PLAY            "STOP"
 #define DEFAULT_CLOUD_CONN_STRING       "https://sbox.presencepro.com/cloud/json/settingsServer/streaming"
 
 #define DEFAULT_IS_SSL                     1

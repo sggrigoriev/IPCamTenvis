@@ -174,10 +174,9 @@ t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data) {
     if(get_old_proxy_msg_with_device_id(obj))
         data->command_type = AO_IN_PROXY_ID;
     else if(get_proxy_conn_status(obj, &data->in_connection_state))
-        data->command_type = AO_IN_CONNECTION_STATE;
-    else {
+        data->command_type = AO_IN_CONNECTION_INFO;
+    else
         get_stream_start_stop(obj, &data->in_manage_video);
-    }
 
     cJSON_Delete(obj);
     return data->command_type;

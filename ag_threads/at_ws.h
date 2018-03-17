@@ -26,6 +26,10 @@ int at_ws_start(const char *host, int port, const char *path, const char *sessio
 int at_is_ws_run();
 void at_ws_stop();
 
+unsigned int at_ws_get_active_viewers_amount();
+void at_ws_set_active_viewers_amount(unsigned int amount);
+
+
 int at_ws_send(const char* msg);
 
 #endif /* IPCAMTENVIS_AT_WS_H */

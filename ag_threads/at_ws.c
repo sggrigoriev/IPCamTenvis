@@ -22,20 +22,21 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include <nopoll.h>
 #include <nopoll_private.h>
-#include <pthread.h>
-#include <ag_config/ag_defaults.h>
-#include <ag_converter/ao_cmd_data.h>
-#include <ag_converter/ao_cmd_cloud.h>
-#include <assert.h>
-#include <au_string/au_string.h>
 
+#include "pthread.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
 
+#include "ag_defaults.h"
+#include "ao_cmd_data.h"
+#include "ao_cmd_cloud.h"
+#include "au_string.h"
 #include "aq_queues.h"
+
 #include "at_ws.h"
 
 #define AT_THREAD_NAME  "WS Thread"
@@ -43,7 +44,9 @@
 static noPollCtx *ctx;
 static noPollConn * conn;
 
-static pthread_mutex_t lock;
+static volatile unsigned int viewers_counter;
+
+static pthread_mutex_t io_lock;
 
 static volatile int stop = 1;
 static pthread_t ws_thread_id;
@@ -67,23 +70,15 @@ static const char* cut_head(const char* host) {
  * this handler fires on every message
 */
 static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, noPollPtr user_data) {
-    const char ping[3] = "{}";
-    t_ao_msg data;
-    t_ao_msg_type msg_type;
+    char buf[512] = {0};
 
-    pu_log(LL_DEBUG, "%s: From WS: %s", AT_THREAD_NAME, msg->payload);
+    size_t len = AU_MIN(msg->payload_size, sizeof(buf)-1);
+    memcpy(buf, msg->payload, len);
+    buf[len] = '\0';
 
-    msg_type = ao_cloud_decode(msg->payload, &data);
-    if(msg_type != AO_WS_ANSWER) {
-        pu_log(LL_ERROR, "%s: received unrecognized message. Ignored", AT_THREAD_NAME);
-        return;
-    }
-    if(data.ws_answer.ws_msg_type == AO_WS_PING) {
-        at_ws_send(ping);
-    }
-    else {
-        pu_queue_push(from_ws, msg->payload, (size_t)msg->payload_size);
-     }
+    pu_log(LL_DEBUG, "%s: From WS: %s, len = %d", AT_THREAD_NAME, buf, len);
+
+    pu_queue_push(from_ws, buf, len+1);
 }
 
 static void *ws_thread(void *pvoid) {
@@ -91,7 +86,27 @@ static void *ws_thread(void *pvoid) {
     pu_log(LL_DEBUG,"%s: start", AT_THREAD_NAME);
     // wait for messages
     while (!stop) {
-        nopoll_loop_wait(ctx, 10);
+        char buf[512];
+        int ret = nopoll_loop_wait(ctx, 100);
+        switch (ret) {
+            case 0:         //No error
+            case -3:        //Timeout
+                break;
+            case -2:
+                pu_log(LL_ERROR, "%s: nopoll_loop_wait error - context is NULL or negative TO! Stop", AT_THREAD_NAME, ctx);
+                ao_ws_error_answer(buf, sizeof(buf));
+                pu_queue_push(from_ws, buf, strlen(buf)+1);
+                break;
+            case -4:
+                pu_log(LL_ERROR, "%s: nopoll_loop_wait error: %d-%s", AT_THREAD_NAME, errno, strerror(errno));
+                ao_ws_error_answer(buf, sizeof(buf));
+                pu_queue_push(from_ws, buf, strlen(buf)+1);
+                break;
+            default:
+                pu_log(LL_ERROR, "%s: nopoll_loop_wait undrcognized error: %d. Ignored.", AT_THREAD_NAME, ret);
+                break;
+        }
+
     }
     pu_log(LL_DEBUG,"%s: exiting\n", AT_THREAD_NAME);
 
@@ -113,12 +128,13 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
 
 
 // Initiation section
-    pthread_mutex_init(&lock, NULL);
+    pthread_mutex_init(&io_lock, NULL);
 
     pu_log(LL_DEBUG, "%s: host = %s port = %d path = %s session_id = %s", AT_THREAD_NAME, host, port, path, session_id);
 
+    viewers_counter = 0;
     ctx = NULL;
-    noPollCtx *ctx = nopoll_ctx_new ();
+    ctx = nopoll_ctx_new ();
     if (!ctx) {
         pu_log(LL_ERROR, "%s unable to create context",AT_THREAD_NAME);
         goto on_error;
@@ -152,12 +168,12 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
         goto on_error;
     }
     /* wait until connection is ready */
-    if (!nopoll_conn_wait_until_connection_ready(conn, 5) ) { //todo
+    if (nopoll_conn_wait_until_connection_ready(conn, 5) == nopoll_false) { //todo
         pu_log(LL_ERROR,"%s: failed to connect", AT_THREAD_NAME);
         goto on_error;
     }
 /* configure callback */
-    nopoll_ctx_set_on_msg (ctx, messageHandler, NULL);
+    nopoll_ctx_set_on_msg (ctx, &messageHandler, NULL);
 //Thread function start
     stop = 0;
     pthread_attr_init(&threadAttr);
@@ -167,6 +183,7 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
 on_error:
     if(conn) nopoll_conn_close(conn);
     if(ctx) nopoll_ctx_unref(ctx);
+    pthread_mutex_destroy(&io_lock);
     return 0;
 }
 
@@ -177,6 +194,7 @@ void at_ws_stop() {
         return;
     }
     stop = 1;
+    nopoll_loop_stop(ctx);
     pthread_join(ws_thread_id, &ret);
     pthread_attr_destroy(&threadAttr);
 
@@ -192,13 +210,19 @@ int at_ws_send(const char* msg) {
     assert(msg);
     pu_log(LL_DEBUG, "%s: sending to Web Socket %s", AT_THREAD_NAME, msg);
     long size = (long)strlen(msg)+1;
-    pthread_mutex_lock(&lock);
 
-    if (nopoll_conn_send_text (conn, msg, size) != size) {
-        pu_log(LL_WARNING, "%s:unable to send %s to Web Socket", AT_THREAD_NAME, msg);
-    }
-    pthread_mutex_unlock(&lock);
+    pthread_mutex_lock(&io_lock);
+        if (nopoll_conn_send_text (conn, msg, size) != size) {
+            pu_log(LL_WARNING, "%s:unable to send %s to Web Socket", AT_THREAD_NAME, msg);
+        }
+    pthread_mutex_unlock(&io_lock);
 
     return 1;
 }
 
+unsigned int at_ws_get_active_viewers_amount() {
+    return viewers_counter;
+}
+void at_ws_set_active_viewers_amount(unsigned int amount) {
+    viewers_counter = amount;
+}

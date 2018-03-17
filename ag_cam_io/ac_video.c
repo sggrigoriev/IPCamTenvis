@@ -58,37 +58,6 @@ static int get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
 }
 
 /*
-* 1. Get streaming & WS connection parameters
-* 2. Make initial Cam setuo
-* 3. Run WebSocket interface
-* 4. Run Cam's async interface (phase - II)
-*/
-int ac_connect_video() {
-
-    t_ao_conn ws_conn = {0};
-
-    if(!get_vs_conn_params(&video_conn, &ws_conn)) {
-        pu_log(LL_ERROR, "%s: error video stream parameters retrieve", __FUNCTION__);
-        return 0;
-    }
-
-    if(!ac_cam_init()) {
-        pu_log(LL_ERROR, "%s: error camera initiation", __FUNCTION__);
-        return 0;
-    }
-
-    if(!at_ws_start(ws_conn.url, ws_conn.port, "/streaming/camera", ws_conn.auth)) {
-        pu_log(LL_ERROR, "%s: Error start WEB socket connector, exit.", __FUNCTION__);
-        return 0;
-    }
-    return 1;
-}
-
-void ac_disconnect_video() {
-    at_ws_stop();
-}
-
-/*
  * Run RTSP exchange and video streaming at the end (and audio - later)
  */
 
@@ -102,16 +71,10 @@ static void shutdown_proc() {
 
     CAM_SESSION = NULL;
     PLAYER_SESSION = NULL;
-    video_conn.port = -1;
-    video_conn.url[0] = '\0';
-    video_conn.auth[0] = '\0';
 }
 static int init_proc() {
     CAM_SESSION = NULL;
     PLAYER_SESSION = NULL;
-    video_conn.port = -1;
-    video_conn.url[0] = '\0';
-    video_conn.auth[0] = '\0';
 
     /* Setup the ring buffer for video streaming */
     if(!ab_init(0, ag_getVideoChunksAmount())) {
@@ -170,13 +133,45 @@ static int process_play(t_rtsp_pair cam_io, t_rtsp_pair player_io) {
     return 1;
 }
 
+/*
+* 1. Get streaming & WS connection parameters
+* 2. Make initial Cam setuo
+* 3. Run WebSocket interface
+* 4. Run Cam's async interface (phase - II)
+*/
+int ac_connect_video() {
+
+    t_ao_conn ws_conn = {0};
+
+    if(!get_vs_conn_params(&video_conn, &ws_conn)) {
+        pu_log(LL_ERROR, "%s: error video stream parameters retrieve", __FUNCTION__);
+        return 0;
+    }
+    if(!ac_cam_init()) {
+        pu_log(LL_ERROR, "%s: error camera initiation", __FUNCTION__);
+        return 0;
+    }
+    if(!at_ws_start(ws_conn.url, ws_conn.port, "/streaming/camera", ws_conn.auth)) {
+        pu_log(LL_ERROR, "%s: Error start WEB socket connector, exit.", __FUNCTION__);
+        return 0;
+    }
+    return 1;
+}
+
+void ac_disconnect_video() {
+    at_ws_stop();
+    video_conn.port = -1;
+    video_conn.url[0] = '\0';
+    video_conn.auth[0] = '\0';
+}
+
 int ac_start_video() {
     t_rtsp_pair cam_io = {-1,-1};
     t_rtsp_pair player_io = {-1,-1};
 
     if(!init_proc()) {
-        pu_log(LL_ERROR, "%s: initiation error, exit", __FUNCTION__);
-        return 0;
+        pu_log(LL_ERROR, "%s: Video initiation error, exit", __FUNCTION__);
+        goto on_error;
     }
 
     if(!process_connect()) {
@@ -206,10 +201,12 @@ on_error:
  * Stops videostreaming
 */
 void ac_stop_video() {
+    ac_stop_rtsp_streaming();   //NB! The order is important! Write thread would not stop!
+
     ac_req_teardown(CAM_SESSION);
     ac_req_teardown(PLAYER_SESSION);
 
-    ac_stop_rtsp_streaming();
+    shutdown_proc();
 }
 /*
  * Return 1 if treaming threads work

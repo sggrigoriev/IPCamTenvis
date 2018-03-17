@@ -24,6 +24,10 @@
 #include <netinet/in.h>
 #include <ag_cam_io/ac_cam_types.h>
 #include <ag_cam_io/ac_tcp.h>
+#include <pu_queue.h>
+#include <ag_converter/ao_cmd_cloud.h>
+#include <string.h>
+#include <ag_queues/aq_queues.h>
 
 #include "pu_logger.h"
 
@@ -94,9 +98,10 @@ static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start!", AT_THREAD_NAME);
 //    struct timespec to = {0,0};
 //    struct timespec rem;
+    pu_queue_t* fromRW = aq_get_gueue(AQ_FromRW);
 
     while(!stop) {
-        t_ab_block ret = ab_getBlock(1);
+        t_ab_block ret = ab_getBlock(0);
         if(!ret.ls_size) {
 //            pu_log(LL_WARNING, "%s: Timeout to get video data", AT_THREAD_NAME);
 //            nanosleep(&to, &rem);
@@ -105,9 +110,12 @@ static void* the_thread(void* params) {
         int sock = (ret.first)?socks.rtp:socks.rtcp;
 
         if(!ac_udp_write(sock, ret.data, ret.ls_size)) {
+            char buf[20];
             free(ret.data);
             ret.data = NULL;
             pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
+            const char* msg = ao_rw_error_answer(buf, sizeof(buf));
+            pu_queue_push(fromRW, msg, strlen(msg)+1);
             break;
         }
 
@@ -118,7 +126,7 @@ static void* the_thread(void* params) {
             break;
         }
 */
-        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
+//        pu_log(LL_DEBUG, "%s: %d bytes sent to stream %d", AT_THREAD_NAME, ret.ls_size, ret.first);
         if(ret.data) free(ret.data);
     }
      pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);

@@ -25,6 +25,16 @@
 #define AU_NOCASE   0
 #define AU_CASE     1
 
+#define AU_MAX(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+#define AU_MIN(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
 char* au_strcpy(char* dest, const char* source, size_t size);
 char* au_strcat(char* dest, const char* source, size_t size);
 char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size);

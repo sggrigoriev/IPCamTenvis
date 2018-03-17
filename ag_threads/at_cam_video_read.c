@@ -23,6 +23,10 @@
 #include <malloc.h>
 #include <netinet/in.h>
 #include <ag_cam_io/ac_cam_types.h>
+#include <pu_queue.h>
+#include <ag_queues/aq_queues.h>
+#include <string.h>
+#include <ag_converter/ao_cmd_cloud.h>
 
 #include "pu_logger.h"
 
@@ -92,10 +96,16 @@ static void* the_thread(void* params) {
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
     size_t buf_size = ag_getStreamBufferSize();
 
+    pu_queue_t* fromRW = aq_get_gueue(AQ_FromRW);
+
     while(!stop) {
         t_ab_byte* buf = malloc(ag_getStreamBufferSize());
         if(!buf) {
+            char err_buf[20];
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
+            const char* msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+            pu_queue_push(fromRW, msg, strlen(msg)+1);
+
             goto on_stop;
         }
 
@@ -106,11 +116,17 @@ static void* the_thread(void* params) {
         }
         switch(ret.rc) {
             case 0:                        /* Timeout + stop */
-            case -1:
+            case -1: {
+                char err_buf[20];
+                pu_log(LL_ERROR, "%s: Lost connection to the camera", AT_THREAD_NAME);
+                const char* msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+                pu_queue_push(fromRW, msg, strlen(msg)+1);
+
                 free(buf);
+            }
                 goto on_stop;
             default:
-                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
+//                pu_log(LL_DEBUG, "%s: %d bytes received from stream %d", AT_THREAD_NAME, ret.rc, ret.src);
                 break;                 /* Got smth - continue processing */
         }
 

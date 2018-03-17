@@ -49,7 +49,25 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
  * Returns {"responses": [{"commandId": <command_id> "result": <rc>}]}
  */
 const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc);
-
+/*
+ * Returns "{}"
+ */
+const char* ao_answer_to_ws_ping();
+/*
+ * Returns {"resultCode":<AO_WS_THREAD_ERROR>}
+ */
+const char* ao_ws_error_answer(char* buf, size_t size);
+/*
+ * Returns {"resultCode":<AO_WS_TO_ERROR>}
+ */
+const char* ao_ws_to_error_answer(char* buf, size_t size);
+/* Returns {"resultCode":<AO_RW_THREAD_ERROR>}
+ *
+ */
+const char* ao_rw_error_answer(char* buf, size_t size);
+/*
+ * Decode clod RC
+ */
 const char* ao_ws_error(int rc);
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

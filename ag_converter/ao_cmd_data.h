@@ -33,7 +33,7 @@
 typedef enum {
     AO_UNDEF,
     AO_IN_PROXY_ID,             /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
-    AO_IN_CONNECTION_STATE,     /* Off line or on line */
+    AO_IN_CONNECTION_INFO,     /* Off line or on line */
     AO_IN_MANAGE_VIDEO,          /* Command to start video streaming received from the cloud */
     AO_WS_ANSWER                 /* Answer from WS */
 } t_ao_msg_type;
@@ -41,9 +41,7 @@ typedef enum {
 typedef enum {
     AO_WS_UNDEF,
     AO_WS_PING,
-    AO_WS_START,
-    AO_WS_STOP,
-    AO_WS_NOT_INTERESTING,
+    AO_WS_ABOUT_STREAMING,
     AO_WS_ERROR
 } t_ao_ws_msg_type;
 
@@ -53,7 +51,7 @@ typedef struct {
     char auth[LIB_HTTP_AUTHENTICATION_STRING_SIZE];   /* Session ID in out case */
 } t_ao_conn;
 
-/* AO_IN_CONNECTION_STATE */
+/* AO_IN_CONNECTION_INFO */
 typedef struct {
     t_ao_msg_type   msg_type;
     char            proxy_device_id[LIB_HTTP_DEVICE_ID_SIZE];
@@ -68,11 +66,15 @@ typedef struct {
     int start_it;               /* 0 if stop, 1 if start */
     int command_id;
 } t_ao_in_manage_video;
+
 /* AO_WS_ANSWER */
 typedef struct {
     t_ao_msg_type       command_type;
-    int                 rc;             /* if rc != 0 - smth goes wrong and the rest of data invalid */
-    t_ao_ws_msg_type    ws_msg_type;      /* if start_stop ==1 - start, if 0 - stop */
+    t_ao_ws_msg_type    ws_msg_type;    /* ERROR or ABOUT_STREAMING or NOT_INTERESTING */
+    int                 is_start;       /* != 1 - do not analyze */
+    int                 viewers_delta;  /* >0 - add viewers <0 - subtract viwers */
+    int                 viwers_count;   /* viwers absolute amount. If negative - do not analyze */
+    int                 rc;
 } t_ao_ws_answer;
 
 typedef union {

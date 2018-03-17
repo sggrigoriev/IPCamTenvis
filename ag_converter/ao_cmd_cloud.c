@@ -28,16 +28,21 @@
 #include "ao_cmd_cloud.h"
 
 #define AO_WS_PING_RC  10
+#define AO_WS_THREAD_ERROR -23
+#define AO_RW_THREAD_ERROR -24
+#define AO_WS_TO_ERROR -25
 
 static const char* CLOUD_RC = "resultCode";
 static const char* CLOUD_PARAMS_ARR = "params";
 static const char* CLOUD_SET_VALUE = "setValue";
+static const char* CLOUD_VIEWERS = "viewers";
+static const char* CLOUD_V_STATUS = "status";
 static const char* CLOUD_VIEWERS_COUNT = "viewersCount";
 
 /*
  * "params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}]
 */
-static int recognize_start(cJSON* obj, t_ao_msg* data) {
+static int get_start_section(cJSON* obj) {
     cJSON* arr;
     cJSON* arr_item;
     cJSON* item;
@@ -47,22 +52,41 @@ static int recognize_start(cJSON* obj, t_ao_msg* data) {
     if(item = cJSON_GetObjectItem(arr_item, CLOUD_SET_VALUE), !item) return 0;
     if(strcmp(item->valuestring, "1") != 0) return 0;
 
-    data->ws_answer.ws_msg_type = AO_WS_START;
     return 1;
+}
+/*
+ * "viewers":[{"id":"<id>","status":<>}]}
+ */
+static int get_viewers_section(cJSON* obj) {
+    cJSON* arr;
+    cJSON* arr_item;
+    cJSON* item;
+    int ret = 0, i;
+
+    if(arr = cJSON_GetObjectItem(obj, CLOUD_VIEWERS), (!arr || arr->type != cJSON_Array) || (cJSON_GetArraySize(arr) < 1)) return ret;
+    for(i = 0; i < cJSON_GetArraySize(arr); i++) {
+        arr_item = cJSON_GetArrayItem(arr, i);
+        if(item = cJSON_GetObjectItem(arr_item, CLOUD_V_STATUS), !item) return ret;
+        if(item->type != cJSON_Number) return ret;
+        ret += item->valueint;
+    }
+    return ret;
 }
 /*
  * "viewersCount":0
  */
-static int recognize_stop(cJSON* obj, t_ao_msg* data) {
+static int get_count_section(cJSON* obj) {
     cJSON* item;
+    int ret = -1;
 
-    if(item = cJSON_GetObjectItem(obj, CLOUD_VIEWERS_COUNT), !item) return 0;
-    if(item->valueint != 0) return 0;
-
-    data->ws_answer.ws_msg_type = AO_WS_STOP;
-    return 1;
+    if(item = cJSON_GetObjectItem(obj, CLOUD_VIEWERS_COUNT), !item) return ret;
+    if(item->type != cJSON_Number) return ret;
+    ret = (item->valueint < 0)?0:item->valueint;
+    return ret;
 }
-
+/*
+ * {"resultCode":0,"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}],"viewers":[{"id":"24","status":1}], "viewersCount":0}
+ */
 t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
     cJSON* obj;
     cJSON* item;
@@ -83,20 +107,22 @@ t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
     }
     data->command_type = AO_WS_ANSWER;
     data->ws_answer.rc = item->valueint;
+    data->ws_answer.viwers_count = -1;
+    data->ws_answer.viewers_delta = 0;
+    data->ws_answer.is_start = 0;
 
     if(data->ws_answer.rc == AO_WS_PING_RC) {       // Ping
         data->ws_answer.ws_msg_type = AO_WS_PING;
         goto on_finish;
     }
-    if(data->ws_answer.rc != 0) {                   //Error
+    if(data->ws_answer.rc != 0) {                   //Error - if not a ping and not a zero
         data->ws_answer.ws_msg_type = AO_WS_ERROR;
         goto on_finish;
     }
-
-    if(recognize_start(obj, data)) goto on_finish;  //"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}]
-    if(recognize_stop(obj, data)) goto on_finish;   //"viewersCount":0
-
-    data->ws_answer.ws_msg_type = AO_WS_NOT_INTERESTING;
+    data->ws_answer.ws_msg_type = AO_WS_ABOUT_STREAMING;
+    data->ws_answer.is_start = get_start_section(obj);
+    data->ws_answer.viewers_delta = get_viewers_section(obj);
+    data->ws_answer.viwers_count = get_count_section(obj);
 
 on_finish:
     cJSON_Delete(obj);
@@ -114,11 +140,12 @@ const char* ao_stream_approve(char* buf, size_t size, const char* session_id) {
 }
 
 /*
- * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU"}
+ * Returns {"sessionId":"<sessionID>", "params":[], "requestViewers":true, "pingType":2}
  */
 const char* ao_connection_request(char* buf, size_t size, const char* session_id) {
     const char* part1 = "{\"sessionId\":\"";
-    const char* part2 = "\"}";
+    const char* part2 = "\", \"params\":[], \"requestViewers\":true, \"pingType\":2}";
+
     snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
     return buf;
 }
@@ -135,11 +162,38 @@ const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc)
     buf[size-1] = '\0';
     return buf;
 }
+/*
+ * Returns "{}"
+ */
+const char* ao_answer_to_ws_ping() {
+    const char* part1 = "{}";
+    return part1;
+}
+/*
+ * Returns {"resultCode":<own_error>}
+ */
+static char* own_error_answer(char* buf, size_t size, int err) {
+    const char* part1 = "{\"resultCode\": ";
+    const char* part2 = "}";
+
+    snprintf(buf, size-1, "%s%d%s", part1, err, part2);
+    buf[size-1] = '\0';
+    return buf;
+}
+const char* ao_ws_error_answer(char* buf, size_t size) {
+    return own_error_answer(buf, size, AO_WS_THREAD_ERROR);
+}
+const char* ao_ws_to_error_answer(char* buf, size_t size) {
+    return own_error_answer(buf, size, AO_WS_TO_ERROR);
+}
+const char* ao_rw_error_answer(char* buf, size_t size) {
+    return own_error_answer(buf, size, AO_RW_THREAD_ERROR);
+}
 
 /*******************************************************************************************************
  * Cloud Web Socket RC handling
 */
-#define AO_WS_DIAGNOSTICS_AMOUNT 12
+#define AO_WS_DIAGNOSTICS_AMOUNT 15
 
 typedef struct {
     int rc;
@@ -147,6 +201,9 @@ typedef struct {
 } t_ao_ws_diagnostics;
 
 static const t_ao_ws_diagnostics ws_diagnostics[AO_WS_DIAGNOSTICS_AMOUNT] = {
+        {AO_RW_THREAD_ERROR, "Streaming R/W treads error"},
+        {AO_WS_THREAD_ERROR, "WS thread internal error"},
+        {AO_WS_TO_ERROR, "No pings from Web Socket"},
         {0, "successful"},
         {1, "internal error"},
         {2, "wrong API key"},
