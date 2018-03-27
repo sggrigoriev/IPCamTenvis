@@ -101,11 +101,7 @@ static void* the_thread(void* params) {
     while(!stop) {
         t_ab_byte* buf = malloc(ag_getStreamBufferSize());
         if(!buf) {
-            char err_buf[20];
             pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
-            const char* msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
-            pu_queue_push(fromRW, msg, strlen(msg)+1);
-
             goto on_stop;
         }
 
@@ -119,7 +115,7 @@ static void* the_thread(void* params) {
             case -1: {
                 char err_buf[20];
                 pu_log(LL_ERROR, "%s: Lost connection to the camera", AT_THREAD_NAME);
-                const char* msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+                const char* msg = ao_rw_error_answer(err_buf, sizeof(buf));
                 pu_queue_push(fromRW, msg, strlen(msg)+1);
 
                 free(buf);

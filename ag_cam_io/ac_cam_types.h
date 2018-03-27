@@ -61,6 +61,9 @@
 #define AC_RTSP_EOL         "\r\n"
 #define AC_RTSP_SDP_ORIGIN  AC_RTSP_EOL"o="
 #define AC_RTSP_SDP_CD      AC_RTSP_EOL"c="
+#define AC_RTSP_SDP_TRN1_S    "m=video 0 "
+#define AC_RTSP_SDP_TRN2_S    "m=audio 0 "
+#define AC_RTSP_SDP_TRN_E     " "
 #define AC_RTSP_VS_ORIGIN   "- 0 0 IN IP4 127.0.0.1"
 #define AC_RTSP_CD_IP4      "IP4 "
 

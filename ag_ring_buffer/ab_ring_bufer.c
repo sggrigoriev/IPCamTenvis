@@ -143,6 +143,7 @@ const t_ab_block ab_getBlock(unsigned long to_sec) {
     t_ab_block ret = zero_elem;
 
     if(!is_data) {                              /* To prevent wait call for most cases. */
+        pu_log(LL_DEBUG,"NODATA!!!");
         if(!wait_for_data(to_sec)) return ret;   /* timeout */
     }
 
@@ -177,6 +178,7 @@ t_ab_put_rc ab_putBlock(t_ab_block* blk) {
         write_index = shift(write_index);
 
     if(!is_data) {
+        pu_log(LL_DEBUG,"NODATA-SIGNAL SENT!!!");
             /* send the signal we got smth */
         pthread_mutex_lock(&data_available_cond_mutex);
             is_data = 1;

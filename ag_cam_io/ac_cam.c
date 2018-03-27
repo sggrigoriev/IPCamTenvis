@@ -18,10 +18,56 @@
 /*
  Created by gsg on 25/02/18.
 */
+#include <au_string/au_string.h>
+#include <ag_config/ag_settings.h>
+#include <string.h>
 #include "ac_cam.h"
+#include "ac_http.h"
+
+/*
+ *  GET http://192.168.1.58/cgi-bin/hi3510/setvencattr.cgi?-chn=12&-brmode=4
+ */
+const char* HTTP_PREFFIX = "http://";
+const char* FIXED_QUALITY = "/cgi-bin/hi3510/setvencattr.cgi?-chn=12&-brmode=4";
 
 static int set_fixed_quality() {
-    return 1;
+    char buf[514] = {0};
+    char answer[521];
+    int rc, ret = 0;
+
+    au_strcpy(buf, HTTP_PREFFIX, sizeof(buf));
+    au_strcat(buf, ag_getCamIP(), sizeof(buf)-strlen(buf));
+    au_strcat(buf, "/", sizeof(buf)-strlen(buf));
+    au_strcat(buf, FIXED_QUALITY, sizeof(buf)-strlen(buf));
+
+    t_ac_http_handler* h = ac_http_prepare_get_conn(buf, NULL);
+    if(!h) return ret;
+
+    int rpt = AC_HTTP_REPEATS;
+    while(rpt) {
+        rc = ac_perform_get_conn(h, answer, sizeof(answer));
+        switch(rc) {
+            case -1:        /* Retry */
+                pu_log(LL_WARNING, "%s: Retry: attempt #%d", __FUNCTION__, rpt);
+                rpt--;
+                 sleep(1);
+                break;
+            case 0:         /* Error */
+                rpt = 0;
+                break;
+            case 1:        /* Success */
+                ret = 1;
+                rpt = 0;
+                break;
+            default:
+                pu_log(LL_ERROR, "%s: Unsupported RC = %d from ac_perform_get_conn()", __FUNCTION__, rc);
+                rpt = 0;
+                break;
+        }
+    }
+    pu_log(LL_DEBUG, "%s: cam's request = %s cam's answer = %s", __FUNCTION__, buf, answer);
+    ac_http_close_conn(h);
+    return ret;
 }
 
 int ac_cam_restart() {

@@ -78,9 +78,10 @@ static int make_ip_from_host(char* ip, size_t size, const char* host) {
 /* Replace
  * o=StreamingServer 3331435948 1116907222000 IN IP4 10.42.0.115 -> o=- 0 0 IN IP4 127.0.0.1
  * c=IN IP4 0.0.0.0 -> c=IN IP4 <WOWZA IP>
+ * add TCP transport (RTP/AVPTCP) if tcp parameter is not null
  * TODO: gst_sdp_message_parse_buffer ()!!!
 */
-static char* make_announce_body(char* buf, size_t size, const char* cam_descr, const char* host) {
+static char* make_announce_body(char* buf, size_t size, const char* cam_descr, const char* host,  const char* tcp) {
     char ip[20] ={0};
     char connection[500] ={0};
 
@@ -94,6 +95,16 @@ static char* make_announce_body(char* buf, size_t size, const char* cam_descr, c
     if(!au_replaceSection(connection, sizeof(connection), AC_RTSP_CD_IP4, AC_RTSP_EOL, AU_NOCASE, ip)) {
         pu_log(LL_ERROR, "%s: can not replace IP %s in VS connection parameter %s Exiting", __FUNCTION__, ip, cam_descr);
         return NULL;
+    }
+    if(tcp) {
+        if(!au_replaceSection(buf, size, AC_RTSP_SDP_TRN1_S, AC_RTSP_SDP_TRN_E, AU_NOCASE, "RTP/AVP/TCP")) {
+            pu_log(LL_ERROR, "%s: can not replace transport video parameter RTP/AVP to RTP/AVP/TCP in %s Exiting", __FUNCTION__, buf);
+            return NULL;
+        }
+        if(!au_replaceSection(buf, size, AC_RTSP_SDP_TRN2_S, AC_RTSP_SDP_TRN_E, AU_NOCASE, "RTP/AVP/TCP")) {
+            pu_log(LL_ERROR, "%s: can not replace transport audeo parameter RTP/AVP to RTP/AVP/TCP in %s Exiting", __FUNCTION__, buf);
+            return NULL;
+        }
     }
     if(!au_replaceSection(buf, size, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE, connection)) {
         pu_log(LL_ERROR, "%s: can not replace connection parameter %s to VS SDP %s Exiting", __FUNCTION__, connection, buf);
@@ -206,7 +217,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
 
     char new_description[1000] = {0};
-    if(!make_announce_body(new_description, sizeof(new_description), description, gs->url->host)) goto on_error;
+    if(!make_announce_body(new_description, sizeof(new_description), description, gs->url->host, "TCP")) goto on_error;
 
     rc = gst_rtsp_message_init (&req); AC_GST_ANAL(rc);
     rc = gst_rtsp_message_init_request (&req, GST_RTSP_ANNOUNCE, sess->url); AC_GST_ANAL(rc);
@@ -315,6 +326,7 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
 
     transport->client_port.min = sess->video_pair.src.port.rtp;
     transport->client_port.max = sess->video_pair.src.port.rtcp;
+
     transport->lower_transport = GST_RTSP_LOWER_TRANS_TCP;
     transport->mode_play = FALSE;
     transport->mode_record = TRUE;

@@ -21,6 +21,7 @@
 
 #include <memory.h>
 #include <assert.h>
+#include <ag_threads/at_rw_thread.h>
 
 #include "pu_logger.h"
 
@@ -202,9 +203,11 @@ int ac_req_teardown(t_at_rtsp_session* sess) {
 }
 
 int ac_start_rtsp_streaming(t_rtsp_pair in, t_rtsp_pair out) {
+    if(!at_start_rw_thread(in, out)) goto on_error;
+/*
     if(!at_start_video_read(in)) goto on_error;
     if(!at_start_video_write(out)) goto on_error;
-
+*/
     return 1;
 on_error:
     ac_close_connection(in.rtp);
@@ -215,8 +218,11 @@ on_error:
     return 0;
 }
 void ac_stop_rtsp_streaming() {
+    at_stop_rw_thread();
+/*
     at_stop_video_write();
     at_stop_video_read();
+*/
 }
 
 static const uint8_t RTP_INIT_REQ[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -236,6 +242,7 @@ int ac_open_connecion(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport vide
     pu_log(LL_DEBUG, "%s: Cam-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_in.src.ip, video_in.src.port.rtp, video_in.dst.port.rtp, video_in.src.ip, video_in.src.port.rtcp, video_in.dst.port.rtcp);
 
 //Player - UDP connection
+
     if((out->rtp = ac_udp_p2p_connection(video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp)) < 0) {
         pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
         goto on_error;
@@ -249,11 +256,11 @@ int ac_open_connecion(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport vide
 /*
 //Player - TCP connection
     if((out->rtp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s Can't open TCP socket for Camera RTP stream. Bye.", __FUNCTION__);
         goto on_error;
     }
     if((out->rtcp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s Can't open TCP socket for Camera RTCP stream. Bye.", __FUNCTION__);
         goto on_error;
     }
     pu_log(LL_DEBUG, "%s: Player-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp, video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp);

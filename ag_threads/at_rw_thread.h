@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 People Power Company
+ *  Copyright 2018 People Power Company
  *
  *  This code was developed with funding from People Power Company
  *
@@ -16,13 +16,11 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
- Read vieo stream from camera. Reconnects until stop or success if looses connection
+ Created by gsg on 17/03/18.
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_VIDEO_READ_H
-#define IPCAMTENVIS_AT_CAM_VIDEO_READ_H
-
+#ifndef IPCAMTENVIS_AT_RW_THREAD_H
+#define IPCAMTENVIS_AT_RW_THREAD_H
 
 #include "ac_cam_types.h"
 
@@ -30,16 +28,15 @@
  * Start getting cideo stream from the camera
  * @return - 1 is OK, 0 if not
  */
-int at_start_video_read(t_rtsp_pair rd);
+int at_start_rw_thread(t_rtsp_pair rd, t_rtsp_pair wr);
 /*****************************
  * Stop read streaming (join)
  */
-void at_stop_video_read();
+void at_stop_rw_thread();
 /*****************************
  * Check if read stream runs
  * @return 1 if runs 0 if not
  */
-int at_is_video_read_run();
+int at_is_rw_thread_run();
 
-
-#endif /* IPCAMTENVIS_AT_CAM_VIDEO_READ_H */
+#endif /* IPCAMTENVIS_AT_RW_THREAD_H */

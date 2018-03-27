@@ -22,6 +22,8 @@
 #ifndef IPCAMTENVIS_AU_STRING_H
 #define IPCAMTENVIS_AU_STRING_H
 
+#include <stddef.h>
+
 #define AU_NOCASE   0
 #define AU_CASE     1
 
