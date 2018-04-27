@@ -47,32 +47,10 @@ static int gst_and_curl_startup() {
         goto on_error;
     }
     return 1;
-    on_error:
+on_error:
     curl_global_cleanup();
+    gst_deinit();
     return 0;
-}
-
-
-/* Help for Agent start parameters syntax */
-static void print_Agent_start_params();
-
-int main() {
-    printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
-
-    if(!ag_load_config(ag_getCfgFileName())) exit(-1);
-
-    pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
-    print_Agent_start_params();
-
-    if(!gst_and_curl_startup()) {
-        pu_log(LL_ERROR, "Curl/Gstreamer init error. Exiting\n");
-        exit(-1);
-    }
-
-    at_main_thread();   /*Main Agent'd work cycle is hear */
-
-    pu_stop_logger();
-    exit(0);
 }
 
 static void print_Agent_start_params() {
@@ -99,6 +77,7 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "\tCam Login: %s", ag_getCamLogin());
     pu_log(LL_INFO, "\tCam Password: %s", ag_getCamPassword());
     pu_log(LL_INFO, "\tCam Protocol: %d", ag_getIPCamProtocol());
+    pu_log(LL_INFO, "\tCam streaming: interleaved mode = %d", ag_isCamInterleavedMode());
 
     pu_log(LL_INFO, "\tStreaming buffers amount: %d", ag_getVideoChunksAmount());
     pu_log(LL_INFO, "\tStreaming buffer size: %d", ag_getStreamBufferSize());
@@ -106,3 +85,26 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "\tCurlopt SSL Verify Peer: %d", ag_getCurloptSSLVerifyPeer());
     pu_log(LL_INFO, "\tCurlopt CA Info: %s", ag_getCurloptCAInfo());
 }
+
+int main() {
+    printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
+
+    if(!ag_load_config(ag_getCfgFileName())) exit(-1);
+
+    pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
+    print_Agent_start_params();
+
+    if(!gst_and_curl_startup()) {
+        pu_log(LL_ERROR, "Curl/Gstreamer init error. Exiting\n");
+    }
+    else {
+        at_main_thread();   /*Main Agent'd work cycle is hear */
+    }
+
+    pu_stop_logger();
+
+    curl_global_cleanup();
+    gst_deinit();
+    exit(0);
+}
+

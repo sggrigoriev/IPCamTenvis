@@ -28,9 +28,8 @@
 #include <stdint.h>
 #include "ac_cam_types.h"
 
-
-t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* url, const char* session_id);
-void ac_rtsp_down(t_at_rtsp_session* sess);
+t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int port, const char* session_id);
+void ac_rtsp_deinit(t_at_rtsp_session* sess);
 
 int ac_req_options(t_at_rtsp_session* sess);
 int ac_req_cam_describe(t_at_rtsp_session* sess, char** dev_description);
@@ -40,9 +39,10 @@ int ac_req_setup(t_at_rtsp_session* sess);
 int ac_req_play(t_at_rtsp_session* sess);
 int ac_req_teardown(t_at_rtsp_session* sess);
 
-int ac_start_rtsp_streaming(t_rtsp_pair in, t_rtsp_pair out);
-void ac_stop_rtsp_streaming();
+int ac_rtsp_open_streaming_connecion(t_at_rtsp_session* sess_in, t_at_rtsp_session* sess_out);
+void ac_rtsp_close_streaming_connecion();
 
-int ac_open_connecion(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out, t_rtsp_pair* in, t_rtsp_pair* out);
+int ac_rtsp_start_streaming();
+void ac_rtsp_stop_streaming();
 
 #endif /* IPCAMTENVIS_AC_RTSP_H */

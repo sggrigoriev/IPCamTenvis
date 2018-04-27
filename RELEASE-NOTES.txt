@@ -1,3 +1,139 @@
-VERSION 0.0.0 DD-MMM-YYYY
+VERSION 0.0.1 27-Apr-2018
 =================================================================================================
-1. 
+1. The version could transfer high quality video to the cloud via TCP transport and low quality vide via UDP transport.
+2. The WUD runs this programm autimatically. For sucessful workTenvis.conf file should be placed with the same place as the program itself
+3. Tenvis.conf description:
+
+	"AGENT_PROCESS_NAME":		"Agent",
+-- The programm name. Should be the same as in wud.conf	& PeoxyJSON.conf
+
+	"LOG_NAME":					"./AGENT_LOG",
+-- Log file name with path (relative or absolute
+
+	"LOG_REC_AMT":				10000,
+-- Max records amount in log file.
+
+	"LOG_LEVEL":				"DEBUG",
+-- Logging level. Values allowed are "DEBUG", "WARNING", "INFO", "ERROR"
+
+	"QUEUES_REC_AMT":			1024,
+-- Max queuened elements allowed in each queue
+
+	"PROXY_PORT":				8888,
+-- The port to communicate with Proxy. Should be the same as "AGENT_PORT" in ProxyJSON.conf
+
+	"WUD_PORT":					8887,
+--	The port to communicate with WUD. Should be the same as "WUD_COMM_PORT" in wud.conf
+
+	"WATCHDOG_TO_SEC":			30,
+-- Watchdog timeout, Should be less than "AGENT_WD_TIMEOUT_SEC" in wud.conf
+
+	"DEVICE_TYPE":				7000,
+-- Not used
+
+	"IPCAM_IP":					"192.168.1.58",
+-- IP address IPCam connected. Should be "127.0.0.1" in production variant. If the Agent runs separately from the Cam the address should be the Cam's IP
+
+	"IPCAM_PORT":				554,
+-- Camera port. 554 for RTSP connection by default
+
+	"IPCAM_RESOLUTION":			"LO",
+-- Camera resolution. Possible values: "HI" and "LO". NB! For UDP connection (INTERLEAVED_MODE = 0) should be "LO"!
+
+	"IPCAM_LOGIN":				"admin",
+	"IPCAM_PASSWORD":			"admin",
+-- Camera login and password. admin/admin - default ones
+
+	"IPCAM_PROTOCOL":			"RTSP",
+-- Not used, done for future development
+
+	"INTERLEAVED_MODE":         1,
+-- Possible values: 0 for UDP streaming and 1 for TCP streaming.
+
+	"CHUNKS_AMOUNT":			20,
+-- Not used
+
+	"STREAMING_BUFFER_SIZE":	16384,
+-- Streaming buffer size. NB! in case of poor connection should be not less than 32K
+
+	"SET_SSL_FOR_URL_REQUEST":	1,
+-- Possible values 0 and 1. Do not touch it if you do not understand what does it mean. (See Curl)
+
+	"CURLOPT_CAINFO":               "",
+-- See Curl for more info
+
+    "CURLOPT_SSL_VERIFYPEER":       0
+-- See Curl for more info
+
+4. CMakeLists defines description
+4.1 Environment
+    PLATFORM -- possible values:
+        ubuntu - for Cam-Agent separate run. Agent runs on Ubuntu
+        hisilicon - for Cam+Agent in silicon platform
+
+    SDK_PATH - path to Proxy common libraries
+    STANDARD - GNU C standardparameter (see GNU c-compiler standards) (not used for ubuntu)
+    NO_GST_PLAGINS - 1 or 0 - use GST plagins or not for linking (0 for ubuntu)
+
+4.2 Defines. Most of them are using for debugging purposes
+    NOPOLL_TRACE - trace to stdout NOPOLL lib output related to web socket R/W
+    CURL_TRACE - trace CURL RTSP operations into stdout
+    RW_CYCLES=<number> - Will stop streaming after <number> records and restart video streaming. NB! For debug only!
+    GST_EXT - defined if NO_GST_PLAGINS = 1 - internal use only!
+5. Source files layout & description
+    ag_cam_io - Camera-Wowza interconnect implementation
+        ac_alfapro.*    - Curl RTSP implementation on Agent - Cam leg. NB! Will be replaced by GST implementation after the Cam fixed the bug in RTSP implementation
+        ac_cam.*        - Cam's properties management functions
+        ac_cam_types.h  - Cam/Wowza interconnection data types
+        ac_cloud.*      - Cloud video connection parameters obtaining
+        ac_http.*       - Curl primitives for HTTP GET
+        ac_rtsp.*       - RTSP protocol basic (calls ac_alfapro & ac_wowza)
+        ac_tcp.*        - TCP basic. Not used
+        ac_udp.*        - UDP basic plus file descriptor read/write. R/W is using for UDP & TCP connections
+        ac_video.*      - Main functions for videostreaming management: connect, run, stop, disconnect
+        ac_wowza.*      - RTSP implementation with GST lib.
+        ag_digest.*     - Digest finctions. Not used now. Obsolete.
+    ag_config - Agent configuration implementation
+        ag_defaults.h   - Default configuration values; common connstants
+        ag_settings.*   - Agent configuration read/write funtions
+    ag_converter
+        ao_cma_cam.*    - Camera input to Agent internal structures converter. Not used now.
+        ao_cmd_cloud.*  - Cloud - Agent messages encoding/decoding
+        ao_cmd_data.h   - Agent internal messaging format data types
+        ao_cmd_proxy.*  - Proxy messages decoder
+    ag_queues
+        ag_queues.*     -Agent's queues implementation
+    ag_ring_buffer - Queue buffer implementation. Obsolete. Might be used later.
+    ag_threads - All Agent's threads
+        at_cam_video_read.* - Obsolete
+        at_cam_video_wrire.* - Obsolete
+        at_main_thread.*    - Agent's main thread function
+        at_proxy_read.*     - Proxy messages async read thread
+        at_proxy_rw.*       - Proxy <->Agent R/W theads manager
+        at_proxy_write.*    - Agent messages write to Proxy thread
+        at_rw_thread.*      - Cam->Agent->Wowza video/audio streaming thread(s)
+        at_ws.*             - WebSocket R/W thread
+        at_wud_write.*      - Angent's watchdogs messages to WUD write thread
+    gsrtsp_local - Some sources from GST plugins. Included in purpose to avoiding plugin use
+        rtsp_msg_ext.*      - Digest auth taken from plugin
+6. Basics of functioning
+    - Startup
+        - Read settings
+        - Got cloud connection paramaters from the Proxy
+        - Got video-parameters from the cloud
+        - Run Web Socket interface
+    - Main loop: listening commands/info from Proxy, WebSocket, VideoStreaming
+    - Operation performed are:
+        - Connect & Run video streming by the WS command
+        - Re-Run Video streaming by VireStreaming error
+        - Disconnect Video by WS command
+        - Send watchdog reply by WS command
+        - Total reconnect including WD restart by cloud connection info change (by Proxy)
+        - Send watchdog to WUD by timeout
+
+
+
+
+
+
+

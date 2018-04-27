@@ -34,25 +34,18 @@
 
 static size_t writer(void *ptr, size_t size, size_t nmemb, void *userp) {
     t_ac_callback_buf *dataToRead = (t_ac_callback_buf *) userp;
-    char *data = (char *)ptr;
+
     if (dataToRead == NULL || dataToRead->buf == NULL) {
         pu_log(LL_ERROR, "writer: dataToRead == NULL");
         return 0;
     }
-
-    /* keeping one byte for the null byte */
-    if((strlen(dataToRead->buf)+(size * nmemb)) > (dataToRead->sz - 1))
-    {
-#if __WORDSIZE == 64
-        pu_log(LL_WARNING, "%s: buffer overflow would result -> strlen(writeData): %lu, (size * nmemb): %lu, max size: %u",
-#else
-                pu_log(LL_WARNING, "writer: buffer overflow would result -> strlen(writeData): %u, (size * nmemb): %u, max size: %u",
-#endif
-               __FUNCTION__, strlen(dataToRead->buf), (size * nmemb), dataToRead->sz);
+    if(size * nmemb > dataToRead->free_space) {
+        pu_log(LL_ERROR, "Callback %s - bufffer overflow. Got %d, but need %d Result ignored", __FUNCTION__, dataToRead->free_space, (size * nmemb));
         return 0;
     }
-    strncat(dataToRead->buf, data, (size * nmemb));
-    return (size * nmemb);
+    memcpy(dataToRead->buf+(dataToRead->buf_sz-dataToRead->free_space), ptr, size * nmemb);
+    dataToRead->free_space -= size * nmemb;
+    return size * nmemb;
 }
 
 int ac_http_init() {
@@ -77,7 +70,8 @@ t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* 
         pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
         goto out;
     }
-    h->wr_buf.sz = LIB_HTTP_MAX_MSG_SIZE;
+    h->wr_buf.buf_sz = LIB_HTTP_MAX_MSG_SIZE;
+    h->wr_buf.free_space = LIB_HTTP_MAX_MSG_SIZE;
 
     if(h->h = curl_easy_init(), !h->h) {
         pu_log(LL_ERROR, "%s: Error on get cURL handler", __FUNCTION__);

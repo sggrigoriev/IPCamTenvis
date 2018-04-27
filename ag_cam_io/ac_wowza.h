@@ -31,11 +31,13 @@ void ac_WowzaDown(t_at_rtsp_session* sess);
 
 int ac_WowzaOptions(t_at_rtsp_session* sess);
 int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description);
-int ac_WowzaSetup(t_at_rtsp_session* sess);
+int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type);
 int ac_WowzaPlay(t_at_rtsp_session* sess);
 int ac_WowzaTeardown(t_at_rtsp_session* sess);
 
 /* <vs_url>:<port>/ppcvideoserver/<vs_session_id> */
 const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, const char* vs_url, int port, const char* vs_session_id);
+/* Get the connected socket for interleaved mode - use same connection as for RTSP negotiations */
+int getWowzaConnSocket(t_at_rtsp_session* sess);
 
 #endif /* IPCAMTENVIS_AC_WOWZA_H */

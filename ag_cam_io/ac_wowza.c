@@ -55,7 +55,10 @@ typedef struct {
 static void clear_session(t_gst_session* gs) {
     if(gs) {
         if(gs->wowza_session) free(gs->wowza_session);
-        if(gs->conn) gst_rtsp_connection_free(gs->conn);
+        if(gs->conn) {
+            gst_rtsp_connection_close(gs->conn);
+            gst_rtsp_connection_free(gs->conn);
+        }
         if(gs->url) gst_rtsp_url_free(gs->url);
         free(gs);
     }
@@ -120,6 +123,7 @@ static char* make_announce_body(char* buf, size_t size, const char* cam_descr, c
 }
 
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
+    pu_log(LL_DEBUG, "%s start", __FUNCTION__);
     AT_DT_RT(sess->device, AC_WOWZA, 0);
 
     GstRTSPResult rc;
@@ -145,6 +149,7 @@ int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
 
     return 1;
 on_error:
+    pu_log(LL_DEBUG, "%s error section start", __FUNCTION__);
     clear_session(gs);
     sess->session = NULL;
     return 0;
@@ -305,7 +310,7 @@ on_error:
     gst_rtsp_message_unset(&resp);
     return 0;
 }
-int ac_WowzaSetup(t_at_rtsp_session* sess) {
+int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
     t_gst_session* gs = sess->session;
@@ -314,9 +319,13 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
     snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
 
     rc = gst_rtsp_message_init (&msg); AC_GST_ANAL(rc);
-//1. Add trackId = 1 to the url;
+//1. Add trackId = 0 or 1 to the url;
     char tmp_url[AC_RTSP_MAX_URL_SIZE] = {0};
-    snprintf(tmp_url, sizeof(tmp_url), "%s/%s0", sess->url, AC_TRACK);
+
+    if(media_type == AC_RTSP_VIDEO_SETUP)
+        snprintf(tmp_url, sizeof(tmp_url), "%s/%s%s", sess->url, AC_TRACK, AC_VIDEO_TRACK);
+    else //AUDIO
+        snprintf(tmp_url, sizeof(tmp_url), "%s/%s%s", sess->url, AC_TRACK, AC_AUDIO_TRACK);
 
     rc = gst_rtsp_message_init_request (&msg, GST_RTSP_SETUP, tmp_url); AC_GST_ANAL(rc);
 
@@ -324,18 +333,29 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
     GstRTSPTransport *transport = NULL;
     rc = gst_rtsp_transport_new (&transport); AC_GST_ANAL(rc);
 
-    transport->client_port.min = sess->video_pair.src.port.rtp;
-    transport->client_port.max = sess->video_pair.src.port.rtcp;
-
-    transport->lower_transport = GST_RTSP_LOWER_TRANS_TCP;
+    if(ag_isCamInterleavedMode()) {
+        transport->interleaved.min = (media_type == AC_RTSP_VIDEO_SETUP)?0:2;
+        transport->interleaved.max = (media_type == AC_RTSP_VIDEO_SETUP)?1:3;
+        transport->lower_transport = GST_RTSP_LOWER_TRANS_TCP;
+    }
+    else {
+        if (media_type == AC_RTSP_VIDEO_SETUP) {
+            transport->client_port.min = sess->media.rt_media.video.src.port.rtp;
+            transport->client_port.max = sess->media.rt_media.video.src.port.rtcp;
+        } else {
+            transport->client_port.min = sess->media.rt_media.audio.src.port.rtp;
+            transport->client_port.max = sess->media.rt_media.audio.src.port.rtcp;
+        }
+        transport->lower_transport = GST_RTSP_LOWER_TRANS_UDP;
+    }
     transport->mode_play = FALSE;
     transport->mode_record = TRUE;
 //    gs->transport->mode_record = TRUE;
     transport->profile = GST_RTSP_PROFILE_AVP;
     transport->trans = GST_RTSP_TRANS_RTP;
 
-    gchar* text_transport = gst_rtsp_transport_as_text (transport);
-    pu_log(LL_DEBUG, "%s: Transport string prepared = %s", __FUNCTION__, text_transport);
+    gchar* text_transport = gst_rtsp_transport_as_text(transport);
+    pu_log(LL_DEBUG, "%s: Transport string for %s prepared = %s", __FUNCTION__, (media_type == AC_RTSP_VIDEO_SETUP)?"video":"audio", text_transport);
     rc = gst_rtsp_message_add_header (&msg, GST_RTSP_HDR_TRANSPORT, text_transport); AC_GST_ANAL(rc);
     g_free(text_transport); text_transport = NULL;
     gst_rtsp_transport_free(transport); transport = NULL;
@@ -360,16 +380,28 @@ int ac_WowzaSetup(t_at_rtsp_session* sess) {
     }
 
     rc = gst_rtsp_message_get_header(&msg, GST_RTSP_HDR_TRANSPORT, &text_transport, 0); AC_GST_ANAL(rc);
-    pu_log(LL_DEBUG, "%s: Transport string received = %s", __FUNCTION__, text_transport);
+    pu_log(LL_DEBUG, "%s: Transport string for %s received = %s", __FUNCTION__, (media_type == AC_RTSP_VIDEO_SETUP)?"video":"audio", text_transport);
 
     rc = gst_rtsp_transport_new (&transport); AC_GST_ANAL(rc);
     rc = gst_rtsp_transport_parse(text_transport, transport); AC_GST_ANAL(rc);
 //Save server port
-    sess->video_pair.dst.port.rtp = transport->server_port.min;
-    sess->video_pair.dst.port.rtcp = transport->server_port.max;
-    if(sess->video_pair.dst.ip = strdup(transport->source), !sess->video_pair.dst.ip) {
-        pu_log(LL_ERROR, "%s: Memory allocation error on %d", __FUNCTION__, __LINE__);
-        goto on_error;
+    if(!ag_isCamInterleavedMode()) {
+        if (media_type == AC_RTSP_VIDEO_SETUP) {
+            sess->media.rt_media.video.dst.port.rtp = transport->server_port.min;
+            sess->media.rt_media.video.dst.port.rtcp = transport->server_port.max;
+            if (sess->media.rt_media.video.dst.ip = strdup(transport->source), !sess->media.rt_media.video.dst.ip) {
+                pu_log(LL_ERROR, "%s: Memory allocation error on %d", __FUNCTION__, __LINE__);
+                goto on_error;
+            }
+        }
+        else {
+            sess->media.rt_media.audio.dst.port.rtp = transport->server_port.min;
+            sess->media.rt_media.audio.dst.port.rtcp = transport->server_port.max;
+            if (sess->media.rt_media.audio.dst.ip = strdup(transport->source), !sess->media.rt_media.audio.dst.ip) {
+                pu_log(LL_ERROR, "%s: Memory allocation error on %d", __FUNCTION__, __LINE__);
+                goto on_error;
+            }
+        }
     }
     sess->CSeq++;
 
@@ -458,10 +490,24 @@ const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, cons
     sprintf(s_port, "%d", port);
 
     if((strlen(vs_url)+strlen(s_port)+strlen(vs_session_id)+strlen(DEFAULT_PPC_VIDEO_FOLDER) + 4) > (size-1)) {
-        pu_log(LL_ERROR, "%s: buffer size too low. VS URL can't be constructed", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: buffer size %d too low. VS URL can't be constructed", __FUNCTION__, size);
+        pu_log(LL_ERROR, "%s: vs_url=%s, s_port = %s, vs_session_id=%s, DEFAULT_PPC_VIDEO_FOLDER=%s",
+            __FUNCTION__, vs_url, s_port, vs_session_id, DEFAULT_PPC_VIDEO_FOLDER);
         return url;
     }
     sprintf(url, "%s://%s:%s/%s/%s", protocol, vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
     return url;
 
+}
+
+int getWowzaConnSocket(t_at_rtsp_session* sess) {
+    AT_DT_RT(sess->device, AC_WOWZA, -1);
+
+    t_gst_session* gs = sess->session;
+    GSocket* gsock = gst_rtsp_connection_get_write_socket(gs->conn);
+    if(!gsock) {
+        pu_log(LL_ERROR, "getWowzaConnSocket: the gst_rtsp_connection_get_write_socket() return NULL");
+        return -1;
+    }
+    return g_socket_get_fd(gsock);
 }

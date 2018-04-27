@@ -19,28 +19,134 @@
  Created by gsg on 13/11/17.
 */
 
-#include <memory.h>
 #include <assert.h>
-#include <ag_threads/at_rw_thread.h>
 
 #include "pu_logger.h"
 
+#include "au_string.h"
+
+#include "ag_settings.h"
 #include "ag_defaults.h"
-#include "ac_cam_types.h"
-#include "ac_alfapro.h"
+#include "ac_udp.h"
+
 #include "ac_wowza.h"
-#include "at_cam_video_write.h"
-#include "at_cam_video_read.h"
+#include "ac_alfapro.h"
+#include "at_rw_thread.h"
+
+//#include "at_cam_video_write.h"
+//#include "at_cam_video_read.h"
+//#include "ac_tcp.h"
 
 #include "ac_rtsp.h"
-#include "ac_udp.h"
+#include "ac_cam_types.h"
 #include "ac_tcp.h"
 
-
 /*******************************************************************************************/
+static void close_rt_connection() {
+    t_rtsp_media_pairs in, out;
+    at_get_rt_rw(&in, &out);
 
-t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* url, const char* session_id) {
-    assert(url); assert(session_id);
+    if(in.video_pair.rtp >= 0) ac_udp_close_connection(in.video_pair.rtp);
+    if(in.video_pair.rtcp >= 0) ac_udp_close_connection(in.video_pair.rtcp);
+    if(in.audio_pair.rtp >= 0) ac_udp_close_connection(in.audio_pair.rtp);
+    if(in.audio_pair.rtcp >= 0) ac_udp_close_connection(in.audio_pair.rtcp);
+
+    if(out.video_pair.rtp >= 0) ac_udp_close_connection(out.video_pair.rtp);
+    if(out.video_pair.rtcp >= 0) ac_udp_close_connection(out.video_pair.rtcp);
+    if(out.audio_pair.rtp >= 0) ac_udp_close_connection(out.audio_pair.rtp);
+    if(out.audio_pair.rtcp >= 0) ac_udp_close_connection(out.audio_pair.rtcp);
+
+    t_rtsp_media_pairs ein = {{-1,-1}, {-1, -1}};
+    t_rtsp_media_pairs eout = {{-1,-1}, {-1, -1}};
+    at_set_rt_rw(ein, eout);
+}
+static int open_rt_connection(t_ac_rtsp_rt_media media_in, t_ac_rtsp_rt_media media_out) {
+    t_rtsp_media_pairs in_socks = {{-1,-1}, {-1, -1}};
+    t_rtsp_media_pairs out_socks = {{-1,-1}, {-1, -1}};
+
+//Camera - video
+    if((in_socks.video_pair.rtp = ac_udp_p2p_connection(media_in.video.src.ip, media_in.video.src.port.rtp, media_in.video.dst.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((in_socks.video_pair.rtcp = ac_udp_p2p_connection(media_in.video.src.ip, media_in.video.src.port.rtcp, media_in.video.dst.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Cam-Agent video connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_in.video.src.ip, media_in.video.src.port.rtp, media_in.video.dst.port.rtp, media_in.video.src.ip, media_in.video.src.port.rtcp, media_in.video.dst.port.rtcp);
+
+//Camera - audio
+    if((in_socks.audio_pair.rtp = ac_udp_p2p_connection(media_in.audio.src.ip, media_in.audio.src.port.rtp, media_in.audio.dst.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((in_socks.audio_pair.rtcp = ac_udp_p2p_connection(media_in.audio.src.ip, media_in.audio.src.port.rtcp, media_in.audio.dst.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Cam-Agent audio connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_in.audio.src.ip, media_in.audio.src.port.rtp, media_in.audio.dst.port.rtp, media_in.audio.src.ip, media_in.audio.src.port.rtcp, media_in.audio.dst.port.rtcp);
+
+//Player - UDP connection
+// video
+    if((out_socks.video_pair.rtp = ac_udp_p2p_connection(media_out.video.dst.ip, media_out.video.dst.port.rtp, media_out.video.src.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((out_socks.video_pair.rtcp = ac_udp_p2p_connection(media_out.video.dst.ip, media_out.video.dst.port.rtcp, media_out.video.src.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Player-Agent video connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_out.video.dst.ip, media_out.video.dst.port.rtp, media_out.video.src.port.rtp, media_out.video.dst.ip, media_out.video.dst.port.rtcp, media_out.video.src.port.rtcp);
+// audio
+    if((out_socks.audio_pair.rtp = ac_udp_p2p_connection(media_out.audio.dst.ip, media_out.audio.dst.port.rtp, media_out.audio.src.port.rtp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    if((out_socks.audio_pair.rtcp = ac_udp_p2p_connection(media_out.audio.dst.ip, media_out.audio.dst.port.rtcp, media_out.audio.src.port.rtcp)) < 0) {
+        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTCP stream. Bye.", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: Player-Agent audio connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__, media_out.audio.dst.ip, media_out.audio.dst.port.rtp, media_out.audio.src.port.rtp, media_out.audio.dst.ip, media_out.audio.dst.port.rtcp, media_out.audio.src.port.rtcp);
+
+    if(!at_set_rt_rw(in_socks,out_socks)) {
+        pu_log(LL_ERROR, "%s: Can't initiate streaming treads for non-interleaved mode", __FUNCTION__);
+        goto on_error;
+    }
+    pu_log(LL_DEBUG, "%s: streaming threads for non-interleaved mode are initiated", __FUNCTION__);
+
+    return 1;
+on_error:
+    close_rt_connection();
+    return 0;
+}
+
+static void close_il_connection() {
+/*    int in, out;
+    at_get_interleaved_rw(&in, &out);
+     if (in >= 0) ac_udp_close_connection(in); */
+//NB! out is under GST responcibility!
+}
+static int open_il_connection(t_at_rtsp_session* sess_in, t_at_rtsp_session* sess_out) {
+    int rd_sock = -1, wr_sock = -1;
+
+    if(rd_sock = getAlfaProConnSocket(sess_in), rd_sock < 0) {
+        pu_log(LL_ERROR, "%s: error retrieving Cam's read socket for interleaved mode", __FUNCTION__);
+        return 0;
+    }
+    if(wr_sock = getWowzaConnSocket(sess_out), rd_sock < 0) {
+        pu_log(LL_ERROR, "%s: error retrieving Wowza's write socket for interleaved mode", __FUNCTION__);
+        return 0;
+    }
+// Using existing connections from RTSP negotiations - do not need opening TCP connections
+    if(!at_set_interleaved_rw(rd_sock, wr_sock)) {
+        pu_log(LL_ERROR, "%s: Can't initiate streaming treads for interleaved mode", __FUNCTION__);
+        return 0;
+    }
+    pu_log(LL_DEBUG, "%s: streaming thread for interleaved mode are initiated. Cam socket = %d, Wowza socket = %d", __FUNCTION__, rd_sock, wr_sock);
+    return 1;
+}
+
+t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int port, const char* session_id) {
     t_at_rtsp_session* sess = calloc(sizeof(t_at_rtsp_session), 1);
     if(!sess) {
         pu_log(LL_ERROR, "%s Memory allocation error at %d", __FUNCTION__, __LINE__);
@@ -48,56 +154,70 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* url, const 
     }
     sess->device = device;
     sess->state = AC_STATE_UNDEF;
-    if(sess->url = strdup(url), !sess->url) {
-        pu_log(LL_ERROR, "%s Memory allocation error at %d", __FUNCTION__, __LINE__);
-        goto on_error;
+
+    if(ag_isCamInterleavedMode()) {
+        sess->media.il_media.port = (sess->device == AC_WOWZA)?port:ag_getCamPort();
+        if(sess->media.il_media.ip = (sess->device == AC_WOWZA)?au_strdup(ip):au_strdup(ag_getCamIP()), !sess->media.il_media.ip) {
+            pu_log(LL_ERROR, "%s: memory alloation error at %d", __FUNCTION__, __LINE__);
+            goto on_error;
+        }
     }
 
     int rc;
+    char url[LIB_HTTP_MAX_URL_SIZE];
 
     switch (device) {
         case AC_CAMERA: {
-            rc = ac_alfaProInit(sess);
-            if (sess->video_pair.dst.ip = strdup("0.0.0.0"), !sess->video_pair.dst.ip) {
-                pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+             ac_makeAlfaProURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution());
+            if(sess->url = au_strdup(url), !sess->url) {
+                pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
                 goto on_error;
             }
-            if (sess->audio_pair.dst.ip = strdup("0.0.0.0"), !sess->audio_pair.dst.ip) {
-                pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
-                goto on_error;
-            }
-            sess->video_pair.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT;
-            sess->video_pair.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT+1;
-            sess->audio_pair.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT+2;
-            sess->audio_pair.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT+3;
+
+            if(rc = ac_alfaProInit(sess), !rc) goto on_error;
         }
             break;
         case AC_WOWZA:
-            sess->video_pair.src.port.rtp = AC_FAKE_CLIENT_WRITE_PORT;
-            sess->video_pair.src.port.rtcp = AC_FAKE_CLIENT_WRITE_PORT+1;
-            sess->audio_pair.src.port.rtp = AC_FAKE_CLIENT_WRITE_PORT+2;
-            sess->audio_pair.src.port.rtcp = AC_FAKE_CLIENT_WRITE_PORT+3;
-            rc = ac_WowzaInit(sess, session_id);
+            pu_log(LL_DEBUG, "%s Wowza section start. ip=%s, port=%d, session_id=%s", __FUNCTION__, ip, port, session_id);
+            ac_make_wowza_url(url, sizeof(url), "rtsp", ip, port, session_id);
+            if(sess->url = au_strdup(url), !sess->url) {
+                pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
+                goto on_error;
+            }
+            pu_log(LL_DEBUG, "%s before ac_WowzaInit", __FUNCTION__);
+            if(rc = ac_WowzaInit(sess, session_id), !rc) goto on_error;
+            pu_log(LL_DEBUG, "%s after ac_WowzaInit", __FUNCTION__);
             break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
             rc = 0;
-            break;
+            goto on_error;
+    }
+
+    if(!ag_isCamInterleavedMode()) {
+         if (sess->media.rt_media.video.dst.ip = au_strdup("0.0.0.0"), !sess->media.rt_media.video.dst.ip) {
+            pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+            goto on_error;
+        }
+        if (sess->media.rt_media.audio.dst.ip = au_strdup("0.0.0.0"), !sess->media.rt_media.audio.dst.ip) {
+            pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+            goto on_error;
+        }
+        sess->media.rt_media.video.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT;
+        sess->media.rt_media.video.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT + 1;
+        sess->media.rt_media.audio.dst.port.rtp = AC_FAKE_CLIENT_READ_PORT + 2;
+        sess->media.rt_media.audio.dst.port.rtcp = AC_FAKE_CLIENT_READ_PORT + 3;
     }
     if(rc) {
         return sess;
     }
 
 on_error:
-    if(sess) {
-        if(sess->url) free(sess->url);
-        if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
-        if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
-        free(sess);
-    }
+    pu_log(LL_DEBUG, "%s error section start", __FUNCTION__);
+    if(sess) ac_rtsp_deinit(sess);
     return NULL;
 }
-void ac_rtsp_down(t_at_rtsp_session* sess) {
+void ac_rtsp_deinit(t_at_rtsp_session* sess) {
     assert(sess);
     switch(sess->device) {
         case AC_CAMERA:
@@ -111,13 +231,18 @@ void ac_rtsp_down(t_at_rtsp_session* sess) {
             break;
     }
     if(sess->url) free(sess->url);
-    if(sess->video_pair.src.ip) free(sess->video_pair.src.ip);
-    if(sess->video_pair.dst.ip) free(sess->video_pair.dst.ip);
+    if (sess->rtsp_session_id) free(sess->rtsp_session_id);
 
-    if(sess->audio_pair.src.ip) free(sess->audio_pair.src.ip);
-    if(sess->audio_pair.dst.ip) free(sess->audio_pair.dst.ip);
+    if(!ag_isCamInterleavedMode()) {
+        if (sess->media.rt_media.video.src.ip) free(sess->media.rt_media.video.src.ip);
+        if (sess->media.rt_media.video.dst.ip) free(sess->media.rt_media.video.dst.ip);
 
-    if(sess->rtsp_session_id) free(sess->rtsp_session_id);
+        if (sess->media.rt_media.audio.src.ip) free(sess->media.rt_media.audio.src.ip);
+        if (sess->media.rt_media.audio.dst.ip) free(sess->media.rt_media.audio.dst.ip);
+    }
+    else {
+        if (sess->media.il_media.ip) free(sess->media.il_media.ip);
+    }
     free(sess);
 }
 
@@ -147,7 +272,7 @@ int ac_req_cam_describe(t_at_rtsp_session* sess, char** dev_description) {
     char body[1000];
     if(!ac_alfaProDescribe(sess, body, sizeof(body))) return 0;
 
-    if(*dev_description = strdup(body), !dev_description) {
+    if(*dev_description = au_strdup(body), !dev_description) {
         pu_log(LL_ERROR, "%s: Mempry allocation error", __FUNCTION__);
         return 0;
     }
@@ -161,129 +286,74 @@ int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description) {
 }
 int ac_req_setup(t_at_rtsp_session* sess) {
     assert(sess);
+    int ret;
 
     switch(sess->device) {
         case AC_CAMERA:
-            return ac_alfaProSetup(sess, AC_ALFA_VIDEO_SETUP);
+            if(ret = ac_alfaProSetup(sess, AC_RTSP_VIDEO_SETUP), ret)
+                ret = ac_alfaProSetup(sess, AC_RTSP_AUDIO_SETUP);
+            break;
         case AC_WOWZA:
-            return ac_WowzaSetup(sess);
+            if(ret = ac_WowzaSetup(sess, AC_RTSP_VIDEO_SETUP), ret)
+                ret = ac_WowzaSetup(sess, AC_RTSP_AUDIO_SETUP);
+            break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            return 0;
+            ret = 0;
+            break;
     }
-    return 0;
+    return ret;
 }
 int ac_req_play(t_at_rtsp_session* sess) {
     assert(sess);
-
+    int ret;
     switch(sess->device) {
         case AC_CAMERA:
-            return ac_alfaProPlay(sess);
+            ret = ac_alfaProPlay(sess);
+            break;
         case AC_WOWZA:
-            return ac_WowzaPlay(sess);
+            ret = ac_WowzaPlay(sess);
+            break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            return 0;
+            ret = 0;
+            break;
     }
-    return 0;
+    return ret;
 }
 int ac_req_teardown(t_at_rtsp_session* sess) {
+    pu_log(LL_DEBUG, "%s starts", __FUNCTION__);
     assert(sess);
-
+    int ret;
     switch(sess->device) {
         case AC_CAMERA:
-            return ac_alfaProTeardown(sess);
+            ret = ac_alfaProTeardown(sess);
+            pu_log(LL_DEBUG, "%s after ac_alfaProTeardown", __FUNCTION__);
+            break;
         case AC_WOWZA:
-            return ac_WowzaTeardown(sess);
+            ret = ac_WowzaTeardown(sess);
+            pu_log(LL_DEBUG, "%s after ac_WowzaTeardown", __FUNCTION__);
+            break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            return 0;
+            ret = 0;
+            break;
     }
-    return 0;
+    return ret;
 }
 
-int ac_start_rtsp_streaming(t_rtsp_pair in, t_rtsp_pair out) {
-    if(!at_start_rw_thread(in, out)) goto on_error;
-/*
-    if(!at_start_video_read(in)) goto on_error;
-    if(!at_start_video_write(out)) goto on_error;
-*/
-    return 1;
-on_error:
-    ac_close_connection(in.rtp);
-    ac_close_connection(in.rtcp);
-    ac_close_connection(out.rtp);
-    ac_close_connection(out.rtcp);
-
-    return 0;
+int ac_rtsp_open_streaming_connecion(t_at_rtsp_session* sess_in, t_at_rtsp_session* sess_out) {
+    return (ag_isCamInterleavedMode())?open_il_connection(sess_in, sess_out):open_rt_connection(sess_in->media.rt_media, sess_out->media.rt_media);
 }
-void ac_stop_rtsp_streaming() {
-    at_stop_rw_thread();
-/*
-    at_stop_video_write();
-    at_stop_video_read();
-*/
+void ac_rtsp_close_streaming_connecion() {
+    (!ag_isCamInterleavedMode())?close_rt_connection():close_il_connection;
 }
 
-static const uint8_t RTP_INIT_REQ[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-static const uint8_t RTCP_INIT_REQ[] = {0x80, 0xc9, 0, 01, 0, 0, 0, 0};
-
-int ac_open_connecion(t_ac_rtsp_pair_ipport video_in, t_ac_rtsp_pair_ipport video_out, t_rtsp_pair* in, t_rtsp_pair* out) {
-    in->rtp = -1; in->rtcp = -1; out->rtp = -1, out->rtcp = -1;
-//Camera
-    if((in->rtp = ac_udp_p2p_connection(video_in.src.ip, video_in.src.port.rtp, video_in.dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((in->rtcp = ac_udp_p2p_connection(video_in.src.ip, video_in.src.port.rtcp, video_in.dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Cam-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_in.src.ip, video_in.src.port.rtp, video_in.dst.port.rtp, video_in.src.ip, video_in.src.port.rtcp, video_in.dst.port.rtcp);
-
-//Player - UDP connection
-
-    if((out->rtp = ac_udp_p2p_connection(video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((out->rtcp = ac_udp_p2p_connection(video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Player-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp, video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp);
-
-/*
-//Player - TCP connection
-    if((out->rtp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open TCP socket for Camera RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((out->rtcp = ac_tcp_client_connect(video_out.dst.ip, video_out.dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open TCP socket for Camera RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Player-Agent connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,video_out.dst.ip, video_out.dst.port.rtp, video_out.src.port.rtp, video_out.dst.ip, video_out.dst.port.rtcp, video_out.src.port.rtcp);
-*/
-/*
-//Initial RTP/RTCP request to Cam
-    if (!ac_udp_write(in->rtp, RTP_INIT_REQ, sizeof(RTP_INIT_REQ))) {
-        pu_log(LL_ERROR, "%s: RTP setup failed", __FUNCTION__);
-        goto on_error;
-    }
-    if (!ac_udp_write(in->rtcp, RTCP_INIT_REQ, sizeof(RTCP_INIT_REQ))) {
-        pu_log(LL_ERROR, "%s: RTCP setup failed", __FUNCTION__);
-        goto on_error;
-    }
-*/
-    return 1;
-on_error:
-    if(in->rtp >= 0) ac_close_connection(in->rtp);
-    if(in->rtcp >= 0) ac_close_connection(in->rtcp);
-    if(out->rtp >= 0) ac_close_connection(out->rtp);
-    if(out->rtcp >= 0) ac_close_connection(out->rtcp);
-    in->rtp = -1; in->rtcp = -1; out->rtp = -1, out->rtcp = -1;
-    return 0;
+int ac_rtsp_start_streaming() {
+    return at_start_rw();
+}
+void ac_rtsp_stop_streaming() {
+    at_stop_rw();
 }
 
 

@@ -43,12 +43,6 @@ int ac_start_video();
 
 void ac_stop_video();
 
-/*
- * Return 1 if treaming threads work
- */
-int ac_streaming_run();
-
-
 void ac_send_stream_initiation();
 void ac_send_stream_confirmation();
 

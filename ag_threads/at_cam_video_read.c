@@ -46,7 +46,7 @@
  * Local data
  */
 static volatile int stop = 1;
-static t_rtsp_pair socks = {-1,-1};
+static t_rtsp_media_pairs socks = {{-1,-1}, {-1,-1}};
 
 static pthread_t id;
 static pthread_attr_t attr;
@@ -57,7 +57,7 @@ static void* the_thread(void* params);
  * Global functions
  */
 /* Here src - remote peer and destination - home */
-int at_start_video_read(t_rtsp_pair rd) {
+int at_start_video_read(t_rtsp_media_pairs rd) {
     if(at_is_video_read_run()) return 1;
     socks = rd;
     stop = 0;
@@ -78,9 +78,6 @@ void at_stop_video_read() {
     stop = 1;
     pthread_join(id, &ret);
     pthread_attr_destroy(&attr);
-
-    if(socks.rtp >= 0) close(socks.rtp);
-    if(socks.rtcp >= 0) close(socks.rtcp);
 }
 
 int at_is_video_read_run() {
@@ -94,7 +91,6 @@ static void* the_thread(void* params) {
 //    struct timespec to = {0,0};
 //    struct timespec rem;
     pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
-    size_t buf_size = ag_getStreamBufferSize();
 
     pu_queue_t* fromRW = aq_get_gueue(AQ_FromRW);
 
@@ -107,7 +103,7 @@ static void* the_thread(void* params) {
 
         t_ac_udp_read_result ret = {0,0};
         while(!stop && !ret.rc) {
-            ret = ac_udp_read(socks, buf, buf_size, 10);
+//            ret = ac_udp_read(socks, buf, buf_size, 10);
 //            if(!sz) pu_log(LL_DEBUG, "%s: Timeout", AT_THREAD_NAME);
         }
         switch(ret.rc) {
@@ -143,12 +139,7 @@ static void* the_thread(void* params) {
         }
 
     }
-    on_stop:
-        ac_close_connection(socks.rtp);
-        socks.rtp = -1;
-        ac_close_connection(socks.rtcp);
-        socks.rtcp = -1;
-
+on_stop:
     pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
     pthread_exit(NULL);
 }

@@ -24,15 +24,22 @@
 
 #include "ac_cam_types.h"
 
+int at_set_rt_rw(t_rtsp_media_pairs rd, t_rtsp_media_pairs wr);
+void at_get_rt_rw(t_rtsp_media_pairs* rd, t_rtsp_media_pairs* wr);
+
+int at_set_interleaved_rw(int rd, int wr);
+void at_get_interleaved_rw(int* rd, int* wr);
+
 /***************************
- * Start getting cideo stream from the camera
+ * Start getting cideo stream from the camera in RT mode - using 4 streams: video & audio
  * @return - 1 is OK, 0 if not
  */
-int at_start_rw_thread(t_rtsp_pair rd, t_rtsp_pair wr);
+int at_start_rw();
+
 /*****************************
  * Stop read streaming (join)
  */
-void at_stop_rw_thread();
+void at_stop_rw();
 /*****************************
  * Check if read stream runs
  * @return 1 if runs 0 if not

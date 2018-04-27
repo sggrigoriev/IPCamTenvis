@@ -150,6 +150,7 @@ int ac_tcp_client_connect(const char* ip, int port) {
             sleep(1);   /*wait for a while */
         }
         else {
+/*
             int sock_flags = fcntl(client_socket, F_GETFL);
             if (sock_flags < 0) {
                 return -1;
@@ -157,6 +158,7 @@ int ac_tcp_client_connect(const char* ip, int port) {
             if (fcntl(client_socket, F_SETFL, sock_flags|O_NONBLOCK) < 0) {
                 return -1;
             }
+*/
             return client_socket;
         }
     }

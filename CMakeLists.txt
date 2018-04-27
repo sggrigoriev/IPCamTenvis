@@ -5,41 +5,40 @@
 # **********************************************
 
 cmake_minimum_required(VERSION 3.5)
-project(IPCamTenvis)
-
-set(CMAKE_C_STANDARD 90)
-
-set(GCC_STANDARD $ENV{STANDARD})
+project(IPCamTenvis C)
 
 set(AGENT_PLATFORM $ENV{PLATFORM})
-
 set(PP_SDK_PATH $ENV{SDK_PATH})
+set(GCC_STANDARD $ENV{STANDARD})
+
 set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
 
 message("path = $ENV{SDK_PATH}")
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
-    #add_definitions( -DPROXY_SEPARATE_RUN )     #Means w/o WUD
-    #add_definitions( -DLOCAL_TEST)
+    #add_definitions(-DNOPOLL_TRACE)            # Enabling nopoll ()Web Socket connection) logging to stdout
+    #add_definitions( -DCURL_TRACE )            # Switches on CURL trace for AlfaPro RTSP session
+    #add_definitions( -DRW_CYCLES=999 )        # will stop RW thread after RW_CYCLES iterations --  helpful for stress-tests
 
-    #add_definitions(-DCURLOPT_VERBOSE)         # Switches on CURL trace for AlfaPro RTSP session
-   add_definitions(-DNOPOLL_TRACE)              # Enabling nopoll ()Web Socket connection) logging to stdout
-
-    if($ENV{NO_GST_PLAGINS} STREQUAL "1")       # To separate build for env with gst plugins installed
+    if($ENV{NO_GST_PLAGINS} STREQUAL "1")        # To separate build for env with gst plugins installed
         add_definitions( -DGST_EXT )
     endif()
 
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)
 
+#Print variables
+    message("NO_GST_PLAGINS = $ENV{NO_GST_PLAGINS}")
     message("gst_FOUND = ${gst_FOUND}")
     message("gst_LIBRARIES = ${gst_LIBRARIES}")
     message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
+    message("PROXY_LIBS_PATH = ${PROXY_LIBS_PATH}")
 
-    #PRESTO_PLATFORM STREQUAL "ubuntu"
-    message(STATUS "Compiling for the X86")
+    message(STATUS "Compiling for ubuntu")
+
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_STANDARD} -O0 -g -Wall")
+
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
     set(REQUIRED_LIBRARIES
         ${gst_LIBRARIES}
@@ -71,11 +70,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
         ${gst_INCLUDE_DIRS}
         /usr/local/include/nopoll
     )
-    message(STATUS "Compiling for ubuntu)")
-
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
-
-
     add_definitions( -DGST_EXT)
 
     file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
@@ -150,44 +145,10 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/json/*.c
 )
 
-#ab_test
-file (GLOB SOURCE_FILES_AB_TEST
-        ag_ring_buffer/*.c
-        ${PROXY_LIBS_PATH}/pu_logger/*.c
-)
-
-#local_test
-file (GLOB SOURCE_FILES_LOCAL_TEST
-        vlc_local_test/*.c
-        ag_cam_io/*.c
-        ag_converter/*.c
-        ag_config/*.c
-        ag_threads/at_cam_video_read.c
-        ag_threads/at_cam_video_write.c
-        ag_threads/at_video_connector.c
-        ag_threads/at_cam_video.c
-        ag_threads/at_ws.c
-        ag_queues/*.c
-        ag_ring_buffer/ab_ring_bufer.c
-        ${PROXY_LIBS_PATH}/pc_config/pc_config.c
-        ${PROXY_LIBS_PATH}/presto_commands/*.c
-        ${PROXY_LIBS_PATH}/pu_queues/*.c
-        ${PROXY_LIBS_PATH}/pu_logger/*.c
-        ${PROXY_LIBS_PATH}/libtimer/*.c
-        ${PROXY_LIBS_PATH}/libtcp/*.c
-        ${PROXY_LIBS_PATH}/json/*.c
-)
-
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     add_executable(Tenvis ${SOURCE_FILES})
     target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
-
-    add_executable(ab_test ${SOURCE_FILES_AB_TEST})
-    target_link_libraries(ab_test ${REQUIRED_LIBRARIES})
-
-    add_executable(local_test ${SOURCE_FILES_LOCAL_TEST})
-    target_link_libraries(local_test ${REQUIRED_LIBRARIES})
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             add_executable(Tenvis ${SOURCE_FILES})

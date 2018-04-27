@@ -33,7 +33,8 @@
 
 typedef struct {
     char *buf;
-    size_t sz;
+    size_t free_space;
+    size_t buf_sz;
 } t_ac_callback_buf;
 
 typedef struct {

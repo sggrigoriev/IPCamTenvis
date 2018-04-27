@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <sys/select.h>
 #include <netdb.h>
+#include <time.h>
 
 
 #include "pu_logger.h"
@@ -112,7 +113,7 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
         pu_log(LL_ERROR, "%s: setsockopt error: %s - %d", __FUNCTION__, strerror(errno), errno);
         goto on_exit;
     }
-
+/*
     // Set the socket as async
     int sock_flags = fcntl(sockfd, F_GETFL);
     if (sock_flags < 0) {
@@ -124,7 +125,7 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
         pu_log(LL_ERROR, "%s: fcntl Set Flags error: %s - %d", __FUNCTION__, strerror(errno), errno);
         goto on_exit;
     }
-
+*/
     /*Bind this datagram socket to home address info */
     if((rc = bind(sockfd, home_info->ai_addr, home_info->ai_addrlen)) != 0) {
         pu_log(LL_ERROR, "%s: Error bind socket: %s - %d", __FUNCTION__, strerror(errno), errno);
@@ -147,60 +148,50 @@ on_exit:
     return (ret)?sockfd:-1;
 }
 
-void ac_close_connection(int sock) {
-    if(sock > 0) {
+void ac_udp_close_connection(int sock) {
+    if(sock >= 0) {
         shutdown(sock, SHUT_RDWR);
         close(sock);
     }
 }
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-t_ac_udp_read_result ac_udp_read(t_rtsp_pair socks, t_ab_byte* buf, size_t size, int to) {
+t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) {
 
-    t_ac_udp_read_result rc={-1,0};
+    t_ac_udp_read_result rc={-1, 0};
 
-// Build set for select
-    struct timeval tv = {to, 0};
-    fd_set readset;
-
-    FD_ZERO(&readset);
-
-    FD_SET(socks.rtp, &readset);
-    FD_SET(socks.rtcp, &readset);
-
-    rc.rc = select(AC_UDP_MAX(socks.rtcp, socks.rtp) + 1, &readset, NULL, NULL, &tv);
-    if(rc.rc < 0) {    // Error. nothing to read
-        pu_log(LL_ERROR, "%s: select error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        return rc;
-    }
-    if(rc.rc == 0) return rc; // timeout
-
-    int sock;
-    if(FD_ISSET(socks.rtcp, &readset)) {
-        rc.src = 0;
-        sock = socks.rtcp;
-        pu_log(LL_DEBUG, "BINGO!!! Got RTCP message!");
-    }
-    else {
-        rc.src = 1;
-        sock = socks.rtp;
-    }
+    struct timespec t = {0,100}, rem;
 
     if(rc.rc = read(sock, buf, size), rc.rc < 0) {
-        pu_log(LL_ERROR, "%s: Read UDP socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
-        if(errno == ECONNREFUSED) rc.rc = 0; //Let it try again
+        if((errno == ECONNREFUSED) || (errno == EAGAIN)) {
+            nanosleep(&t, &rem);
+            rc.rc = 0; //Let it try again
+        }
+        else {
+            pu_log(LL_ERROR, "%s: Read socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
+        }
     }
     if(rc.rc == size) {
-        pu_log(LL_WARNING, "%s: Read buffer too small - data truncated!", __FUNCTION__);
+        pu_log(LL_WARNING, "%s: Read buffer %d is too small - data truncated!", __FUNCTION__, size);
     }
 
     return rc;
 }
 int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
-    if(write(sock, buf, size) < 0) {
-        pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s. Buffer size = %d", __FUNCTION__, errno, strerror(errno), size);
+    struct timespec t = {0,100}, rem;
+    long rc = 0;
 
-        return 0;
+    while(!rc) {
+        if (rc = write(sock, buf, size), rc < 0) {
+            if ((errno == ECONNREFUSED) || (errno == EAGAIN)) {
+                nanosleep(&t, &rem);
+                rc = 0; //Let it try again
+            }
+            else {
+                pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s. Buffer size = %d", __FUNCTION__, errno, strerror(errno), size);
+                return 0;
+            }
+        }
     }
     return 1;
 }

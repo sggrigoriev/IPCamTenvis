@@ -22,15 +22,9 @@
 #ifndef IPCAMTENVIS_AC_ALFAPRO_H
 #define IPCAMTENVIS_AC_ALFAPRO_H
 
-#define AC_ALFA_VIDEO_SETUP 0
-#define AC_ALFA_AUDIO_SETUP 1
-
 #include <stdlib.h>
 
 #include "ac_cam_types.h"
-
-#include "ao_cma_cam.h"
-
 
 int ac_alfaProInit(t_at_rtsp_session* sess);
 void ac_alfaProDown(t_at_rtsp_session* sess);
@@ -43,5 +37,7 @@ int ac_alfaProTeardown(t_at_rtsp_session* sess);
 
 /* [login:password@]ip:port/resolution/ */
 const char* ac_makeAlfaProURL(char *url, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
+
+int getAlfaProConnSocket(t_at_rtsp_session* sess);
 
 #endif /* IPCAMTENVIS_AC_ALFAPRO_H */

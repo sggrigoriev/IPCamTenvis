@@ -61,11 +61,11 @@ const char*     ag_getCamLogin();
 const char*     ag_getCamPassword();
 const char*     ag_getCamIface();
 const char*     ag_getCamIfaceModel();
+int             ag_isCamInterleavedMode();
 
-
-time_t    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
-time_t    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
-time_t    ag_getSessionIdTO();        /* TO to wait session info form cloud */
+long    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
+long    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */
+long    ag_getSessionIdTO();        /* TO to wait session info form cloud */
 
 void ag_saveProxyID(const char* proxyID);
 const char* ag_getProxyID();

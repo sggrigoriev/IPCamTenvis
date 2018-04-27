@@ -60,8 +60,9 @@
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
 #define IPCAM_RESOLUTION            "IPCAM_RESOLUTION"
-#define IR_LOW_RES                  "LO"
-#define IR_HI_RES                   "HI"
+    #define IR_LOW_RES                  "LO"
+    #define IR_HI_RES                   "HI"
+#define AGENT_INTERLEAVED_MODE      "INTERLEAVED_MODE"
 #define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
 #define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
 #define AGENT_IPCAM_IFACE_MODEL     "IPCAM_IFACE_MODEL"
@@ -103,6 +104,7 @@ static int          video_protocol;
 static unsigned int chunks_amount;
 static unsigned int streaming_buffer_size;
 static t_ao_cam_res ipcam_resolution;
+static unsigned int interleaved_mode;
 static char         cam_login[129];
 static char         cam_password[129];
 static char         cam_iface[129];
@@ -209,6 +211,9 @@ const char*     ag_getCamIface() {
 const char*     ag_getCamIfaceModel() {
     AGS_RET(DEFAULT_IPCAM_IFACE_MODEL, cam_iface_model);
 }
+int             ag_isCamInterleavedMode() {
+    AGS_RET(DEFAULT_IPCAM_INTERLEAVED_MODE, interleaved_mode);
+}
 
 const char* ag_getCurloptCAInfo() {
     return curlopt_ca_info;
@@ -281,6 +286,7 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_IFACE, cam_iface, sizeof(cam_iface)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_IFACE_MODEL, cam_iface_model, sizeof(cam_iface_model)))    AGS_ERR;
+    if(!getUintValue(cfg, AGENT_INTERLEAVED_MODE, &interleaved_mode))                           AGS_ERR;
 
     if(!getUintValue(cfg, SET_SSL_FOR_URL_REQUEST, (unsigned int* )&is_ssl))                    AGS_ERR;
 
@@ -318,6 +324,7 @@ static void initiate_defaults() {
     chunks_amount = DEFAULT_CHUNKS_AMOUNT;
     streaming_buffer_size = DEFAULT_MAX_UDP_STREAM_BUFF_SIZE;
     ipcam_resolution = DEFAULT_IPCAM_RESOLUTION;
+    interleaved_mode = DEFAULT_IPCAM_INTERLEAVED_MODE;
 
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);

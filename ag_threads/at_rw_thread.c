@@ -39,101 +39,238 @@
 #include "ac_cam_types.h"
 #include "at_rw_thread.h"
 
-#define AT_THREAD_NAME "VIDEO_RW"
+#define AT_THREAD_NAME "STREAMING_RW"
 
 /********************************************
  * Local data
  */
 static volatile int stop = 1;
-static t_rtsp_pair rd_socks = {-1,-1};
-static t_rtsp_pair wr_socks = {-1,-1};
 
-static pthread_t id;
-static pthread_attr_t attr;
 
-static void* the_thread(void* params) {
-    pu_log(LL_INFO, "%s start", AT_THREAD_NAME);
+static int is_rt_mode;
+//RT socks
+static t_rtsp_media_pairs rd_socks = {{-1,-1}, {-1,-1}};
+static t_rtsp_media_pairs wr_socks = {{-1,-1}, {-1,-1}};
 
-    pu_queue_t* fromRW = aq_get_gueue(AQ_FromRW);
+static t_ab_byte* v_rtp_buf;
+static t_ab_byte* v_rtcp_buf;
+static t_ab_byte* a_rtp_buf;
+static t_ab_byte* a_rtcp_buf;
+static size_t media_buf_size;
 
-    size_t buf_size = ag_getStreamBufferSize();
-    t_ab_byte* buf = malloc(ag_getStreamBufferSize());
-    if(!buf) {
-        pu_log(LL_ERROR, "%s: can't allocate the buffer for video read", AT_THREAD_NAME);
-        goto on_stop;
-    }
+static pthread_t v_rtp_id;
+static pthread_attr_t v_rtp_attr;
+static pthread_t v_rtcp_id;
+static pthread_attr_t v_rtcp_attr;
 
-    while(!stop) {
+static pthread_t a_rtp_id;
+static pthread_attr_t a_rtp_attr;
+static pthread_t a_rtcp_id;
+static pthread_attr_t a_rtcp_attr;
+
+//Interleaved socks - they are separate just for better undestanding - no simultanious use RT and IL socks!
+static int read_il_sock = -1;
+static int write_il_sock = -1;
+
+static pthread_t rdwr_id;
+static pthread_attr_t rdwr_attr;
+
+static t_ab_byte* rdwr_buf;
+
+pu_queue_t* fromRW;
+
+static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_byte* buf, pu_queue_t* q) {
+    pu_log(LL_INFO, "%s start", name);
+#ifdef RW_CYCLES
+    int step = RW_CYCLES;
+#endif
+
+     while(!stop) {
         t_ac_udp_read_result ret;
-        ret = ac_udp_read(rd_socks, buf, buf_size, 10);
-        if(ret.rc > 0) {
-            int sock = (ret.src)?wr_socks.rtp:wr_socks.rtcp;
-            if(!ac_udp_write(sock, buf, (size_t)ret.rc)) {
-                char b[20];
-                pu_log(LL_ERROR, "%s: Lost connection to the video server", AT_THREAD_NAME);
-                const char* msg = ao_rw_error_answer(b, sizeof(b));
-                pu_queue_push(fromRW, msg, strlen(msg)+1);
-                goto on_stop;
-            }
-        }
-        else {
-            char err_buf[20];
-            pu_log(LL_ERROR, "%s: Lost connection to the camera", AT_THREAD_NAME);
-            const char* msg = ao_rw_error_answer(err_buf, sizeof(buf));
-            pu_queue_push(fromRW, msg, strlen(msg)+1);
+
+        ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
+        if(!ret.rc)              //timeout
+            continue;
+        else if(ret.rc < 0) {        // Error
+            char err_buf[120];
+            pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
+            const char *msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+            pu_queue_push(q, msg, strlen(msg) + 1);
             goto on_stop;
         }
+
+        if(!ac_udp_write(write_sock, buf, (size_t)ret.rc)) {
+            char b[120];
+            pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
+            const char* msg = ao_rw_error_answer(b, sizeof(b));
+            pu_queue_push(q, msg, strlen(msg)+1);
+            goto on_stop;
+        }
+#ifdef RW_CYCLES
+        if(!step--) {
+            char b[120];
+            pu_log(LL_ERROR, "%s: Reach %d IOs", AT_THREAD_NAME, RW_CYCLES);
+            const char* msg = ao_rw_error_answer(b, sizeof(b));
+            pu_queue_push(q, msg, strlen(msg)+1);
+            goto on_stop;
+        }
+#endif
     }
 on_stop:
-    ac_close_connection(rd_socks.rtp);
-    rd_socks.rtp = -1;
-    ac_close_connection(rd_socks.rtcp);
-    rd_socks.rtcp = -1;
-
-    ac_close_connection(wr_socks.rtp);
-    wr_socks.rtp = -1;
-    ac_close_connection(wr_socks.rtcp);
-    wr_socks.rtcp = -1;
-
-    if(buf) free(buf);
-
-    pu_log(LL_INFO, "%s stop", AT_THREAD_NAME);
+//    pu_log(LL_INFO, "%s stop %s", AT_THREAD_NAME, name);
     pthread_exit(NULL);
 }
 
-/***************************
- * Start getting cideo stream from the camera
- * @return - 1 is OK, 0 if not
- */
-int at_start_rw_thread(t_rtsp_pair rd, t_rtsp_pair wr) {
+static void* v_rtp_the_thread(void* params) {
+    thread_proc("VIDEO_RTP", rd_socks.video_pair.rtp, wr_socks.video_pair.rtp, v_rtp_buf, fromRW);
+    pthread_exit(NULL);
+}
+static void* v_rtcp_the_thread(void* params) {
+    thread_proc("VIDEO_RTCP", rd_socks.video_pair.rtcp, wr_socks.video_pair.rtcp, v_rtcp_buf, fromRW);
+    pthread_exit(NULL);
+}
+
+static void* a_rtp_the_thread(void* params) {
+    thread_proc("AUDIO_RTP", rd_socks.audio_pair.rtp, wr_socks.audio_pair.rtp, a_rtp_buf, fromRW);
+    pthread_exit(NULL);
+}
+static void* a_rtcp_the_thread(void* params) {
+    thread_proc("AUDIO_RTCP", rd_socks.audio_pair.rtcp, wr_socks.audio_pair.rtcp, a_rtcp_buf, fromRW);
+    pthread_exit(NULL);
+}
+
+static void *a_rdwr_the_thread(void* params) {
+    thread_proc("INTERLEAVED_IO", read_il_sock, write_il_sock, rdwr_buf, fromRW);
+    pthread_exit(NULL);
+}
+
+static int at_start_rt_rw_thread() {
     if(at_is_rw_thread_run()) return 1;
-    rd_socks = rd;
-    wr_socks = wr;
     stop = 0;
-    if(pthread_attr_init(&attr)) {stop = 1; return 0;}
-    if(pthread_create(&id, &attr, &the_thread, NULL)) {stop = 1; return 0;}
+    if(pthread_attr_init(&v_rtp_attr)) goto on_error;
+    if(pthread_create(&v_rtp_id, &v_rtp_attr, &v_rtp_the_thread, NULL)) goto on_error;
+    if(pthread_attr_init(&v_rtcp_attr)) goto on_error;
+    if(pthread_create(&v_rtcp_id, &v_rtcp_attr, &v_rtcp_the_thread, NULL)) goto on_error;
+
+    if(pthread_attr_init(&a_rtp_attr)) goto on_error;
+    if(pthread_create(&a_rtp_id, &a_rtp_attr, &a_rtp_the_thread, NULL)) goto on_error;
+    if(pthread_attr_init(&a_rtcp_attr)) goto on_error;
+    if(pthread_create(&a_rtcp_id, &a_rtcp_attr, &a_rtcp_the_thread, NULL)) goto on_error;
 
     return 1;
+on_error:
+    stop = 1;
+    return 0;
+}
+static int at_start_interleaved_rw_thread() {
+    if(at_is_rw_thread_run()) return 1;
+
+    stop = 0;
+    if(pthread_attr_init(&rdwr_attr)) goto on_error;
+    if(pthread_create(&rdwr_id, &rdwr_attr, &a_rdwr_the_thread, NULL)) goto on_error;
+
+    return 1;
+on_error:
+    stop = 1;
+    return 0;
+}
+
+int at_set_rt_rw(t_rtsp_media_pairs rd, t_rtsp_media_pairs wr) {
+    if(at_is_rw_thread_run()) return 1;
+    fromRW = aq_get_gueue(AQ_FromRW);
+    fromRW = aq_get_gueue(AQ_FromRW);
+    rd_socks = rd;
+    wr_socks = wr;
+    is_rt_mode = 1;
+
+    media_buf_size = ag_getStreamBufferSize();
+    v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
+
+    if(v_rtp_buf = calloc(media_buf_size, 1), !v_rtp_buf) goto on_error;
+    if(v_rtcp_buf = calloc(media_buf_size, 1), !v_rtcp_buf) goto on_error;
+    if(a_rtp_buf = calloc(media_buf_size, 1), !a_rtp_buf) goto on_error;
+    if(a_rtcp_buf = calloc(media_buf_size, 1), !a_rtcp_buf) goto on_error;
+
+    return 1;
+on_error:
+    pu_log(LL_ERROR, "%s: can't allocate the buffer at %d", AT_THREAD_NAME, __LINE__);
+    if(v_rtp_buf) free(v_rtp_buf);
+    if(v_rtcp_buf) free(v_rtcp_buf);
+    if(a_rtp_buf) free(a_rtp_buf);
+    if(a_rtcp_buf) free(a_rtcp_buf);
+    v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
+    return 0;
+}
+void at_get_rt_rw(t_rtsp_media_pairs* rd, t_rtsp_media_pairs* wr) {
+    *rd = rd_socks;
+    *wr = wr_socks;
+}
+int at_set_interleaved_rw(int rd, int wr) {
+    if(at_is_rw_thread_run()) return 1;
+    fromRW = aq_get_gueue(AQ_FromRW);
+
+    read_il_sock = rd;
+    write_il_sock = wr;
+    is_rt_mode = 0;
+
+    media_buf_size = ag_getStreamBufferSize();
+
+    if(rdwr_buf = calloc(media_buf_size, 1), !rdwr_buf) goto on_error;
+
+    return 1;
+on_error:
+    pu_log(LL_ERROR, "%s: can't allocate the buffer at %d", AT_THREAD_NAME, __LINE__);
+    if(rdwr_buf) free(rdwr_buf);
+    rdwr_buf = NULL;
+    return 0;
+}
+void at_get_interleaved_rw(int* rd, int* wr) {
+    *rd = read_il_sock;
+    *wr = write_il_sock;
+}
+
+int at_start_rw() {
+    return (is_rt_mode)?at_start_rt_rw_thread():at_start_interleaved_rw_thread();
 }
 /*****************************
  * Stop read streaming (join)
  */
-void at_stop_rw_thread() {
-    void *ret;
-
+void at_stop_rw() {
     if(!at_is_rw_thread_run()) {
         pu_log(LL_WARNING, "%s is already down", AT_THREAD_NAME);
         return;
     }
-
     stop = 1;
-    pthread_join(id, &ret);
-    pthread_attr_destroy(&attr);
+    if(is_rt_mode) {
+        pthread_cancel(v_rtp_id);
+        pthread_cancel(v_rtcp_id);
+        pthread_cancel(a_rtp_id);
+        pthread_cancel(a_rtcp_id);
 
-    if(rd_socks.rtp >= 0) close(rd_socks.rtp);
-    if(rd_socks.rtcp >= 0) close(rd_socks.rtcp);
-    if(wr_socks.rtp >= 0) close(wr_socks.rtp);
-    if(wr_socks.rtcp >= 0) close(wr_socks.rtcp);
+        pthread_attr_destroy(&v_rtp_attr);
+        pthread_attr_destroy(&v_rtcp_attr);
+        pthread_attr_destroy(&a_rtp_attr);
+        pthread_attr_destroy(&a_rtcp_attr);
+
+        if(v_rtp_buf) free(v_rtp_buf);
+        if(v_rtcp_buf) free(v_rtcp_buf);
+        if(a_rtp_buf) free(a_rtp_buf);
+        if(a_rtcp_buf) free(a_rtcp_buf);
+        v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
+        pu_log(LL_ERROR, "%s: RW threads are down", AT_THREAD_NAME);
+    }
+    else {
+//        pthread_cancel(rdwr_id);
+        void *ret;
+        pthread_join(rdwr_id, &ret);
+        pthread_attr_destroy(&rdwr_attr);
+
+//We do not close existing connections - they will be used for RTSP Teardown
+
+        if(rdwr_buf) free(rdwr_buf);
+        rdwr_buf = NULL;
+        pu_log(LL_ERROR, "%s: RW thread is down", AT_THREAD_NAME);
+    }
 }
 /*****************************
  * Check if read stream runs

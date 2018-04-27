@@ -59,6 +59,7 @@
 #define DEFAULT_IPCAM_PASSWORD  ""
 #define DEFAULT_IPCAM_IFACE     "cgi-bin"
 #define DEFAULT_IPCAM_IFACE_MODEL   "hi3510"
+#define DEFAULT_IPCAM_INTERLEAVED_MODE  1
 /**********************************************************
  * Local test settings
  */

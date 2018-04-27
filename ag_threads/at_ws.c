@@ -66,6 +66,7 @@ static const char* cut_head(const char* host) {
     int pos = au_findSubstr(host, "://", AU_NOCASE);
     return host + pos + 3;
 }
+
 /*
  * this handler fires on every message
 */

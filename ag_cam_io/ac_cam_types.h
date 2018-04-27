@@ -40,8 +40,15 @@
 #define AC_SESSION          "Session: "
 #define AC_TIMEOUT          "timeout="
 #define AC_PLAY_RANGE       "npt=0.000-"
+
+#define AC_IL_VIDEO_PARAMS  "interleaved=0-1"
+#define AC_IL_AUDIO_PARAMS  "interleaved=2-3"
+
+#define AC_RTSP_VIDEO_SETUP 0
+#define AC_RTSP_AUDIO_SETUP 1
 #define AC_VIDEO_TRACK      "0"
 #define AC_AUDIO_TRACK      "1"
+
 #define AC_STREAMING_TCP    1
 #define AC_STREAMING_UDP    0
 #define AC_RTSP_HEAD        "rtsp://"
@@ -92,6 +99,11 @@ typedef struct {
 } t_rtsp_pair;
 
 typedef struct {
+    t_rtsp_pair video_pair;
+    t_rtsp_pair audio_pair;
+} t_rtsp_media_pairs;
+
+typedef struct {
     char* ip;
     t_rtsp_pair port;
 } t_ac_rtsp_ipport;
@@ -101,14 +113,28 @@ typedef struct {
     t_ac_rtsp_ipport dst;
 } t_ac_rtsp_pair_ipport;
 
+typedef struct {
+    t_ac_rtsp_pair_ipport video;
+    t_ac_rtsp_pair_ipport audio;
+} t_ac_rtsp_rt_media;
+
+typedef struct {
+    char* ip;
+    int port;
+} t_ac_rtsp_il_media;
+
+typedef union {
+    t_ac_rtsp_il_media  il_media;
+    t_ac_rtsp_rt_media  rt_media;
+} t_ac_rtsp_media;
+
 typedef struct _ACRTSPSession {
     t_ac_rtsp_device device;
     t_ac_rtsp_states state;
     char* url;
     char* rtsp_session_id;
     int CSeq;                   /* NB! this is NEXT number */
-    t_ac_rtsp_pair_ipport video_pair;
-    t_ac_rtsp_pair_ipport audio_pair;
+    t_ac_rtsp_media media;   /* NB! for non-interleaved mode only! */
 /* Implementation-specific */
     void* session;
 } t_at_rtsp_session;

@@ -61,23 +61,27 @@ static t_au_pos findSection(const char* msg, const char* before, const char* aft
 }
 
 char* au_strcpy(char* dest, const char* source, size_t size) {
-    assert(dest); assert(source);
-    if(!size) return dest;
+    if((!size) || (!source) || (!dest)) return dest;
 
-    if((size-1) < strlen(source)) return NULL;
+    if((size-1) < strlen(source)) return dest;
     memcpy(dest, source, strlen(source)+1);
     return dest;
 }
 char* au_strcat(char* dest, const char* source, size_t size) {
-    assert(dest); assert(source);
-    if(!size) return dest;
-    if((size-1) < strlen(dest)+strlen(source)) return NULL;
+    if((!size) || (!source) || (!dest)) return dest;
+
+    if((size-1) < strlen(dest)+strlen(source)) return dest;
     strcat(dest, source);
     return dest;
 }
+char* au_strdup(const char* source) {
+    if(!source) return NULL;
+    char* ret = calloc(strlen(source)+1, 1);
+
+    return strcpy(ret, source);
+}
 char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size) {
-    assert(dest); assert(src);
-    if((!size) || (!src_len)) return dest;
+    if((!size) || (!src_len) || (!dest) || (!src)) return dest;
 
     unsigned int i, len;
     len = 0;
@@ -88,8 +92,10 @@ char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_
         if(!au_strcat(dest, hex, size)) return NULL;
         len += strlen(hex);
     }
-    if(len+1 > size) return NULL;
-    dest[len] = '\0';
+    if(len+1 > size)
+        dest[size-1] = '\0';
+    else
+        dest[len] = '\0';
     return dest;
 }
 
@@ -122,7 +128,7 @@ const char* au_getNumber(char* buf, size_t size, const char* msg) {
     unsigned int i;
     unsigned int counter = 0;
 
-    assert(buf);
+    if(!buf) return buf;
 
     buf[0] = '\0';
     if(!msg) return buf;
@@ -139,7 +145,7 @@ const char* au_getNumber(char* buf, size_t size, const char* msg) {
     return buf;
 }
 const char* au_getSection(char* buf, size_t size, const char* msg, const char* before, const char* after, int case_sencitive) {
-    assert(buf); assert(size);
+    if(!buf || !size) return buf;
 
     t_au_pos pos = findSection(msg, before, after, case_sencitive);
     if(!pos.found) return NULL;
@@ -153,7 +159,7 @@ char* au_replaceSection(char* msg, size_t m_size,  const char* before, const cha
     char* buf;
     t_au_pos pos = {0};
 
-    assert(msg); assert(m_size); assert(substr);
+    if(!msg || !m_size || !substr) return msg;
 
     pos = findSection(msg, before, after, caseSencitive);
     if(!pos.found) return 0;

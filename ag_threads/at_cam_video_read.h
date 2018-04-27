@@ -30,7 +30,7 @@
  * Start getting cideo stream from the camera
  * @return - 1 is OK, 0 if not
  */
-int at_start_video_read(t_rtsp_pair rd);
+int at_start_video_read(t_rtsp_media_pairs rd);
 /*****************************
  * Stop read streaming (join)
  */
