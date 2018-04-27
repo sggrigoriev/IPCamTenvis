@@ -123,7 +123,7 @@ VERSION 0.0.1 27-Apr-2018
         - Got video-parameters from the cloud
         - Run Web Socket interface
     - Main loop: listening commands/info from Proxy, WebSocket, VideoStreaming
-    - Operation performed are:
+    - Operation performed are :
         - Connect & Run video streming by the WS command
         - Re-Run Video streaming by VireStreaming error
         - Disconnect Video by WS command
