@@ -35,9 +35,6 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type);
 int ac_alfaProPlay(t_at_rtsp_session* sess);
 int ac_alfaProTeardown(t_at_rtsp_session* sess);
 
-/* [login:password@]ip:port/resolution/ */
-const char* ac_makeAlfaProURL(char *url, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution);
-
 int getAlfaProConnSocket(t_at_rtsp_session* sess);
 
 #endif /* IPCAMTENVIS_AC_ALFAPRO_H */

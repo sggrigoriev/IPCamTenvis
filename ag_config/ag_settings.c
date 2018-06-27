@@ -56,19 +56,17 @@
 
 #define AGENT_IPCAM_IP              "IPCAM_IP"
 #define AGENT_IPCAM_PORT            "IPCAM_PORT"
+#define AGENT_IPCAM_POSTFIX         "IPCAM_POSTFIX"     /* "0" */
+#define AGENT_IPCAM_CHANNEL         "IPCAM_CHANNEL"     /* 0 - Hi res, 1 - Low res, 2 - second channel */
+#define AGENT_IPCAM_MODE            "IPCAM_MODE"        /* av - Audio + video, video, audio */
+#define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
+#define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
+#define AGENT_INTERLEAVED_MODE      "INTERLEAVED_MODE"
+
 #define AGENT_IPCAM_PROTOCOL        "IPCAM_PROTOCOL"
     #define AGENT_IC_RTMP           "RTMP"
     #define AGENT_IC_RTSP           "RTSP"
-#define IPCAM_RESOLUTION            "IPCAM_RESOLUTION"
-    #define IR_LOW_RES                  "LO"
-    #define IR_HI_RES                   "HI"
-#define AGENT_INTERLEAVED_MODE      "INTERLEAVED_MODE"
-#define AGENT_IPCAM_LOGIN           "IPCAM_LOGIN"
-#define AGENT_IPCAM_PASSWORD        "IPCAM_PASSWORD"
-#define AGENT_IPCAM_IFACE_MODEL     "IPCAM_IFACE_MODEL"
-#define AGENT_IPCAM_IFACE           "IPCAM_IFACE"
 
-#define AGENT_CHUNKS_AMOUNT         "CHUNKS_AMOUNT"
 #define STREAMING_BUFFER_SIZE       "STREAMING_BUFFER_SIZE"
 
 #define SET_SSL_FOR_URL_REQUEST     "SET_SSL_FOR_URL_REQUEST"
@@ -100,15 +98,15 @@ static unsigned int watchdog_to_sec;
 
 static char         ipcam_ip[LIB_HTTP_MAX_IPADDRES_SIZE];
 static int          ipcam_port;
-static int          video_protocol;
-static unsigned int chunks_amount;
-static unsigned int streaming_buffer_size;
-static t_ao_cam_res ipcam_resolution;
-static unsigned int interleaved_mode;
+static char         ipcam_postfix[128];
+static char         ipcam_channel[128];
+static char         ipcam_mode[128];
 static char         cam_login[129];
 static char         cam_password[129];
-static char         cam_iface[129];
-static char         cam_iface_model[129];
+static int          video_protocol;
+static unsigned int interleaved_mode;
+
+static unsigned int streaming_buffer_size;
 
 static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
 static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
@@ -131,15 +129,42 @@ static int initiated = 0;
 static void initiate_defaults();
 /* Copy log_level_t value (see pu_logger.h) of field_name of cgf object into uint_setting. */
 /* Copy default value in case of absence of the field in the object */
-static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_setting);
+static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_setting) {
+    char buf[10];
+    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
+        fprintf(stderr, "Default will be used instead.\n");
+    else if(!strcmp(buf, AGENT_LL_DEBUG))
+        *llt_setting = LL_DEBUG;
+    else if(!strcmp(buf, AGENT_LL_WARNING))
+        *llt_setting = LL_WARNING;
+    else if(!strcmp(buf, AGENT_LL_INFO))
+        *llt_setting = LL_INFO;
+    else if(!strcmp(buf, AGENT_LL_ERROR))
+        *llt_setting = LL_ERROR;
+    else
+        fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
+                field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
+        );
+}
 /*******************************************************************************
  * Get configured video protocol type
  * @param cfg - parsed configuration file
  * @param field_name - setting name
  * @param prot_val - setting value converted to int (see ad_defaults.h)
  */
-static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val);
-static void getCamResValue(cJSON* cfg, const char* field_name, t_ao_cam_res* cam_res);
+static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val) {
+    char buf[10];
+    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
+        fprintf(stderr, "Default will be used instead.\n");
+    else if(!strcmp(buf, AGENT_IC_RTMP))
+        *prot_val = AG_VIDEO_RTMP;
+    else if(!strcmp(buf, AGENT_IC_RTSP))
+        *prot_val = AG_VIDEO_RTSP;
+    else
+        fprintf(stderr, "Setting %s = %s. Posssible values are %s or %s. Default will be used instead\n",
+                field_name, buf, AGENT_IC_RTMP, AGENT_IC_RTSP
+        );
+}
 
 /*************************************************************************
     Set of "get" functions to make an access to settings for Presto modules
@@ -187,17 +212,14 @@ const char*     ag_getCamIP() {
 int             ag_getCamPort() {
     AGS_RET(DEFAULT_IPCAM_PORT, ipcam_port);
 }
-int             ag_getIPCamProtocol() {
-    AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
+const char*     ag_getCamPostfix() {         /* Some shit right after the ip:port/ */
+    AGS_RET("", ipcam_postfix);
 }
-unsigned int    ag_getVideoChunksAmount() {
-    AGS_RET(DEFAULT_CHUNKS_AMOUNT, chunks_amount);
+const char*     ag_getCamChannel() {         /* "0" - hi res, "1" - low res, "2" - 2nd channel - applicable for av & video */
+    AGS_RET("", ipcam_channel);
 }
-t_ao_cam_res    ag_getCamResolution() {
-    AGS_RET(DEFAULT_IPCAM_RESOLUTION, ipcam_resolution);
-}
-unsigned int    ag_getStreamBufferSize() {
-    AGS_RET(DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, streaming_buffer_size);
+const char*     ag_getCamMode() {            /* "av" or "video" or "audio" */
+    AGS_RET("", ipcam_mode);
 }
 const char*     ag_getCamLogin() {
     AGS_RET(DEFAULT_IPCAM_LOGIN, cam_login);
@@ -205,14 +227,15 @@ const char*     ag_getCamLogin() {
 const char*     ag_getCamPassword() {
     AGS_RET(DEFAULT_IPCAM_PASSWORD, cam_password);
 }
-const char*     ag_getCamIface() {
-    AGS_RET(DEFAULT_IPCAM_IFACE, cam_iface);
-}
-const char*     ag_getCamIfaceModel() {
-    AGS_RET(DEFAULT_IPCAM_IFACE_MODEL, cam_iface_model);
+int             ag_getIPCamProtocol() {
+    AGS_RET(DEFAULT_VIDEO_PROTOCOL, video_protocol);
 }
 int             ag_isCamInterleavedMode() {
     AGS_RET(DEFAULT_IPCAM_INTERLEAVED_MODE, interleaved_mode);
+}
+
+unsigned int    ag_getStreamBufferSize() {
+    AGS_RET(DEFAULT_MAX_UDP_STREAM_BUFF_SIZE, streaming_buffer_size);
 }
 
 const char* ag_getCurloptCAInfo() {
@@ -275,18 +298,15 @@ int ag_load_config(const char* cfg_file_name) {
 
     if(!getStrValue(cfg, AGENT_IPCAM_IP, ipcam_ip, sizeof(ipcam_ip)))                           AGS_ERR;
     if(!getUintValue(cfg, AGENT_IPCAM_PORT, (unsigned int *)&ipcam_port))                       AGS_ERR;
-
-    getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
-    getCamResValue(cfg, IPCAM_RESOLUTION, &ipcam_resolution);
-
-    if(!getUintValue(cfg, STREAMING_BUFFER_SIZE, &streaming_buffer_size))                       AGS_ERR;
-
-    if(!getUintValue(cfg, AGENT_CHUNKS_AMOUNT, &chunks_amount))                                 AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_POSTFIX, ipcam_postfix, sizeof(ipcam_postfix)))            AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_CHANNEL, ipcam_channel, sizeof(ipcam_channel)))            AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_MODE, ipcam_channel, sizeof(ipcam_mode)))                  AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
-    if(!getStrValue(cfg, AGENT_IPCAM_IFACE, cam_iface, sizeof(cam_iface)))                      AGS_ERR;
-    if(!getStrValue(cfg, AGENT_IPCAM_IFACE_MODEL, cam_iface_model, sizeof(cam_iface_model)))    AGS_ERR;
+    getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);
     if(!getUintValue(cfg, AGENT_INTERLEAVED_MODE, &interleaved_mode))                           AGS_ERR;
+
+    if(!getUintValue(cfg, STREAMING_BUFFER_SIZE, &streaming_buffer_size))                       AGS_ERR;
 
     if(!getUintValue(cfg, SET_SSL_FOR_URL_REQUEST, (unsigned int* )&is_ssl))                    AGS_ERR;
 
@@ -319,71 +339,19 @@ static void initiate_defaults() {
     wud_port = DEFAULT_WUD_PORT;
     watchdog_to_sec = DEFAULT_WATCHDOG_TO_SEC;
 
-    ipcam_port = DEFAULT_IPCAM_PORT;
     au_strcpy(ipcam_ip, DEFAULT_IPCAM_IP, LIB_HTTP_MAX_IPADDRES_SIZE);
-    chunks_amount = DEFAULT_CHUNKS_AMOUNT;
-    streaming_buffer_size = DEFAULT_MAX_UDP_STREAM_BUFF_SIZE;
-    ipcam_resolution = DEFAULT_IPCAM_RESOLUTION;
-    interleaved_mode = DEFAULT_IPCAM_INTERLEAVED_MODE;
-
+    ipcam_port = DEFAULT_IPCAM_PORT;
+    ipcam_postfix[0] = '\0';
+    ipcam_channel[0] = '\0';
     au_strcpy(cam_login, DEFAULT_IPCAM_LOGIN, sizeof(cam_login)-1);
     au_strcpy(cam_password, DEFAULT_IPCAM_PASSWORD, sizeof(cam_password)-1);
-    au_strcpy(cam_iface, DEFAULT_IPCAM_IFACE, sizeof(cam_iface)-1);
-    au_strcpy(cam_iface_model, DEFAULT_IPCAM_IFACE_MODEL, sizeof(cam_iface_model)-1);
+    video_protocol = AG_VIDEO_RTSP;
+    interleaved_mode = DEFAULT_IPCAM_INTERLEAVED_MODE;
 
+    streaming_buffer_size = DEFAULT_MAX_UDP_STREAM_BUFF_SIZE;
     is_ssl = DEFAULT_IS_SSL;
 
     curlopt_ssl_verify_peer = DEFAULT_IPCAM_SSL_VERIFY_PEER;
     curlopt_ca_info[0] = '\0';
 }
 
-/*
- Get log_level_t value
-    cfg           - poiner to cJSON object containgng configuration
-    field_name    - JSON fileld name
-    llt_setting   - returned value of field_name
-*/
-static void getLLTValue(cJSON* cfg, const char* field_name, log_level_t* llt_setting) {
-    char buf[10];
-    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
-        fprintf(stderr, "Default will be used instead.\n");
-    else if(!strcmp(buf, AGENT_LL_DEBUG))
-        *llt_setting = LL_DEBUG;
-    else if(!strcmp(buf, AGENT_LL_WARNING))
-        *llt_setting = LL_WARNING;
-    else if(!strcmp(buf, AGENT_LL_INFO))
-        *llt_setting = LL_INFO;
-    else if(!strcmp(buf, AGENT_LL_ERROR))
-        *llt_setting = LL_ERROR;
-    else
-        fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
-                field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
-        );
-}
-static void getProtocolValue(cJSON* cfg, const char* field_name, int* prot_val) {
-    char buf[10];
-    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
-        fprintf(stderr, "Default will be used instead.\n");
-    else if(!strcmp(buf, AGENT_IC_RTMP))
-        *prot_val = AG_VIDEO_RTMP;
-    else if(!strcmp(buf, AGENT_IC_RTSP))
-        *prot_val = AG_VIDEO_RTSP;
-    else
-        fprintf(stderr, "Setting %s = %s. Posssible values are %s or %s. Default will be used instead\n",
-                field_name, buf, AGENT_IC_RTMP, AGENT_IC_RTSP
-        );
-}
-static void getCamResValue(cJSON* cfg, const char* field_name, t_ao_cam_res* cam_res) {
-    char buf[10];
-    if(!getStrValue(cfg, field_name, buf, sizeof(buf)))
-        fprintf(stderr, "Default will be used instead.\n");
-    else if(!strcmp(buf, IR_LOW_RES))
-        *cam_res = AO_RES_LO;
-    else if(!strcmp(buf, IR_HI_RES))
-        *cam_res = AO_RES_HI;
-    else
-        fprintf(stderr, "Setting %s = %s. Posssible values are %s, %s, %s or %s. Default will be used instead\n",
-                field_name, buf, AGENT_LL_DEBUG, AGENT_LL_INFO,  AGENT_LL_WARNING, AGENT_LL_ERROR
-        );
-
-}

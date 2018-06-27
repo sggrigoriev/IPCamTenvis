@@ -168,7 +168,8 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
 
     switch (device) {
         case AC_CAMERA: {
-             ac_makeAlfaProURL(url, sizeof(url), ag_getCamIP(), ag_getCamPort(), ag_getCamLogin(), ag_getCamPassword(), ag_getCamResolution());
+            /* rtsp://<ip>:port/0 */
+            snprintf(url, sizeof(url)-1, "rtsp://%s:%s/%s", ag_getCamIP(), ag_getCamPort(), ag_getCamPostfix());
             if(sess->url = au_strdup(url), !sess->url) {
                 pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
                 goto on_error;

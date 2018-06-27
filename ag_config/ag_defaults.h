@@ -47,18 +47,15 @@
 /* IP Cam settings */
 #define DEFAULT_IPCAM_IP        "127.0.0.1"
 #define DEFAULT_IPCAM_PORT      554
-#define IPCAM_HIRES             "11"
-#define IPCAP_LORES             "12"
+
 #define AG_VIDEO_RTMP           1
 #define AG_VIDEO_RTSP           0
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTSP
-#define DEFAULT_CHUNKS_AMOUNT   12
 #define DEFAULT_MAX_UDP_STREAM_BUFF_SIZE    8192    /* I had 1514 in trace and add a little...*/
-#define DEFAULT_IPCAM_RESOLUTION            AO_RES_LO
-#define DEFAULT_IPCAM_LOGIN     ""
-#define DEFAULT_IPCAM_PASSWORD  ""
-#define DEFAULT_IPCAM_IFACE     "cgi-bin"
-#define DEFAULT_IPCAM_IFACE_MODEL   "hi3510"
+
+#define DEFAULT_IPCAM_LOGIN     "admin"
+#define DEFAULT_IPCAM_PASSWORD  "admin"
+
 #define DEFAULT_IPCAM_INTERLEAVED_MODE  1
 /**********************************************************
  * Local test settings

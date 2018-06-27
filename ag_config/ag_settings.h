@@ -53,15 +53,16 @@ unsigned int    ag_getAgentWDTO();          /* timeout for watchdog sending */
 
 const char*     ag_getCamIP();            /* IP Camera address */
 int             ag_getCamPort();            /* IP Cam port */
-int             ag_getIPCamProtocol();      /* RTMP or RTSP */
-unsigned int    ag_getVideoChunksAmount();  /* Amount of buffers for video translation */
-t_ao_cam_res    ag_getCamResolution();
-unsigned int    ag_getStreamBufferSize();
+const char*     ag_getCamPostfix();         /* Some shit right after the ip:port/ */
+const char*     ag_getCamChannel();         /* "0" - hi res, "1" - low res, "2" - 2nd channel - applicable for av & video */
+const char*     ag_getCamMode();            /* "av" or "video" or "audio" */
 const char*     ag_getCamLogin();
 const char*     ag_getCamPassword();
-const char*     ag_getCamIface();
-const char*     ag_getCamIfaceModel();
+int             ag_getIPCamProtocol();      /* RTMP or RTSP */
 int             ag_isCamInterleavedMode();
+
+unsigned int    ag_getStreamBufferSize();
+
 
 long    ag_getConnectRespTO();      /* TO to wait video connect confirmation from the cloud */
 long    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation from the cloud */

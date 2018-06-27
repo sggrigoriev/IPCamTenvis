@@ -43,6 +43,8 @@ typedef struct {
     char track[AC_RTSP_TRACK_SIZE];
     t_ac_callback_buf header_buf;
     t_ac_callback_buf body_buf;
+    char* video_url;
+    char* audio_url;
 } t_curl_session;
 
 static unsigned long AC_BUF_SIZE;
@@ -175,7 +177,6 @@ static const char* get_source_ip(char* ip, size_t size, const char* msg) {
     return ip;
 }
 
-
 /*************************************************************************/
 int ac_alfaProInit(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_CAMERA, 0);
@@ -205,6 +206,8 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
     cs->body_buf.free_space = AC_BUF_SIZE;
     cs->header_buf.buf_sz = AC_BUF_SIZE;
     cs->header_buf.free_space = AC_BUF_SIZE;
+    cs->video_url = NULL;
+    cs->audio_url = NULL;
 
     sess->session = cs;
 
@@ -213,7 +216,9 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
 #endif
     if(res = curl_easy_setopt(cs->h, CURLOPT_URL, sess->url), res != CURLE_OK) goto on_error;
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, 0L), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
+    if (res = curl_easy_setopt(cs->h, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;
+    if (res = curl_easy_setopt(cs->h, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
 
@@ -254,6 +259,8 @@ void ac_alfaProDown(t_at_rtsp_session* sess) {
         }
         if (cs->body_buf.buf) free(cs->body_buf.buf);
         if (cs->header_buf.buf) free(cs->header_buf.buf);
+        if (cs->audio_url) free(cs->audio_url);
+        if (cs->video_url) free(cs->video_url);
         free(cs);
     }
     sess->session = NULL;
@@ -265,7 +272,10 @@ int ac_alfaProOptions(t_at_rtsp_session* sess) {
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) goto on_error;
+    char uri[LIB_HTTP_MAX_URL_SIZE];
+
+    sprintf(uri, sizeof(uri)-1, "%s/%s%s", sess->url, ag_getCamMode(), ag_getCamChannel());
+    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_OPTIONS), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(cs->h);
@@ -288,7 +298,11 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) goto on_error;
+    char uri[LIB_HTTP_MAX_URL_SIZE];
+
+    sprintf(uri, sizeof(uri)-1, "%s/%s%s", sess->url, ag_getCamMode(), ag_getCamChannel());
+
+    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long) CURL_RTSPREQ_DESCRIBE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(cs->h);
@@ -299,6 +313,8 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     strncpy(descr, cs->body_buf.buf, size-1);
     descr[size-1] = '\0';
+
+    if(!get_audio_and_video_urls(descr, cs)) goto on_error;
 
     return 1;
 on_error:
@@ -417,42 +433,6 @@ int ac_alfaProTeardown(t_at_rtsp_session* sess) {
     pu_log(LL_INFO, "%s: Finished OK", __FUNCTION__);
 
     return 1;
-}
-
-const char* ac_makeAlfaProURL(char *url, size_t size, const char* ip, int port, const char* login, const char* pwd, t_ao_cam_res resolution) {
-    char s_port[20];
-    url[0] = '\0';
-    sprintf(s_port, "%d", port);
-
-    if((strlen(s_port) + strlen(ip) + strlen(login) + strlen(pwd) + strlen(AC_LOW_RES) + 4) > (size -1)) {
-        pu_log(LL_ERROR, "%s: uri size too small!", __FUNCTION__);
-        return url;
-    }
-    strcpy(url, "rtsp://");
-    if(strlen(login) && strlen(pwd)) {
-        if(!au_strcat(url, login, size)) return 0;
-        if(!au_strcat(url, ":", size)) return 0;
-        if(!au_strcat(url, pwd, size)) return 0;
-        if(!au_strcat(url, "@", size)) return 0;
-        if(!au_strcat(url, ip, size)) return 0;
-    }
-    else {
-        if(!au_strcat(url, ip, size)) return 0;
-    }
-    if(!au_strcat(url, ":", size)) return 0;
-    if(!au_strcat(url, s_port, size)) return 0;
-    if(!au_strcat(url, "/", size)) return 0;
-    switch (resolution) {
-        case AO_RES_LO:
-            if(!au_strcat(url, AC_LOW_RES, size)) return 0;
-            break;
-        case AO_RES_HI:
-            if(!au_strcat(url, AC_HI_RES, size)) return 0;
-            break;
-        default:
-            break;
-    }
-    return url;
 }
 
 int getAlfaProConnSocket(t_at_rtsp_session* sess) {
