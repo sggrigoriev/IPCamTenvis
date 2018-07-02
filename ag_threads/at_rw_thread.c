@@ -89,6 +89,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         t_ac_udp_read_result ret;
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
+
         if(!ret.rc) {            //timeout
             continue;
         }
