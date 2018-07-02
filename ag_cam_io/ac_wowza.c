@@ -27,6 +27,7 @@
 #include <gst/rtsp/gstrtspconnection.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <gst/sdp/gstsdpmessage.h>
 
 #include "pu_logger.h"
 
@@ -78,48 +79,129 @@ static int make_ip_from_host(char* ip, size_t size, const char* host) {
     return 1;
 }
 
+/***************************************************
+ * Get attribute value ("a=") from sdp with attr_name, given media type (video or audoi)
+ * if media_type is NULL then the common attribute takes.
+ * @param sdp           txt RTSP SDP presentation
+ * @param attr_name     attribute name (a=<attr_name>)
+ * @param media_type    NULL, video or audio
+ * @return              NULL if attr not found or attribute value as null-terminated string
+ */
+const char* ac_wowzaGetAttr(const char* sdp_ascii, const char* attr_name, const char* media_type) {
+    GstSDPMessage *sdp;
+    const char* ret = NULL;
+
+    if(gst_sdp_message_new (&sdp) != GST_SDP_OK) {
+        pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+        return ret;
+    }
+    if(gst_sdp_message_parse_buffer ((const guint8*)sdp_ascii, (guint)strlen(sdp_ascii), sdp) != GST_SDP_OK) {
+        pu_log(LL_ERROR, "%s: Error parsing sdp ASCII description", __FUNCTION__);
+        gst_sdp_message_free(sdp);
+        return ret;
+    }
+    if(!media_type) {   /* looking for connon attribute */
+        ret = gst_sdp_message_get_attribute_val(sdp, attr_name);
+    }
+    else {              /* looking for the attribute of specific media type */
+        for (guint i = 0; i < gst_sdp_message_medias_len(sdp); i++) {
+            const GstSDPMedia *sdp_media = gst_sdp_message_get_media(sdp, i);
+            if((sdp_media->media != NULL) && !strcmp(sdp_media->media, media_type)) {
+                ret = gst_sdp_media_get_attribute_val(sdp_media, attr_name);
+                break;
+            }
+        }
+    }
+    return ret;
+}
+
+/********************************************
+ * Finds control attribute for video&audio medias and replaca it on controls at parameters
+ * @param sdp
+ * @param video_control
+ * @param audio_control
+ * @return
+ */
+int set_media_controls(GstSDPMessage* sdp, const char* video_control, const char* audio_control) {
+    GstSDPMedia **new_sdp_media;
+    guint old_media_len = gst_sdp_message_medias_len(sdp);
+    if(new_sdp_media = calloc(old_media_len, sizeof(GstSDPMedia*)), !(new_sdp_media)) {
+        pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+        return 0;
+    }
+
+    for(guint i = 0; i < old_media_len; i++) {
+        const GstSDPMedia* sdp_media = gst_sdp_message_get_media(sdp, i);
+        if(gst_sdp_media_copy(sdp_media, &new_sdp_media[i]) != GST_SDP_OK) {
+            pu_log(LL_ERROR, "%s: Error using %s at %iteration %d", __FUNCTION__, gst_sdp_media_copy, i);
+            return 0;
+        }
+
+        for(guint j = 0; j < gst_sdp_media_attributes_len(sdp_media); j++) {
+            const GstSDPAttribute* media_attr = gst_sdp_media_get_attribute(sdp_media, j);
+            if(!strcmp(media_attr->key, "control")) {
+                GstSDPAttribute* m_attr;
+                if(m_attr = calloc(1, sizeof(GstSDPAttribute)), !m_attr) {
+                    pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+                    free(new_sdp_media);
+                    return 0;
+                }
+                gst_sdp_attribute_set(m_attr, "control", (!i)?video_control:audio_control);
+                gst_sdp_media_replace_attribute(new_sdp_media[i], j, m_attr); //sholud be used for copy!
+            }
+        }
+    }
+
+    g_array_free(sdp->medias, TRUE);
+    for(int i = 0; i < old_media_len; i++) {
+        gst_sdp_message_add_media(sdp, new_sdp_media[i]);
+    }
+    free(new_sdp_media);
+    return 1;
+}
+
 /* Replace
  * o=StreamingServer 3331435948 1116907222000 IN IP4 10.42.0.115 -> o=- 0 0 IN IP4 127.0.0.1
  * c=IN IP4 0.0.0.0 -> c=IN IP4 <WOWZA IP>
- * add TCP transport (RTP/AVPTCP) if tcp parameter is not null
- * TODO: gst_sdp_message_parse_buffer ()!!!
+ * set a=control:*
+ * And set media contrlols for video and audio (if any) for trackID=0 and tractID=1
+ * Return NULL atring if error
 */
-static char* make_announce_body(char* buf, size_t size, const char* cam_descr, const char* host,  const char* tcp) {
-    char ip[20] ={0};
-    char connection[500] ={0};
+#define MAD_ERR() {pu_log(LL_ERROR, "%s: GST error at %d", __FUNCTION__, __LINE__); goto on_error;}
+static char* make_announce_body(char* buf, size_t size, const char* cam_descr, const char* host) {
+    GstSDPMessage * sdp = NULL;
 
-    if(!au_strcpy(buf, cam_descr, size)) return 0;
+    if(gst_sdp_message_new (&sdp) != GST_SDP_OK) MAD_ERR();
+    if(gst_sdp_message_parse_buffer ((const guint8*)cam_descr, (guint)strlen(cam_descr), sdp) != GST_SDP_OK) MAD_ERR();
 
-    if(!make_ip_from_host(ip, sizeof(ip), host)) return NULL;
-    if(!au_getSection(connection, sizeof(connection), cam_descr, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE)) {
-        pu_log(LL_ERROR, "%s: can not extract connection parameter from Camera SDP %s Exiting", __FUNCTION__, cam_descr);
-        return NULL;
-    }
-    if(!au_replaceSection(connection, sizeof(connection), AC_RTSP_CD_IP4, AC_RTSP_EOL, AU_NOCASE, ip)) {
-        pu_log(LL_ERROR, "%s: can not replace IP %s in VS connection parameter %s Exiting", __FUNCTION__, ip, cam_descr);
-        return NULL;
-    }
-    if(tcp) {
-        if(!au_replaceSection(buf, size, AC_RTSP_SDP_TRN1_S, AC_RTSP_SDP_TRN_E, AU_NOCASE, "RTP/AVP/TCP")) {
-            pu_log(LL_ERROR, "%s: can not replace transport video parameter RTP/AVP to RTP/AVP/TCP in %s Exiting", __FUNCTION__, buf);
-            return NULL;
-        }
-        if(!au_replaceSection(buf, size, AC_RTSP_SDP_TRN2_S, AC_RTSP_SDP_TRN_E, AU_NOCASE, "RTP/AVP/TCP")) {
-            pu_log(LL_ERROR, "%s: can not replace transport audeo parameter RTP/AVP to RTP/AVP/TCP in %s Exiting", __FUNCTION__, buf);
-            return NULL;
-        }
-    }
-    if(!au_replaceSection(buf, size, AC_RTSP_SDP_CD, AC_RTSP_EOL, AU_NOCASE, connection)) {
-        pu_log(LL_ERROR, "%s: can not replace connection parameter %s to VS SDP %s Exiting", __FUNCTION__, connection, buf);
-        return NULL;
-    }
+/* Set o= */
+    if(gst_sdp_message_set_origin(sdp,
+                                    "-",
+                                    "0",
+                                    "0",
+                                    "IN",
+                                    "IP4",
+                                    "127.0.0.1"
+                                    ) !=  GST_SDP_OK) MAD_ERR();
+/* c= ... -> c = IN IP4 host */
+    if(gst_sdp_message_set_connection(sdp, "IN", "IP4", host, 0, 0) != GST_SDP_OK) MAD_ERR();
 
-// Replace origin
-    if(!au_replaceSection(buf, size, AC_RTSP_SDP_ORIGIN, AC_RTSP_EOL, AU_NOCASE, AC_RTSP_VS_ORIGIN)) {
-        pu_log(LL_ERROR, "%s: can not replace origin parameter %s to VS SDP %s Exiting", __FUNCTION__, AC_RTSP_VS_ORIGIN, buf);
-        return NULL;
-    }
+/* add a=control:* */
+    if(gst_sdp_message_add_attribute(sdp, "control", "*") != GST_SDP_OK) MAD_ERR();
+
+/* And set media contrlols for video and audio (if any) for trackID=0 and tractID=1 */
+    if(!set_media_controls(sdp, "trackID=0", "trackID=1")) goto on_error;
+
+    char* txt = gst_sdp_message_as_text(sdp);
+    pu_log(LL_DEBUG, "%s: SDP message for ANNOUCE:\n%s", __FUNCTION__, txt);
+    strncpy(buf, txt, size-1);
+    free(txt);
+    gst_sdp_message_free(sdp);
     return buf;
+
+on_error:
+    if(sdp)gst_sdp_message_free(sdp);
+    return NULL;
 }
 
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
@@ -222,7 +304,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
 
     char new_description[1000] = {0};
-    if(!make_announce_body(new_description, sizeof(new_description), description, gs->url->host, "TCP")) goto on_error;
+    if(!make_announce_body(new_description, sizeof(new_description), description, gs->url->host)) goto on_error;
 
     rc = gst_rtsp_message_init (&req); AC_GST_ANAL(rc);
     rc = gst_rtsp_message_init_request (&req, GST_RTSP_ANNOUNCE, sess->url); AC_GST_ANAL(rc);

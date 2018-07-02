@@ -89,8 +89,9 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         t_ac_udp_read_result ret;
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
-        if(!ret.rc)              //timeout
+        if(!ret.rc) {            //timeout
             continue;
+        }
         else if(ret.rc < 0) {        // Error
             char err_buf[120];
             pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
@@ -98,7 +99,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             pu_queue_push(q, msg, strlen(msg) + 1);
             goto on_stop;
         }
-
+//        pu_log(LL_DEBUG, "%s: %d bytes read", __FUNCTION__, ret.rc);
         if(!ac_udp_write(write_sock, buf, (size_t)ret.rc)) {
             char b[120];
             pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
@@ -117,7 +118,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
 #endif
     }
 on_stop:
-//    pu_log(LL_INFO, "%s stop %s", AT_THREAD_NAME, name);
+    pu_log(LL_INFO, "%s stop %s", AT_THREAD_NAME, name);
     pthread_exit(NULL);
 }
 

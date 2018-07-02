@@ -121,8 +121,6 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
         ${SYSROOT_PATH}/usr/include
         #        ${gst_INCLUDE_DIRS}
         #        /usr/local/include/nopoll
-# OOBE includes
-        OOBE
     )
     message(STATUS "Compiling for hiSilicon CPU (${TOOLCHAIN_PATH}/target/usr)")
     message(STATUS "sysroot is (${SYSROOT_PATH})")
@@ -148,22 +146,10 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/json/*.c
 )
 
-#OOBE - self-registration utility
-file(GLOB SOURCE_FILES_OOBE
-        OOBE/*.c
-        ${PROXY_LIBS_PATH}/proxy_eui64/eui64.c
-        ${PROXY_LIBS_PATH}/pc_config/pc_config.c
-        ${PROXY_LIBS_PATH}/pu_logger/*.c
-        ${PROXY_LIBS_PATH}/json/*.c
-)
-
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     add_executable(Tenvis ${SOURCE_FILES})
     target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
-
-    add_executable(OOBE ${SOURCE_FILES_OOBE})
-    target_link_libraries(OOBE ${REQUIRED_LIBRARIES})
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             add_executable(Tenvis ${SOURCE_FILES})

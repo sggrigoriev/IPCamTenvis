@@ -25,6 +25,15 @@
 #include <stdlib.h>
 
 #include "ac_cam_types.h"
+/***************************************************
+ * Get attribute value ("a=") from sdp with attr_name, given media type (video or audoi)
+ * if media_type is NULL then the common attribute takes.
+ * @param sdp           txt RTSP SDP presentation
+ * @param attr_name     attribute name (a=<attr_name>)
+ * @param media_type    NULL, video or audio
+ * @return              NULL if attr not found or attribute value as null-terminated string
+ */
+const char* ac_wowzaGetAttr(const char* sdp_ascii, const char* attr_name, const char* media_type);
 
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id);
 void ac_WowzaDown(t_at_rtsp_session* sess);

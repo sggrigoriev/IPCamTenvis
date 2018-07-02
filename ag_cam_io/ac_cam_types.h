@@ -131,7 +131,9 @@ typedef union {
 typedef struct _ACRTSPSession {
     t_ac_rtsp_device device;
     t_ac_rtsp_states state;
-    char* url;
+    char* url;              /* What we got externally */
+    char* audio_url;        /* for audio setup */
+    char* video_url;        /* for media setup */
     char* rtsp_session_id;
     int CSeq;                   /* NB! this is NEXT number */
     t_ac_rtsp_media media;   /* NB! for non-interleaved mode only! */

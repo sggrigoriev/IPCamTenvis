@@ -40,11 +40,8 @@
 
 typedef struct {
     CURL* h;
-    char track[AC_RTSP_TRACK_SIZE];
     t_ac_callback_buf header_buf;
     t_ac_callback_buf body_buf;
-    char* video_url;
-    char* audio_url;
 } t_curl_session;
 
 static unsigned long AC_BUF_SIZE;
@@ -167,13 +164,13 @@ static int get_media_port(const char* msg) {
 static const char* get_source_ip(char* ip, size_t size, const char* msg) {
     int pos = au_findSubstr(msg, AC_RTSP_SOURCE_IP, AU_NOCASE);
     ip[0] = '\0';
-    if(pos < 0) return ip;
+    if (pos < 0) return ip;
     int start = pos + strlen(AC_RTSP_SOURCE_IP);
-    int finish = au_findFirstOutOfSet(msg+start, "0123456789.") + start;
-    if(finish < 0) return ip;
-    if((finish - start+1) > size) return ip;
-    memcpy(ip, msg+start, finish-start);
-    ip[finish-start] = '\0';
+    int finish = au_findFirstOutOfSet(msg + start, "0123456789.") + start;
+    if (finish < 0) return ip;
+    if ((finish - start + 1) > size) return ip;
+    memcpy(ip, msg + start, finish - start);
+    ip[finish - start] = '\0';
     return ip;
 }
 
@@ -206,8 +203,6 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
     cs->body_buf.free_space = AC_BUF_SIZE;
     cs->header_buf.buf_sz = AC_BUF_SIZE;
     cs->header_buf.free_space = AC_BUF_SIZE;
-    cs->video_url = NULL;
-    cs->audio_url = NULL;
 
     sess->session = cs;
 
@@ -259,8 +254,6 @@ void ac_alfaProDown(t_at_rtsp_session* sess) {
         }
         if (cs->body_buf.buf) free(cs->body_buf.buf);
         if (cs->header_buf.buf) free(cs->header_buf.buf);
-        if (cs->audio_url) free(cs->audio_url);
-        if (cs->video_url) free(cs->video_url);
         free(cs);
     }
     sess->session = NULL;
@@ -272,10 +265,7 @@ int ac_alfaProOptions(t_at_rtsp_session* sess) {
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    char uri[LIB_HTTP_MAX_URL_SIZE];
-
-    sprintf(uri, sizeof(uri)-1, "%s/%s%s", sess->url, ag_getCamMode(), ag_getCamChannel());
-    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_OPTIONS), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(cs->h);
@@ -298,11 +288,7 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    char uri[LIB_HTTP_MAX_URL_SIZE];
-
-    sprintf(uri, sizeof(uri)-1, "%s/%s%s", sess->url, ag_getCamMode(), ag_getCamChannel());
-
-    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
+    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long) CURL_RTSPREQ_DESCRIBE), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(cs->h);
@@ -313,8 +299,6 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     strncpy(descr, cs->body_buf.buf, size-1);
     descr[size-1] = '\0';
-
-    if(!get_audio_and_video_urls(descr, cs)) goto on_error;
 
     return 1;
 on_error:
@@ -330,22 +314,18 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
     char transport[AC_RTSP_TRANSPORT_SIZE];
-    char uri[AC_RTSP_HEADER_SIZE];
-
-    if(!au_strcpy(cs->track, AC_TRACK, sizeof(cs->track))) goto on_error;
-    if(!au_strcat(cs->track, (media_type==AC_RTSP_VIDEO_SETUP)?AC_VIDEO_TRACK:AC_AUDIO_TRACK, sizeof(cs->track))) goto on_error; /* save "trackID=0" for use in PLAY command */
-
-
-    if(!au_strcpy(uri, sess->url, sizeof(uri))) goto on_error;
-    if(!au_strcat(uri, "/", sizeof(uri))) goto on_error;
-    if(!au_strcat(uri, cs->track, sizeof(uri))) goto on_error;                /* Add to url "/trackID=0" */
 
     if(ag_isCamInterleavedMode())
         make_il_transport_string(transport, sizeof(transport), media_type);
     else
         make_rt_transport_string(transport, sizeof(transport), (media_type == AC_RTSP_VIDEO_SETUP)?sess->media.rt_media.video.dst.port.rtp:sess->media.rt_media.audio.dst.port.rtp);
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, uri), res != CURLE_OK) goto on_error;
+    if(media_type == AC_RTSP_VIDEO_SETUP) {
+        if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->video_url), res != CURLE_OK) goto on_error;
+    }
+    else {
+        if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->audio_url), res != CURLE_OK) goto on_error;
+    }
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_TRANSPORT, transport), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_SETUP), res != CURLE_OK) goto on_error;
 

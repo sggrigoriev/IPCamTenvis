@@ -73,13 +73,14 @@ static void print_Agent_start_params() {
 
     pu_log(LL_INFO, "\tCam IP: %s", ag_getCamIP());
     pu_log(LL_INFO, "\tCam port: %d", ag_getCamPort());
-    pu_log(LL_INFO, "\tCam Resolution: %d", ag_getCamResolution());
+    pu_log(LL_INFO, "\tURL postfix: %s", ag_getCamPostfix());
+    pu_log(LL_INFO, "\tCanm Mode: %s", ag_getCamMode());
+    pu_log(LL_INFO, "\tCam Channel: %s", ag_getCamChannel());
     pu_log(LL_INFO, "\tCam Login: %s", ag_getCamLogin());
     pu_log(LL_INFO, "\tCam Password: %s", ag_getCamPassword());
     pu_log(LL_INFO, "\tCam Protocol: %d", ag_getIPCamProtocol());
     pu_log(LL_INFO, "\tCam streaming: interleaved mode = %d", ag_isCamInterleavedMode());
 
-    pu_log(LL_INFO, "\tStreaming buffers amount: %d", ag_getVideoChunksAmount());
     pu_log(LL_INFO, "\tStreaming buffer size: %d", ag_getStreamBufferSize());
 
     pu_log(LL_INFO, "\tCurlopt SSL Verify Peer: %d", ag_getCurloptSSLVerifyPeer());
