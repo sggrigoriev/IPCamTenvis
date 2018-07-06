@@ -79,6 +79,91 @@ static int make_ip_from_host(char* ip, size_t size, const char* host) {
     return 1;
 }
 
+/**
+ * gst_sdp_media_copy_replace: - copypizded from https://github.com/jojva/gst-plugins-base/blob/master/gst-libs/gst/sdp/gstsdpmessage.c
+ * gst_sdp_media_copy.
+ *
+ * Makes copy and replaces some media attributes: Finds control attribute for video&audio medias and replaca it on controls at parameters
+ * @media: a #GstSDPMedia
+ * @copy: (out) (transfer full): pointer to new #GstSDPMedia
+ * control: replacement value for "a=contrlol:" in media
+ *
+ * Allocate a new copy of @media and store the result in @copy. The value in
+ * @copy should be release with gst_sdp_media_free function.
+ *
+ * Returns: a #GstSDPResult
+ *
+ * Since: 1.2
+ */
+#define FREE_STRING(field)              g_free (field); (field) = NULL
+#define REPLACE_STRING(field, val)      FREE_STRING(field); (field) = g_strdup (val)
+
+GstSDPResult
+gst_sdp_media_copy_n_replace (const GstSDPMedia * media, GstSDPMedia ** copy, const char* control)
+{
+    GstSDPResult ret;
+    GstSDPMedia *cp;
+    guint i, len;
+
+    if (media == NULL)
+        return GST_SDP_EINVAL;
+
+    ret = gst_sdp_media_new (copy);
+    if (ret != GST_SDP_OK)
+        return ret;
+
+    cp = *copy;
+
+    REPLACE_STRING (cp->media, media->media);
+    cp->port = media->port;
+    cp->num_ports = media->num_ports;
+    REPLACE_STRING (cp->proto, media->proto);
+
+    len = gst_sdp_media_formats_len (media);
+    for (i = 0; i < len; i++) {
+        gst_sdp_media_add_format (cp, gst_sdp_media_get_format (media, i));
+    }
+
+    REPLACE_STRING (cp->information, media->information);
+
+    len = gst_sdp_media_connections_len (media);
+    for (i = 0; i < len; i++) {
+        const GstSDPConnection *connection =
+                gst_sdp_media_get_connection (media, i);
+        gst_sdp_media_add_connection (cp, connection->nettype, connection->addrtype,
+                                      connection->address, connection->ttl, connection->addr_number);
+    }
+
+    len = gst_sdp_media_bandwidths_len (media);
+    for (i = 0; i < len; i++) {
+        const GstSDPBandwidth *bw = gst_sdp_media_get_bandwidth (media, i);
+        gst_sdp_media_add_bandwidth (cp, bw->bwtype, bw->bandwidth);
+    }
+
+    gst_sdp_media_set_key (cp, media->key.type, media->key.data);
+
+    len = gst_sdp_media_attributes_len (media);
+    for (i = 0; i < len; i++) {
+        const GstSDPAttribute *att = gst_sdp_media_get_attribute (media, i);
+        if(!strcmp(att->key, "control")) {
+            GstSDPAttribute* m_attr;
+            if(m_attr = calloc(1, sizeof(GstSDPAttribute)), !m_attr) {
+                pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+                gst_sdp_media_free(cp);
+                return GST_SDP_EINVAL;
+            }
+            REPLACE_STRING (m_attr->key, "control");
+            REPLACE_STRING(m_attr->value, control);
+            gst_sdp_media_add_attribute (cp, m_attr->key, m_attr->value);
+        }
+        else {
+            gst_sdp_media_add_attribute(cp, att->key, att->value);
+        }
+    }
+
+    return GST_SDP_OK;
+}
+
 /***************************************************
  * Get attribute value ("a=") from sdp with attr_name, given media type (video or audoi)
  * if media_type is NULL then the common attribute takes.
@@ -130,35 +215,30 @@ int set_media_controls(GstSDPMessage* sdp, const char* video_control, const char
         pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
         return 0;
     }
-    guint i=0;
+    guint i;
     for(i = 0; i < old_media_len; i++) {
         const GstSDPMedia* sdp_media = gst_sdp_message_get_media(sdp, i);
-        if(gst_sdp_media_copy(sdp_media, &new_sdp_media[i]) != GST_SDP_OK) {
-            pu_log(LL_ERROR, "%s: Error using %s at %iteration %d", __FUNCTION__, gst_sdp_media_copy, i);
-            return 0;
+        if(!strcmp(sdp_media->media, "video")) {
+            if(gst_sdp_media_copy_n_replace(sdp_media, new_sdp_media+i, video_control) != GST_SDP_OK) {
+                pu_log(LL_ERROR, "%s: Error video control attr replacement", __FUNCTION__);
+                free(new_sdp_media);
+                return 0;
+            }
         }
-        guint j=0;
-        for(j = 0; j < gst_sdp_media_attributes_len(sdp_media); j++) {
-            const GstSDPAttribute* media_attr = gst_sdp_media_get_attribute(sdp_media, j);
-            if(!strcmp(media_attr->key, "control")) {
-                GstSDPAttribute* m_attr;
-                if(m_attr = calloc(1, sizeof(GstSDPAttribute)), !m_attr) {
-                    pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
-                    free(new_sdp_media);
-                    return 0;
-                }
-                gst_sdp_attribute_set(m_attr, "control", (!i)?video_control:audio_control);
-                gst_sdp_media_replace_attribute(new_sdp_media[i], j, m_attr); //sholud be used for copy!
+        if(!strcmp(sdp_media->media, "audio")) {
+            if(gst_sdp_media_copy_n_replace(sdp_media, new_sdp_media+i, audio_control) != GST_SDP_OK) {
+                pu_log(LL_ERROR, "%s: Error audio control attr replacement", __FUNCTION__);
+                free(new_sdp_media);
+                return 0;
             }
         }
     }
 
     g_array_free(sdp->medias, TRUE);
-    int i1 = 0;
-    for(i1=0; i1 < old_media_len; i1++) {
-        gst_sdp_message_add_media(sdp, new_sdp_media[i1]);
+    for(i = 0; i < old_media_len; i++) {
+        gst_sdp_message_add_media(sdp, new_sdp_media[i]);
     }
-    free(new_sdp_media);
+    free(new_sdp_media); /* NB! The array is free but elements are not - they are kept in SDP */
     return 1;
 }
 
