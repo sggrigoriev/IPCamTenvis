@@ -104,7 +104,8 @@ const char* ac_wowzaGetAttr(const char* sdp_ascii, const char* attr_name, const 
         ret = gst_sdp_message_get_attribute_val(sdp, attr_name);
     }
     else {              /* looking for the attribute of specific media type */
-        for (guint i = 0; i < gst_sdp_message_medias_len(sdp); i++) {
+        guint i = 0;
+        for (i = 0; i < gst_sdp_message_medias_len(sdp); i++) {
             const GstSDPMedia *sdp_media = gst_sdp_message_get_media(sdp, i);
             if((sdp_media->media != NULL) && !strcmp(sdp_media->media, media_type)) {
                 ret = gst_sdp_media_get_attribute_val(sdp_media, attr_name);
@@ -129,15 +130,15 @@ int set_media_controls(GstSDPMessage* sdp, const char* video_control, const char
         pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
         return 0;
     }
-
-    for(guint i = 0; i < old_media_len; i++) {
+    guint i=0;
+    for(i = 0; i < old_media_len; i++) {
         const GstSDPMedia* sdp_media = gst_sdp_message_get_media(sdp, i);
         if(gst_sdp_media_copy(sdp_media, &new_sdp_media[i]) != GST_SDP_OK) {
             pu_log(LL_ERROR, "%s: Error using %s at %iteration %d", __FUNCTION__, gst_sdp_media_copy, i);
             return 0;
         }
-
-        for(guint j = 0; j < gst_sdp_media_attributes_len(sdp_media); j++) {
+        guint j=0;
+        for(j = 0; j < gst_sdp_media_attributes_len(sdp_media); j++) {
             const GstSDPAttribute* media_attr = gst_sdp_media_get_attribute(sdp_media, j);
             if(!strcmp(media_attr->key, "control")) {
                 GstSDPAttribute* m_attr;
@@ -153,8 +154,9 @@ int set_media_controls(GstSDPMessage* sdp, const char* video_control, const char
     }
 
     g_array_free(sdp->medias, TRUE);
-    for(int i = 0; i < old_media_len; i++) {
-        gst_sdp_message_add_media(sdp, new_sdp_media[i]);
+    int i1 = 0;
+    for(i1=0; i1 < old_media_len; i1++) {
+        gst_sdp_message_add_media(sdp, new_sdp_media[i1]);
     }
     free(new_sdp_media);
     return 1;
