@@ -100,10 +100,10 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
 
-        if(!ret.rc) {            //timeout
+        if(!ret.rc) {            /* timeout */
             continue;
         }
-        else if(ret.rc < 0) {        // Error
+        else if(ret.rc < 0) {        /* Error */
             char err_buf[120];
             pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
             const char *msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
