@@ -139,7 +139,7 @@ static int open_il_connection(t_at_rtsp_session* sess_in, t_at_rtsp_session* ses
         return 0;
     }
 // Using existing connections from RTSP negotiations - do not need opening TCP connections
-    if(!at_set_interleaved_rw(rd_sock, wr_sock)) {
+    if(!at_set_interleaved_rw(rd_sock, wr_sock, sess_in)) {
         pu_log(LL_ERROR, "%s: Can't initiate streaming treads for interleaved mode", __FUNCTION__);
         return 0;
     }

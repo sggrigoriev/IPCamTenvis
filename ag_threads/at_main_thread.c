@@ -465,9 +465,12 @@ void at_main_thread() {
                 }
                 break;
             case AQ_FromCam:
-                pu_log(LL_ERROR, "%s: %s Camera async interface not omplemented yet", AT_THREAD_NAME, mt_msg);
+                pu_log(LL_ERROR, "%s: %s Camera async interface not implemented yet", AT_THREAD_NAME, mt_msg);
                 break;
             case AQ_Timeout:
+                if(waiting_command != AT_CMD_NOTHING) {
+                    run_command(AT_CMD_NOTHING);    /* waiting command will be processed inside */
+                }
 //                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
                 break;
             case AQ_STOP:

@@ -125,6 +125,9 @@ static void reset_curl_buffers(t_curl_session* cs) {
 
     cs->header_buf.free_space = AC_BUF_SIZE;
     cs->body_buf.free_space = AC_BUF_SIZE;
+
+    bzero(cs->header_buf.buf, cs->header_buf.buf_sz);
+    bzero(cs->body_buf.buf, cs->body_buf.buf_sz);
 }
 
 static const char* make_il_transport_string(char* buf, size_t size, int media_type) {
@@ -299,7 +302,7 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     strncpy(descr, cs->body_buf.buf, size-1);
     descr[size-1] = '\0';
-
+    reset_curl_buffers(cs);
     return 1;
 on_error:
     err_report(res);
@@ -345,8 +348,6 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
         char lip[20] = {0};
         get_source_ip(lip, sizeof(lip), cs->header_buf.buf);
 
-        reset_curl_buffers(cs);
-
         char *ipd = au_strdup(strlen(lip) ? lip : ag_getCamIP());
         if (!ipd) {
              pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
@@ -362,6 +363,7 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
             sess->media.rt_media.audio.src.ip = ipd;
         }
     }
+    reset_curl_buffers(cs);
     return 1;
 on_error:
     err_report(res);
@@ -387,7 +389,7 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
     curl_easy_setopt(cs->h, CURLOPT_RANGE, NULL);
 
     pu_log(LL_INFO, "%s: finished OK", __FUNCTION__);
-
+    reset_curl_buffers(cs);
     return 1;
 on_error:
     err_report(res);
@@ -411,7 +413,7 @@ int ac_alfaProTeardown(t_at_rtsp_session* sess) {
     if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
 
     pu_log(LL_INFO, "%s: Finished OK", __FUNCTION__);
-
+    reset_curl_buffers(cs);
     return 1;
 }
 

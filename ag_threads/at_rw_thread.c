@@ -28,6 +28,8 @@
 #include <string.h>
 #include <ag_converter/ao_cmd_cloud.h>
 #include <ag_cam_io/ac_udp.h>
+#include <lib_timer.h>
+#include <ag_cam_io/ac_alfapro.h>
 
 #include "pu_logger.h"
 
@@ -77,6 +79,8 @@ static pthread_attr_t rdwr_attr;
 
 static t_ab_byte* rdwr_buf;
 
+static t_at_rtsp_session* the_session;
+
 pu_queue_t* fromRW;
 
 static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_byte* buf, pu_queue_t* q) {
@@ -84,9 +88,15 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
 #ifdef RW_CYCLES
     int step = RW_CYCLES;
 #endif
-
-     while(!stop) {
+    lib_timer_clock_t hart_beat = {0};
+    lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
+    while(!stop) {
         t_ac_udp_read_result ret;
+
+        if(lib_timer_alarm(hart_beat)) {
+            ac_alfaProOptions(the_session);     /* hart beats from the Camera */
+            lib_timer_init(&hart_beat, 30);
+        }
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
 
@@ -207,7 +217,7 @@ void at_get_rt_rw(t_rtsp_media_pairs* rd, t_rtsp_media_pairs* wr) {
     *rd = rd_socks;
     *wr = wr_socks;
 }
-int at_set_interleaved_rw(int rd, int wr) {
+int at_set_interleaved_rw(int rd, int wr, t_at_rtsp_session* cam_sess) {
     if(at_is_rw_thread_run()) return 1;
     fromRW = aq_get_gueue(AQ_FromRW);
 
@@ -218,6 +228,8 @@ int at_set_interleaved_rw(int rd, int wr) {
     media_buf_size = ag_getStreamBufferSize();
 
     if(rdwr_buf = calloc(media_buf_size, 1), !rdwr_buf) goto on_error;
+
+    the_session = cam_sess;
 
     return 1;
 on_error:

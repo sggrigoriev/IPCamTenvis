@@ -27,7 +27,7 @@
 int at_set_rt_rw(t_rtsp_media_pairs rd, t_rtsp_media_pairs wr);
 void at_get_rt_rw(t_rtsp_media_pairs* rd, t_rtsp_media_pairs* wr);
 
-int at_set_interleaved_rw(int rd, int wr);
+int at_set_interleaved_rw(int rd, int wr, t_at_rtsp_session* cam_sess);
 void at_get_interleaved_rw(int* rd, int* wr);
 
 /***************************
