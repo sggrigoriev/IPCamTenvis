@@ -161,23 +161,17 @@ t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) 
 
     t_ac_udp_read_result rc={-1, 0};
 
-    struct timespec t = {1,99999999}, rem;
-    useconds_t tm = 100000;
+    struct timespec t = {1,100}, rem;
 
     if(rc.rc = read(sock, buf, size), rc.rc < 0) {
 
         if(errno == ECONNREFUSED) pu_log(LL_ERROR, "%s: Connection refuzed", __FUNCTION__);
         if((errno == ECONNREFUSED) || (errno == EAGAIN)) {
-
-            usleep(tm);
-
-/*
             if(nanosleep(&t, &rem)) {
                 pu_log(LL_ERROR, "%s: nanosleep returns %d", __FUNCTION__, errno);
                 rc.rc = -1;
             }
-*/
-            rc.rc = 0; //Let it try again
+            rc.rc = 0; /* Let it try again */
         }
         else {
             pu_log(LL_ERROR, "%s: Read socket error: RC = %d - %s", __FUNCTION__, errno, strerror(errno));
@@ -205,5 +199,5 @@ int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
             }
         }
     }
-    return 1;
+    return rc;
 }
