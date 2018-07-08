@@ -425,7 +425,7 @@ int ac_WowzaOptions(t_at_rtsp_session* sess) {
         goto on_error;
     }
     if(msg.type_data.response.code != GST_RTSP_STS_OK) {
-        pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(msg.type_data.response.code));
+        pu_log(LL_ERROR, "%s: bad answer: %s", __FUNCTION__, gst_rtsp_status_as_text(msg.type_data.response.code));
         goto on_error;
     }
 //Now lets parse and show the answer
