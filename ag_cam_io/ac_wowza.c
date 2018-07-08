@@ -443,7 +443,7 @@ int ac_WowzaOptions(t_at_rtsp_session* sess) {
     rc = gst_rtsp_message_steal_body (&msg, &data, &size); AC_GST_ANAL(rc);
 
     if(size) {
-        pu_log(LL_DEBUG, "%s: Body received = \n%s", data);
+        pu_log(LL_DEBUG, "%s: Body received = \n%s", __FUNCTION__, data);
     }
 
     gst_rtsp_message_unset(&msg);
@@ -776,7 +776,7 @@ int ac_WowzaTeardown(t_at_rtsp_session* sess) {
         goto on_error;
     }
     if(msg.type_data.response.code != GST_RTSP_STS_OK) {
-        pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(msg.type_data.response.code));
+        pu_log(LL_ERROR, "%s: bad answer: %s", __FUNCTION__, gst_rtsp_status_as_text(msg.type_data.response.code));
         goto on_error;
     }
 
@@ -812,7 +812,7 @@ int getWowzaConnSocket(t_at_rtsp_session* sess) {
     t_gst_session* gs = sess->session;
     GSocket* gsock = gst_rtsp_connection_get_write_socket(gs->conn);
     if(!gsock) {
-        pu_log(LL_ERROR, "getWowzaConnSocket: the gst_rtsp_connection_get_write_socket() return NULL");
+        pu_log(LL_ERROR, "%s: the gst_rtsp_connection_get_write_socket() return NULL", __FUNCTION__);
         return -1;
     }
     return g_socket_get_fd(gsock);
