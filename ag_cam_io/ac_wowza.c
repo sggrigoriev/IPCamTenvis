@@ -237,6 +237,7 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
         g_string_append_printf (lines, "u=%s\r\n", msg->uri);
     contextId = 131002008;
 
+/*
     if (msg && msg->emails)
     for (i = 0; i < msg->emails->len; i++)
         g_string_append_printf (lines, "e=%s\r\n",
@@ -248,7 +249,7 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
         g_string_append_printf (lines, "p=%s\r\n",
                                 gst_sdp_message_get_phone (msg, i));
     contextId = 131002009;
-
+*/
     if (msg->connection.nettype && msg->connection.addrtype &&
         msg->connection.address) {
         contextId = 131002010;
