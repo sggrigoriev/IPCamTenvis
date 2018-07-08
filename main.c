@@ -38,7 +38,7 @@ static int gst_and_curl_startup() {
     CURLcode res = CURLE_OK;
 
     if (res = curl_global_init(CURL_GLOBAL_ALL), res != CURLE_OK) {
-        pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", res);
+        pu_log(LL_ERROR, "%s: Error in curl_global_init. RC = %d", __FUNCTION__, res);
         goto on_error;
     }
     GError *err = NULL;
@@ -93,7 +93,7 @@ static void print_Agent_start_params() {
  */
 volatile uint32_t contextId;
 void signalHandler( int signum ) {
-    printf("Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", signum, contextId, pthread_self());
+    pu_log(LL_ERROR, "%s: Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", __FUNCTION__, signum, contextId, pthread_self());
     exit(signum);
 }
 

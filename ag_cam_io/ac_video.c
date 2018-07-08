@@ -229,7 +229,7 @@ void ac_send_stream_confirmation() {
     char buf[128];
 
     if(!at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth))) {
-        pu_log(LL_ERROR, "%s - %s: Error sending stream approve to WS, exit.", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Error sending stream approve to WS, exit.", __FUNCTION__);
     }
     print_vc(__FUNCTION__);
 }
