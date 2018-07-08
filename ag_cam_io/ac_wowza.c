@@ -171,64 +171,97 @@ gst_sdp_media_copy_n_replace (const GstSDPMedia * media, GstSDPMedia ** copy, co
     GstSDPResult ret;
     GstSDPMedia *cp;
     guint i, len;
-
+    contextId = 1003000;
     if (media == NULL)
         return GST_SDP_EINVAL;
+    contextId = 1003001;
 
     ret = gst_sdp_media_new (copy);
+    contextId = 1003002;
     if (ret != GST_SDP_OK)
         return ret;
-
+    contextId = 1003003;
     cp = *copy;
-
+    contextId = 1003004;
     REPLACE_STRING (cp->media, media->media);
+    contextId = 1003005;
     cp->port = media->port;
+    contextId = 1003006;
     cp->num_ports = media->num_ports;
+    contextId = 1003007;
     REPLACE_STRING (cp->proto, media->proto);
+    contextId = 1003008;
 
     len = gst_sdp_media_formats_len (media);
+    contextId = 1003009;
     for (i = 0; i < len; i++) {
+        contextId = 1003010;
         gst_sdp_media_add_format (cp, gst_sdp_media_get_format (media, i));
+        contextId = 1003011;
     }
-
+    contextId = 1003012;
     REPLACE_STRING (cp->information, media->information);
+    contextId = 1003013;
 
     len = gst_sdp_media_connections_len (media);
+    contextId = 1003014;
     for (i = 0; i < len; i++) {
+        contextId = 1003015;
         const GstSDPConnection *connection =
                 gst_sdp_media_get_connection (media, i);
+        contextId = 1003016;
         gst_sdp_media_add_connection (cp, connection->nettype, connection->addrtype,
                                       connection->address, connection->ttl, connection->addr_number);
+        contextId = 1003017;
     }
-
+    contextId = 1003018;
     len = gst_sdp_media_bandwidths_len (media);
+    contextId = 1003019;
     for (i = 0; i < len; i++) {
+        contextId = 1003020;
         const GstSDPBandwidth *bw = gst_sdp_media_get_bandwidth (media, i);
+        contextId = 1003021;
         gst_sdp_media_add_bandwidth (cp, bw->bwtype, bw->bandwidth);
+        contextId = 1003022;
     }
-
+    contextId = 1003023;
     gst_sdp_media_set_key (cp, media->key.type, media->key.data);
-
+    contextId = 1003024;
     len = gst_sdp_media_attributes_len (media);
+    contextId = 1003025;
     for (i = 0; i < len; i++) {
+        contextId = 1003026;
         const GstSDPAttribute *att = gst_sdp_media_get_attribute (media, i);
+        contextId = 1003027;
         if(!strcmp(att->key, "control")) {
+            contextId = 1003028;
             GstSDPAttribute* m_attr;
             if(m_attr = calloc(1, sizeof(GstSDPAttribute)), !m_attr) {
+                contextId = 1003029;
                 pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+                contextId = 1003030;
                 gst_sdp_media_free(cp);
+                contextId = 1003031;
                 return GST_SDP_EINVAL;
             }
+            contextId = 1003032;
             REPLACE_STRING (m_attr->key, "control");
+            contextId = 1003033;
             REPLACE_STRING(m_attr->value, control);
+            contextId = 1003034;
             gst_sdp_media_add_attribute (cp, m_attr->key, m_attr->value);
+            contextId = 1003035;
         }
         else {
+            contextId = 1003036;
             gst_sdp_media_add_attribute(cp, att->key, att->value);
+            contextId = 1003037;
         }
     }
+    contextId = 1003038;
 
     return GST_SDP_OK;
+
 }
 
 /***************************************************
