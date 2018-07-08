@@ -244,7 +244,7 @@ static void run_command(t_agent_command cmd) {
                     /* Do nothing */
                     break;
                 default:    // Commangs for child entities
-                    pu_log(LL_ERROR, "%s: Can't process command %s dueto disconnected Agent", AT_THREAD_NAME, cmd2text(cmd));
+                    pu_log(LL_ERROR, "%s: Can't process command %s due to disconnected Agent", AT_THREAD_NAME, cmd2text(cmd));
                     break;
             }
             break;

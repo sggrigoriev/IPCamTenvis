@@ -25,6 +25,7 @@
 
 #include <curl/curl.h>  /* for global init/deinit */
 #include <gst/gst.h>    /* for gloal init/deinit */
+#include <stdint.h>
 
 #include "pu_logger.h"
 
@@ -87,7 +88,22 @@ static void print_Agent_start_params() {
     pu_log(LL_INFO, "\tCurlopt CA Info: %s", ag_getCurloptCAInfo());
 }
 
+/*
+ * Debugging utility
+ */
+volatile uint32_t contextId;
+void signalHandler( int signum ) {
+    printf("Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", signum, contextId, pthread_self());
+    exit(signum);
+}
+
+
 int main() {
+    signal(SIGSEGV, signalHandler);
+    signal(SIGBUS, signalHandler);
+    signal(SIGINT, signalHandler);
+    signal(SIGFPE, signalHandler);
+
     printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
 
     if(!ag_load_config(ag_getCfgFileName())) exit(-1);
