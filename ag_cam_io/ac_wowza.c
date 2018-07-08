@@ -28,6 +28,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <gst/sdp/gstsdpmessage.h>
+#include <gstreamer-1.0/gst/sdp/gstsdpmessage.h>
 
 #include "pu_logger.h"
 
@@ -206,6 +207,11 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
     lines = g_string_new ("");
     contextId = 131002002;
 
+    if(!msg)
+    {
+        pu_log(LL_ERROR,"%s: Null message, returning"<__FUNCTION__);
+        return NULL;
+    }
     if (msg->version)
         g_string_append_printf (lines, "v=%s\r\n", msg->version);
     contextId = 131002003;
@@ -231,11 +237,13 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
         g_string_append_printf (lines, "u=%s\r\n", msg->uri);
     contextId = 131002008;
 
+    if (msg && msg->emails)
     for (i = 0; i < msg->emails->len; i++)
         g_string_append_printf (lines, "e=%s\r\n",
                                 gst_sdp_message_get_email (msg, i));
     contextId = 131002009;
 
+    if (msg && msg->phones)
     for (i = 0; i < msg->phones->len; i++)
         g_string_append_printf (lines, "p=%s\r\n",
                                 gst_sdp_message_get_phone (msg, i));
@@ -265,7 +273,8 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
     }
     contextId = 131002016;
 
-    for (i = 0; i < msg->bandwidths->len; i++) {
+    if (msg && msg->bandwidths)
+        for (i = 0; i < msg->bandwidths->len; i++) {
         contextId = 131002017;
         const GstSDPBandwidth *bandwidth = gst_sdp_message_get_bandwidth (msg, i);
         contextId = 131002018;
@@ -275,6 +284,7 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
     }
     contextId = 131002020;
 
+    if (msg && msg->times)
     if (msg->times->len == 0) {
         contextId = 131002021;
         g_string_append_printf (lines, "t=0 0\r\n");
@@ -304,6 +314,7 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
     }
     contextId = 131002030;
 
+    if (msg && msg->zones)
     if (msg->zones->len > 0) {
         contextId = 131002031;
         const GstSDPZone *zone = gst_sdp_message_get_zone (msg, 0);
@@ -333,7 +344,8 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
         g_string_append_printf (lines, "\r\n");
     }
     contextId = 131002044;
-    for (i = 0; i < msg->attributes->len; i++) {
+    if (msg && msg->attributes)
+        for (i = 0; i < msg->attributes->len; i++) {
         contextId = 131002045;
         const GstSDPAttribute *attr = gst_sdp_message_get_attribute (msg, i);
         contextId = 131002046;
@@ -351,7 +363,8 @@ gst_sdp_message_as_text1 (const GstSDPMessage * msg)
         }
     }
     contextId = 131002052;
-    for (i = 0; i < msg->medias->len; i++) {
+    if (msg && msg->medias)
+        for (i = 0; i < msg->medias->len; i++) {
         contextId = 131002053;
         const GstSDPMedia *media = gst_sdp_message_get_media (msg, i);
         contextId = 131002054;
