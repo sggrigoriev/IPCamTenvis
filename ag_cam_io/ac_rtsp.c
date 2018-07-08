@@ -288,7 +288,7 @@ int ac_req_options(t_at_rtsp_session* sess) {
 
     switch(sess->device) {
         case AC_CAMERA:
-            return ac_alfaProOptions(sess);
+            return ac_alfaProOptions(sess, 0);
          case AC_WOWZA:
             return ac_WowzaOptions(sess);
          default:

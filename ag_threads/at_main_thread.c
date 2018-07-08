@@ -375,7 +375,7 @@ static t_agent_command process_rw_message(char* msg) {
     }
     pu_log(LL_ERROR, "%s: Error from streaming R/W treads. RC = %d %s. Reconnect", AT_THREAD_NAME,
            data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
-    ret = AT_CMD_RW_START;
+    ret = (rw_status = AT_ST_CONNECTED)?AT_CMD_RW_START:AT_CMD_NOTHING;
     return ret;
 }
 

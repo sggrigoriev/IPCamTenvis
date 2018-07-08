@@ -262,7 +262,7 @@ void ac_alfaProDown(t_at_rtsp_session* sess) {
     sess->session = NULL;
 }
 
-int ac_alfaProOptions(t_at_rtsp_session* sess) {
+int ac_alfaProOptions(t_at_rtsp_session* sess, int suppress_info) {
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
@@ -274,8 +274,8 @@ int ac_alfaProOptions(t_at_rtsp_session* sess) {
     res = curl_easy_perform(cs->h);
 
     if(ac_http_analyze_perform(res, cs->h,  __FUNCTION__) != CURLE_OK) goto on_error;
-
-    pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
+    if(!suppress_info)
+        pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
     reset_curl_buffers(cs);
 
     return 1;

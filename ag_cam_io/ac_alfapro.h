@@ -29,7 +29,7 @@
 int ac_alfaProInit(t_at_rtsp_session* sess);
 void ac_alfaProDown(t_at_rtsp_session* sess);
 
-int ac_alfaProOptions(t_at_rtsp_session* sess);
+int ac_alfaProOptions(t_at_rtsp_session* sess, int suppress_info);
 int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size);
 int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type);
 int ac_alfaProPlay(t_at_rtsp_session* sess);

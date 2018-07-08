@@ -90,6 +90,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
 #endif
     lib_timer_clock_t hart_beat = {0};
     lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
+    unsigned int bytes_passed = 0;
 
     char err_buf[120];
     const char* stop_msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
@@ -97,12 +98,14 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         t_ac_udp_read_result ret;
 
         if(lib_timer_alarm(hart_beat)) {
-            if(!ac_alfaProOptions(the_session)) {     /* hart beats from the Camera */
+            if(!ac_alfaProOptions(the_session, 1)) {     /* hart beats from the Camera */
                 pu_log(LL_ERROR, "%s: Camera is out: restart streaming process", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
                 goto on_stop;
             }
             lib_timer_init(&hart_beat, 30);
+            pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
+            bytes_passed = 0;
         }
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
@@ -123,6 +126,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             goto on_stop;
         }
 //        pu_log(LL_DEBUG, "%s: %d bytes written", __FUNCTION__, rt);
+        bytes_passed += rt;
 #ifdef RW_CYCLES
         if(!step--) {
             char b[120];
