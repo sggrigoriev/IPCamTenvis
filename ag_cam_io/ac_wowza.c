@@ -89,6 +89,190 @@ static int make_ip_from_host(char* ip, size_t size, const char* host) {
     return 1;
 }
 
+
+/**
+ * gst_sdp_message_as_text:
+ * @msg: a #GstSDPMessage
+ *
+ * Convert the contents of @msg to a text string.
+ *
+ * Returns: A dynamically allocated string representing the SDP description.
+ */
+gchar *
+gst_sdp_message_as_text1 (const GstSDPMessage * msg)
+{
+    /* change all vars so they match rfc? */
+    GString *lines;
+    guint i;
+    contextId = 131002001;
+
+    g_return_val_if_fail (msg != NULL, NULL);
+
+    lines = g_string_new ("");
+    contextId = 131002002;
+
+    if (msg->version)
+        g_string_append_printf (lines, "v=%s\r\n", msg->version);
+    contextId = 131002003;
+
+    if (msg->origin.sess_id && msg->origin.sess_version && msg->origin.nettype &&
+        msg->origin.addrtype && msg->origin.addr)
+        contextId = 131002004,
+        g_string_append_printf (lines, "o=%s %s %s %s %s %s\r\n",
+                                msg->origin.username ? msg->origin.username : "-", msg->origin.sess_id,
+                                msg->origin.sess_version, msg->origin.nettype, msg->origin.addrtype,
+                                msg->origin.addr);
+    contextId = 131002005;
+
+    if (msg->session_name)
+        g_string_append_printf (lines, "s=%s\r\n", msg->session_name);
+    contextId = 131002006;
+
+    if (msg->information)
+        g_string_append_printf (lines, "i=%s\r\n", msg->information);
+    contextId = 131002007;
+
+    if (msg->uri)
+        g_string_append_printf (lines, "u=%s\r\n", msg->uri);
+    contextId = 131002008;
+
+    for (i = 0; i < gst_sdp_message_emails_len (msg); i++)
+        g_string_append_printf (lines, "e=%s\r\n",
+                                gst_sdp_message_get_email (msg, i));
+    contextId = 131002009;
+
+    for (i = 0; i < gst_sdp_message_phones_len (msg); i++)
+        g_string_append_printf (lines, "p=%s\r\n",
+                                gst_sdp_message_get_phone (msg, i));
+    contextId = 131002009;
+
+    if (msg->connection.nettype && msg->connection.addrtype &&
+        msg->connection.address) {
+        contextId = 131002010;
+        g_string_append_printf (lines, "c=%s %s %s", msg->connection.nettype,
+                                msg->connection.addrtype, msg->connection.address);
+        contextId = 131002011;
+        if (gst_sdp_address_is_multicast (msg->connection.nettype,
+                                          msg->connection.addrtype, msg->connection.address)) {
+            contextId = 131002012;
+            /* only add ttl for IP4 */
+            if (strcmp (msg->connection.addrtype, "IP4") == 0)
+                g_string_append_printf (lines, "/%u", msg->connection.ttl);
+            contextId = 131002013;
+
+            if (msg->connection.addr_number > 1)
+                g_string_append_printf (lines, "/%u", msg->connection.addr_number);
+            contextId = 131002014;
+
+        }
+        contextId = 131002015;
+        g_string_append_printf (lines, "\r\n");
+    }
+    contextId = 131002016;
+
+    for (i = 0; i < gst_sdp_message_bandwidths_len (msg); i++) {
+        contextId = 131002017;
+        const GstSDPBandwidth *bandwidth = gst_sdp_message_get_bandwidth (msg, i);
+        contextId = 131002018;
+        g_string_append_printf (lines, "b=%s:%u\r\n", bandwidth->bwtype,
+                                bandwidth->bandwidth);
+        contextId = 131002019;
+    }
+    contextId = 131002020;
+
+    if (gst_sdp_message_times_len (msg) == 0) {
+        contextId = 131002021;
+        g_string_append_printf (lines, "t=0 0\r\n");
+    } else {
+        contextId = 131002022;
+        for (i = 0; i < gst_sdp_message_times_len (msg); i++) {
+            contextId = 131002023;
+            const GstSDPTime *times = gst_sdp_message_get_time (msg, i);
+            contextId = 131002024;
+            g_string_append_printf (lines, "t=%s %s\r\n", times->start, times->stop);
+            contextId = 131002025;
+            if (times->repeat != NULL) {
+                contextId = 131002026;
+                guint j;
+
+                g_string_append_printf (lines, "r=%s",
+                                        g_array_index (times->repeat, gchar *, 0));
+                contextId = 131002027;
+                for (j = 1; j < times->repeat->len; j++)
+                    g_string_append_printf (lines, " %s",
+                                            g_array_index (times->repeat, gchar *, j));
+                contextId = 131002028;
+                g_string_append_printf (lines, "\r\n");
+                contextId = 131002029;
+            }
+        }
+    }
+    contextId = 131002030;
+
+    if (gst_sdp_message_zones_len (msg) > 0) {
+        contextId = 131002031;
+        const GstSDPZone *zone = gst_sdp_message_get_zone (msg, 0);
+        contextId = 131002032;
+        g_string_append_printf (lines, "z=%s %s", zone->time, zone->typed_time);
+        contextId = 131002033;
+        for (i = 1; i < gst_sdp_message_zones_len (msg); i++) {
+            contextId = 131002034;
+            zone = gst_sdp_message_get_zone (msg, i);
+            contextId = 131002035;
+            g_string_append_printf (lines, " %s %s", zone->time, zone->typed_time);
+            contextId = 131002036;
+        }
+        contextId = 131002037;
+        g_string_append_printf (lines, "\r\n");
+        contextId = 131002038;
+    }
+    contextId = 131002039;
+    if (msg->key.type) {
+        contextId = 131002040;
+        g_string_append_printf (lines, "k=%s", msg->key.type);
+        contextId = 131002041;
+        if (msg->key.data)
+            contextId = 131002042,
+            g_string_append_printf (lines, ":%s", msg->key.data);
+        contextId = 131002043;
+        g_string_append_printf (lines, "\r\n");
+    }
+    contextId = 131002044;
+    for (i = 0; i < gst_sdp_message_attributes_len (msg); i++) {
+        contextId = 131002045;
+        const GstSDPAttribute *attr = gst_sdp_message_get_attribute (msg, i);
+        contextId = 131002046;
+
+        if (attr->key) {
+            contextId = 131002047;
+            g_string_append_printf (lines, "a=%s", attr->key);
+            contextId = 131002048;
+            if (attr->value)
+                contextId = 131002049,
+            g_string_append_printf (lines, ":%s", attr->value);
+            contextId = 131002050;
+            g_string_append_printf (lines, "\r\n");
+            contextId = 131002051;
+        }
+    }
+    contextId = 131002052;
+    for (i = 0; i < gst_sdp_message_medias_len (msg); i++) {
+        contextId = 131002053;
+        const GstSDPMedia *media = gst_sdp_message_get_media (msg, i);
+        contextId = 131002054;
+        gchar *sdp_media_str;
+
+        sdp_media_str = gst_sdp_media_as_text (media);
+        contextId = 131002055;
+        g_string_append_printf (lines, "%s", sdp_media_str);
+        contextId = 131002056;
+        g_free (sdp_media_str);
+        contextId = 131002057;
+    }
+    contextId = 131002058;
+    return g_string_free (lines, FALSE);
+}
+
 /* Dedined below */
 static int set_media_controls(GstSDPMessage* sdp, const char* video_control, const char* audio_control);
 /* Replace
@@ -128,7 +312,7 @@ static char* make_announce_body(char* buf, size_t size, const char* cam_descr, c
 /* And set media contrlols for video and audio (if any) for trackID=0 and tractID=1 */
     if(!set_media_controls(sdp, "trackID=0", "trackID=1")) goto on_error;
     contextId = 1002006;
-    char* txt = gst_sdp_message_as_text(sdp);
+    char* txt = gst_sdp_message_as_text1(sdp);
     contextId = 1002007;
     pu_log(LL_DEBUG, "%s: SDP message for ANNOUCE:\n%s", __FUNCTION__, txt);
     contextId = 1002008;
