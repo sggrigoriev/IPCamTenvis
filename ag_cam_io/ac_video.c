@@ -107,15 +107,14 @@ static int process_connect() {
 }
 static int process_describe() {
     print_vc(__FUNCTION__);
-    char *description = NULL;
+    char sdp[1000] = {0};
     int rc = 0;
 
-    if(!ac_req_cam_describe(CAM_SESSION, &description)) goto on_exit;
-    if(!ac_req_vs_announce(PLAYER_SESSION, description)) goto on_exit;
+    if(!ac_req_cam_describe(CAM_SESSION, sdp, sizeof(sdp))) goto on_exit;
+    if(!ac_req_vs_announce(PLAYER_SESSION, sdp)) goto on_exit;
 
     rc = 1;
 on_exit:
-    if(description) free(description);
     print_vc(__FUNCTION__);
     return rc;
 }

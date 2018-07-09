@@ -147,37 +147,6 @@ static int open_il_connection(t_at_rtsp_session* sess_in, t_at_rtsp_session* ses
     return 1;
 }
 
-/*
- * If media_type is NULL then  sesion->common
- * How to define the media URL:
- * if common attrubute "control" undefined, then media control contains full url
- * if common attribute "control" is '*". then media control url = session url + / + meda control
- * else media control url = common attribute control + / + media control
- */
-static int get_media_url(t_at_rtsp_session* session, const char* sdp, const char* media_type) {
-    const char* common_url = ac_wowzaGetAttr(sdp, "control", NULL);
-    const char* media_url = ac_wowzaGetAttr(sdp, "control", media_type);
-
-    char** dest_url = (!strcmp(media_type, "video"))?&(session->video_url):&(session->audio_url);
-
-    if(!media_url) {
-        pu_log(LL_WARNING, "%s: %s 'control' attribute undefined!", __FUNCTION__, media_type);
-        return 1;
-    }
-    char url[LIB_HTTP_MAX_URL_SIZE] = {0};
-    if(!common_url)
-        ;
-    else /* if(!strcmp(common_url, "*")) */     /* TODO! split cases with * and uri! */
-        snprintf(url, sizeof(url)-1, "%s/%s", session->url, media_url);
-
-    *dest_url = au_strdup(media_url);
-    if(!(*dest_url)) {
-        pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
-        return 0;
-    }
-    return 1;
-}
-
 t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int port, const char* session_id) {
     t_at_rtsp_session* sess = calloc(sizeof(t_at_rtsp_session), 1);
     if(!sess) {
@@ -297,24 +266,15 @@ int ac_req_options(t_at_rtsp_session* sess) {
     }
     return 0;
 }
-int ac_req_cam_describe(t_at_rtsp_session* sess, char** dev_description) { 
+int ac_req_cam_describe(t_at_rtsp_session* sess, char* dev_description, size_t size) {
     assert(sess);
-    *dev_description = NULL;
 
     if(sess->device != AC_CAMERA) {
         pu_log(LL_ERROR, "%s: Wrong device type %d. Expected %d", __FUNCTION__, sess->device, AC_CAMERA);
         return 0;
     }
 
-    char body[1000];
-    if(!ac_alfaProDescribe(sess, body, sizeof(body))) return 0;
-    if(!get_media_url(sess, body, "video")) return 0;
-    if(!get_media_url(sess, body, "audio")) return 0;
-    
-    if(*dev_description = au_strdup(body), !dev_description) {
-        pu_log(LL_ERROR, "%s: Mempry allocation error at %d", __FUNCTION__, __LINE__);
-        return 0;
-    }
+    if(!ac_alfaProDescribe(sess, dev_description, size)) return 0;
 
     return 1;
 }

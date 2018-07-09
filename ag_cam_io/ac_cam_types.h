@@ -22,16 +22,13 @@
 #ifndef IPCAMTENVIS_AC_CAM_TYPES_H
 #define IPCAMTENVIS_AC_CAM_TYPES_H
 
+#include <stddef.h>
+
 #define AC_FAKE_CLIENT_READ_PORT 11038
 #define AC_FAKE_CLIENT_WRITE_PORT 11038+4   //38-41 for
 
 #define AC_RTSP_MAX_URL_SIZE        4097
-#define AC_RTSP_HEADER_SIZE         4097
-#define AC_RTSP_BODY_SIZE           8193
 #define AC_RTSP_TRANSPORT_SIZE      100
-#define AC_RTSP_SESSION_ID_SIZE     20
-#define AC_WOWZA_SESSION_ID_SIZE    30
-#define AC_RTSP_TRACK_SIZE          20
 
 #define AC_RTSP_CLIENT_NAME "IOT Proxy"
 #define AC_RTSP_CONTENT_TYPE "application/sdp"
@@ -48,31 +45,6 @@
 #define AC_RTSP_AUDIO_SETUP 1
 #define AC_VIDEO_TRACK      "0"
 #define AC_AUDIO_TRACK      "1"
-
-#define AC_STREAMING_TCP    1
-#define AC_STREAMING_UDP    0
-#define AC_RTSP_HEAD        "rtsp://"
-
-#define AC_RTSP_CHALLENGE_HEAD   "WWW-Authenticate: "
-#define AC_RTSP_F_DIGEST_REALM  "Digest realm=\""
-#define AC_RTSP_F_DIGEST_NONCE  "nonce=\""
-
-#define AC_RTSP_DIGEST_AUTH     "Authorization: "
-#define AC_RTSP_DIGEST_UNAME    "Digest username="
-#define AC_RTSP_DIGEST_REALM    "realm="
-#define AC_RTSP_DIGEST_NONCE    "nonce="
-#define AC_RTSP_DIGEST_URI      "uri="
-#define AC_RTSP_DIGEST_RESPONSE "response="
-#define AC_RTSP_DIGEST_METHOD   "POST"
-
-#define AC_RTSP_EOL         "\r\n"
-#define AC_RTSP_SDP_ORIGIN  AC_RTSP_EOL"o="
-#define AC_RTSP_SDP_CD      AC_RTSP_EOL"c="
-#define AC_RTSP_SDP_TRN1_S    "m=video 0 "
-#define AC_RTSP_SDP_TRN2_S    "m=audio 0 "
-#define AC_RTSP_SDP_TRN_E     " "
-#define AC_RTSP_VS_ORIGIN   "- 0 0 IN IP4 127.0.0.1"
-#define AC_RTSP_CD_IP4      "IP4 "
 
 #define AC_RTSP_SERVER_PORT "server_port="
 #define AC_RTSP_SOURCE_IP   "source="
@@ -149,5 +121,53 @@ typedef struct _ACRTSPSession {
                                 pu_log(LL_ERROR, "%s: Session with wrong device type %d. Device type %d expected", __FUNCTION__, a, b); \
                                 return; \
                             }
+
+/*
+ * Games around SDP
+ */
+#define AT_RTSP_CONCAT  0
+#define AT_RTSP_REPLACE 1
+/*****************************************************
+ * Prepares the sdp to be sent to Wowza:
+ * 1 Replace:
+   From:
+   o=StreamingServer <sess_id> <sess_smth> IN IP4 <cam_ip>
+   to
+   o=- 0 0 IN IP4 127.0.0.1
+2 Replace:
+   From:
+   c=IN IP4 <cam_ip>
+   to:
+   c=IN IP4 <Wowza IP>
+3 Add
+   a=control: *
+4 Replace for video (if "m=video" found)
+   From:
+   a=control:<cam setup video url>
+   to:
+   a=control:trackID=0
+5 Replace for audio (if "m=audio" found)
+   From:
+   a=control:<cam setup audio url>
+   to:
+   a=control:trackID=1
+ * @param new_sdp - changed SDP
+ * @param size - buf size
+ * @param old_sdp  - cam's SDP
+ * @param control_url - Wowza IP for #2 Replace
+ * @return 1 if OK, 0 if not
+*/
+int ac_rtsp_make_announce_body(char* new_sdp, size_t size, const char* old_sdp, const char* control_url);
+
+/**************************************************
+ * Setup sess->audie/video _url use audio/media "a=control": values
+ * Add values to the session url or replace session url for audio/video setups
+ * @param sdp - Wowze/AP SDP
+ * @param sess - Wowza/AP sesion descriptor
+ * @param is_replace - 1 - make replacement,0 - concatinate
+ * @return - 1 if OK, 0 if not
+ */
+int ac_rtsp_set_setup_urls(const char* text_sdp, t_at_rtsp_session* sess, int is_replace);
+
 
 #endif /* IPCAMTENVIS_AC_CAM_TYPES_H */

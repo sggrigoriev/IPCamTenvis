@@ -32,7 +32,7 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
 void ac_rtsp_deinit(t_at_rtsp_session* sess);
 
 int ac_req_options(t_at_rtsp_session* sess);
-int ac_req_cam_describe(t_at_rtsp_session* sess, char** dev_description);
+int ac_req_cam_describe(t_at_rtsp_session* sess, char* dev_description, size_t size);
 int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description);
 
 int ac_req_setup(t_at_rtsp_session* sess);
