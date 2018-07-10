@@ -170,4 +170,5 @@ int ac_rtsp_make_announce_body(char* new_sdp, size_t size, const char* old_sdp, 
 int ac_rtsp_set_setup_urls(const char* text_sdp, t_at_rtsp_session* sess, int is_replace);
 
 
+
 #endif /* IPCAMTENVIS_AC_CAM_TYPES_H */
