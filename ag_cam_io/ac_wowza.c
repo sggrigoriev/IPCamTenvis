@@ -188,11 +188,11 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     contextId = 1005004;
     if(!ac_rtsp_make_announce_body(new_description, sizeof(new_description), description, gs->url->host)) goto on_error;
     contextId = 1005005;
-    pu_log(LL_DEBUG, "%s: New body for announnce = %s\n", __FUNCTION__, new_description);
+    pu_log(LL_DEBUG, "%s: New body for announnce =\n %s", __FUNCTION__, new_description);
     contextId = 1005006;
     if(!ac_rtsp_set_setup_urls(new_description, sess, AT_RTSP_CONCAT)) goto on_error;
-    if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", sess->audio_url);
-    if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", sess->video_url);
+    if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
+    if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
 // Header
     rc = gst_rtsp_message_add_header (&req, GST_RTSP_HDR_CONTENT_TYPE, AC_RTSP_CONTENT_TYPE); AC_GST_ANAL(rc);
     contextId = 1005007;

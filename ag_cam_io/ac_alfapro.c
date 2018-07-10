@@ -187,7 +187,7 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
     t_curl_session *cs = NULL;
 
     if(cs = calloc(sizeof(t_curl_session),1), !cs) {
-        pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
         goto on_error;
     }
     if(cs->h = curl_easy_init(), !cs->h) {
@@ -307,8 +307,8 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
  * Set SETUP URLS
  */
     if(!ac_rtsp_set_setup_urls(descr, sess, AT_RTSP_REPLACE)) goto on_error;
-    if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", sess->audio_url);
-    if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", sess->video_url);
+    if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
+    if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
     return 1;
 on_error:
     err_report(res);

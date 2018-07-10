@@ -335,8 +335,8 @@ int ac_rtsp_set_setup_urls(const char* text_sdp, t_at_rtsp_session* sess, int is
             }
             char buf[100]={0};
             int pos = au_findSubstr(sdp->key_value, SDP_END_STR, NO_CASE_SENS);
-            memcpy(buf, sdp->key_value, pos+strlen(SDP_END_STR));
-            buf[pos+strlen(SDP_END_STR)] = '\0';
+            memcpy(buf, sdp->key_value, pos);
+            buf[pos] = '\0';
             if(is_replace)
                 *url = au_strdup(buf);
             else {

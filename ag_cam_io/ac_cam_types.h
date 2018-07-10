@@ -161,7 +161,7 @@ int ac_rtsp_make_announce_body(char* new_sdp, size_t size, const char* old_sdp, 
 
 /**************************************************
  * Setup sess->audie/video _url use audio/media "a=control": values
- * Add values to the session url or replace session url for audio/video setups
+ * Add values to the session url or replace session url for audio/video setupsac_rtsp_set_setup_urls
  * @param sdp - Wowze/AP SDP
  * @param sess - Wowza/AP sesion descriptor
  * @param is_replace - 1 - make replacement,0 - concatinate
