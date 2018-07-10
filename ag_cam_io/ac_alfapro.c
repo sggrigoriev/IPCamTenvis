@@ -298,7 +298,7 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
 
     if (ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) goto on_error;
 
-    pu_log(LL_INFO, "%s: Header = \n%sBody =\n%s", __FUNCTION__, cs->header_buf.buf, cs->body_buf.buf);
+    pu_log(LL_INFO, "%s: Header = \n%sBody = \n%s", __FUNCTION__, cs->header_buf.buf, cs->body_buf.buf);
 
     strncpy(descr, cs->body_buf.buf, size-1);
     descr[size-1] = '\0';
