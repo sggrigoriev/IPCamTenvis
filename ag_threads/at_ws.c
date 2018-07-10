@@ -94,7 +94,7 @@ static void *ws_thread(void *pvoid) {
             case -3:        //Timeout
                 break;
             case -2:
-                pu_log(LL_ERROR, "%s: nopoll_loop_wait error - context is NULL or negative TO! Stop", AT_THREAD_NAME, ctx);
+                pu_log(LL_ERROR, "%s: nopoll_loop_wait error - context is NULL or negative TO! Stop", AT_THREAD_NAME);
                 ao_ws_error_answer(buf, sizeof(buf));
                 pu_queue_push(from_ws, buf, strlen(buf)+1);
                 break;
