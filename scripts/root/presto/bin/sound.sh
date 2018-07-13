@@ -1,14 +1,6 @@
 #!/bin/ash
-PRESTO_PATH=/root/presto
 
-export PATH=$PRESTO_PATH/bin:$PATH
-export LD_LIBRARY_PATH=$PRESTO_PATH/lib:$LD_LIBRARY_PATH
-
-CLOUD_URL_FILE="/root/presto/bin/cloud_url"
-AUTH_TOKEN_FILE="/root/presto/bin/auth_token"
-
-# misc URL parameters
-CGI_URL="http://127.0.0.1:8001/getalp"
+source ./presto.conf
 
 #################################################################
 #  internal funtions/procedures

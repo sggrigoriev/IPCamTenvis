@@ -1,0 +1,3 @@
+/Data/PP/Hardware/IPCamera/AlphaPro/SDK/osdrv/peoplepower/agent/agent/build-hisilicon/CMakeFiles/rebuild_cache.dir
+/Data/PP/Hardware/IPCamera/AlphaPro/SDK/osdrv/peoplepower/agent/agent/build-hisilicon/CMakeFiles/Tenvis.dir
+/Data/PP/Hardware/IPCamera/AlphaPro/SDK/osdrv/peoplepower/agent/agent/build-hisilicon/CMakeFiles/edit_cache.dir
