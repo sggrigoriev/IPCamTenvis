@@ -1,48 +1,39 @@
 #!/bin/ash
-PRESTO_PATH=/root/presto
+
+source /root/presto/bin/presto.conf
 
 export PATH=$PRESTO_PATH/bin:$PATH
 export LD_LIBRARY_PATH=$PRESTO_PATH/lib:$LD_LIBRARY_PATH
 
-CLOUD_URL_FILE="/root/presto/bin/cloud_url"
-AUTH_TOKEN_FILE="/root/presto/bin/auth_token"
-PROXY_BIN="$PRESTO_PATH/bin/Proxy";
-WUD_BIN="$PRESTO_PATH/bin/WUD";
-TENVIS_BIN="$PRESTO_PATH/bin/Tenvis";
-
-WIFI_INTERFACE="ra0"
-
-DEVICE_TYPE="7000"
-
-# connectivity check params
-# address we ping to check IP state
-IP_PING_ADDRESS="8.8.8.8"
-# number of ping requests per ping
-IP_PING_TRIES=5
-# number of tries before reboot
-IP_CONNECTIVITY_MAX_TRIES=20
-# esp watch URL
-ESPAPI_URL="espapi/watch"
-# esp max # of tries before reboot;
-ESP_CONNECTIVITY_MAX_TRIES=15
-#deviceio url
-DEVICEIO_URL="deviceio/watch"
-# deviceio max # of tries before reboot;
-DEVICEIO_CONNECTIVITY_MAX_TRIES=15
-
-
-REBOOT_COMMAND="reboot"
-# misc URL parameters
-CGI_URL="http://127.0.0.1:8001/getalp"
-CURL_COMMAND="$PRESTO_PATH/bin/curl -k --cacert /root/presto/bin/cacert.pem"
-PING_COMMAND="$PRESTO_PATH/bin/curl 'http://127.0.0.1:8001/playsndfile?file=Ping.wav&async=1' 2>/dev/null"
-BELL_COMMAND="$PRESTO_PATH/bin/curl 'http://127.0.0.1:8001/playsndfile?file=DoorBell.wav&async=1' 2>/dev/null"
-WHOOPS_COMMAND="$PRESTO_PATH/bin/curl 'http://127.0.0.1:8001/playsndfile?file=Whoops.wav&async=1' 2>/dev/null"
-
-
 #################################################################
 #  internal funtions/procedures
 #################################################################
+
+
+#performs upgrade check
+firmware_upgrade () {
+
+UPGRADE_DIR=$(cat $WUD_CONFIG_FILE | $PRESTO_PATH/bin/jq -r .FW_UPGRADE_FOLDER);
+OTA_UPGRADE_FILE=$(cat $WUD_CONFIG_FILE | $PRESTO_PATH/bin/jq -r .FW_UPGRADE_FILE_NAME);
+
+    echo " ****** checking for $UPGRADE_DIR/$OTA_UPGRADE_FILE  *******"
+if [ -e $UPGRADE_DIR/$OTA_UPGRADE_FILE ]; 
+then
+    echo "******** OTA upgrade file exists, preforming upgrade ******"
+    cd $UPGRADE_FOLDER
+    rm -rf /tmp/presto
+    tar xzf $OTA_UPGRADE_FILE -C /tmp
+    cd /tmp/presto
+    ./make_install
+    cd -
+
+    rm -rf /tmp/presto
+    rm -f $UPGRADE_DIR/$OTA_UPGRADE_FILE
+    sync
+else
+    echo " ****** No OTA Upgrade file $UPGRADE_DIR/$OTA_UPGRADE_FILE exists, proceeding *******"
+fi
+}
 
 #issue ping sound
 ping_command () {
@@ -185,7 +176,9 @@ return "$v_connected";
 
 
 cd $PRESTO_PATH/bin;
-killall -9 $PROXY_BIN $WUD_BIN $TENVIS_BIN
+killall -9 Proxy WUD Tenvis
+
+firmware_upgrade;
 
 # ++++++++++++ check WiFi attach & WLAN interface readiness  ++++++++++++
 ./sound.sh Ping.wav &
@@ -387,7 +380,7 @@ echo "<-" $result;
 if [ "$( echo $result | jq -r .status )" == "UNKNOWN" ];
 then
 	echo WARNING, AUTH_KEY is Obsolete, rebooting;
-    reset_and_reboot;
+	reset_and_reboot;
 fi;
 r=$(eval killall -9 sound.sh);
 sleep 2;
