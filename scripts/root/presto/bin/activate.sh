@@ -193,7 +193,7 @@ do
     then
             echo "Playing QR prompt sound";
             start_qr_command;
-            sleep 5;
+            sleep 7;
     else
             break;
     fi;
