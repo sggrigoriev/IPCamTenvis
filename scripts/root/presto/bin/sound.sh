@@ -25,6 +25,5 @@ do
             exit 1;
     else
             ping_command;
-            sleep 3;
     fi;
 done;
