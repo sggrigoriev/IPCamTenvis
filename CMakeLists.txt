@@ -148,10 +148,14 @@ file (GLOB SOURCE_FILES
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
+    add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
+    target_link_libraries(jq ${REQUIRED_LIBRARIES})
     add_executable(Tenvis ${SOURCE_FILES})
     target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
+            add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
+            target_link_libraries(jq m)
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
 
