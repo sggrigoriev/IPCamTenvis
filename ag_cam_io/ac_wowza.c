@@ -53,16 +53,8 @@ typedef struct {
     GTimeVal io_to;
 }t_gst_session;
 
-/*
- * AA-XX-YY-ZZZ
- * AA - file.c - 8 for Wowza
- * YY - function #
- * ZZZ - line number
-*/
-
 extern volatile uint32_t contextId;
 
-/* 00 */
 static void clear_session(t_gst_session* gs) {
     if(gs) {
         if(gs->wowza_session) free(gs->wowza_session);
@@ -75,7 +67,6 @@ static void clear_session(t_gst_session* gs) {
     }
 }
 
-/* 06 */
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
     pu_log(LL_DEBUG, "%s start", __FUNCTION__);
     AT_DT_RT(sess->device, AC_WOWZA, 0);
@@ -108,13 +99,13 @@ on_error:
     sess->session = NULL;
     return 0;
 }
-/* 07 */
+
 void ac_WowzaDown(t_at_rtsp_session* sess) {
     AT_DT_NR(sess->device, AC_WOWZA);
     clear_session(sess->session);
     sess->session = NULL;
 }
-/* 08 */
+
 int ac_WowzaOptions(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
@@ -167,7 +158,7 @@ on_error:
     gst_rtsp_message_unset(&msg);
     return 0;
 }
-/* 09 */
+
 int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
@@ -176,160 +167,106 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     GstRTSPMessage resp = {0};
     char num[10];
 
-    contextId = 1009000;
     snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
-    contextId = 1005001;
+
     rc = gst_rtsp_message_init (&req); AC_GST_ANAL(rc);
-    contextId = 1005002;
     rc = gst_rtsp_message_init_request (&req, GST_RTSP_ANNOUNCE, sess->url); AC_GST_ANAL(rc);
-    contextId = 1005003;
 
     char new_description[1000] = {0};
-    contextId = 1005004;
+
     if(!ac_rtsp_make_announce_body(new_description, sizeof(new_description), description, gs->url->host)) goto on_error;
-    contextId = 1005005;
     pu_log(LL_DEBUG, "%s: New body for announnce =\n%s", __FUNCTION__, new_description);
-    contextId = 1005006;
+
     if(!ac_rtsp_set_setup_urls(new_description, sess, AT_RTSP_CONCAT)) goto on_error;
     if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
     if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
 // Header
     rc = gst_rtsp_message_add_header (&req, GST_RTSP_HDR_CONTENT_TYPE, AC_RTSP_CONTENT_TYPE); AC_GST_ANAL(rc);
-    contextId = 1005007;
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CSEQ, num); AC_GST_ANAL(rc);
-    contextId = 1005008;
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_USER_AGENT, AC_RTSP_CLIENT_NAME); AC_GST_ANAL(rc);
-    contextId = 1005009;
+
     snprintf(num, sizeof(num)-1, "%lu", strlen(new_description));
-    contextId = 1005010;
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CONTENT_LENGTH, num); AC_GST_ANAL(rc);
-    contextId = 1005011;
+
 // Body
-    rc = gst_rtsp_message_set_body(&req, (guint8 *)new_description, (guint)strlen(new_description));
-    contextId = 1005012;
-
+    rc = gst_rtsp_message_set_body(&req, (guint8 *)new_description, (guint)strlen(new_description)); AC_GST_ANAL(rc);
     rc = gst_rtsp_connection_send (gs->conn, &req, &gs->io_to); AC_GST_ANAL(rc);    /* Send */
-    contextId = 1005013;
-
     rc = gst_rtsp_message_init (&resp); AC_GST_ANAL(rc);
-    contextId = 1005014;
     rc = gst_rtsp_connection_receive (gs->conn, &resp, &gs->io_to); AC_GST_ANAL(rc); /* Receive */
-    contextId = 1005015;
 
     if(resp.type != GST_RTSP_MESSAGE_RESPONSE) {
-        contextId = 1005016;
         pu_log(LL_ERROR, "%s: wrong GST message type %d. Expected one is %d", __FUNCTION__, resp.type, GST_RTSP_MESSAGE_RESPONSE);
-        contextId = 1005017;
-        goto on_error;
+         goto on_error;
     }
-    contextId = 1005018;
     if(resp.type_data.response.code == GST_RTSP_STS_OK) goto on_no_auth;    //Video restart w/o reconnection - same session ID
-    contextId = 1005019;
 
     if(resp.type_data.response.code != GST_RTSP_STS_UNAUTHORIZED) {
-        contextId = 1005020;
         pu_log(LL_ERROR, "%s: bad answer: %s", __FUNCTION__, gst_rtsp_status_as_text(resp.type_data.response.code));
-        contextId = 1005021;
         goto on_error;
     }
 //Auth step
     gchar* auth;
     gchar* session;
-    contextId = 1005022;
+
     rc = gst_rtsp_message_get_header(&resp, GST_RTSP_HDR_WWW_AUTHENTICATE, &auth, 0); AC_GST_ANAL(rc);
-    contextId = 1005023;
     rc = gst_rtsp_message_get_header(&resp, GST_RTSP_HDR_SESSION, &session, 0); AC_GST_ANAL(rc);
-    contextId = 1005024;
 
     if(sess->rtsp_session_id = strdup(session), !sess->rtsp_session_id) {
-        contextId = 1005025;
         pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
-        contextId = 1005026;
         goto on_error;
     }
 
     GstRTSPAuthCredential** ac, **acc;
-    contextId = 1005027;
+
     if (ac = gst_rtsp_message_parse_auth_credentials (&resp, GST_RTSP_HDR_WWW_AUTHENTICATE), !ac) {
-        contextId = 1005028;
         pu_log(LL_ERROR, "%s error parsing WOWZA Auth Credentials", __FUNCTION__);
-        contextId = 1005029;
         goto on_error;
     }
 
     acc = ac;
-    contextId = 1005030;
     while (*acc) {
-        contextId = 1005031;
         if ((*acc)->scheme != GST_RTSP_AUTH_DIGEST) {
-            contextId = 1005032;
             pu_log(LL_ERROR, "%s: WOWZA proposed non-Digest auth. Not supported", __FUNCTION__);
-            contextId = 1005033;
             gst_rtsp_auth_credentials_free (ac);
-            contextId = 1005034;
             goto on_error;
         }
         GstRTSPAuthParam **param = (*acc)->params;
-        contextId = 1005035;
         gst_rtsp_connection_clear_auth_params (gs->conn);
-        contextId = 1005036;
+
         while (*param) {
-            contextId = 1005037;
             gst_rtsp_connection_set_auth_param (gs->conn, (*param)->name, (*param)->value);
-            contextId = 1005038;
-                param++;
-            contextId = 1005039;
+            param++;
         }
-        contextId = 1005040;
         acc++;
-        contextId = 1005041;
     }
-    contextId = 1005042;
     gst_rtsp_auth_credentials_free (ac);
-    contextId = 1005043;
     rc = gst_rtsp_connection_set_auth(gs->conn, GST_RTSP_AUTH_DIGEST, gs->wowza_session, gs->wowza_session); AC_GST_ANAL(rc);
-    contextId = 1005044;
+
 //Try to send it again
     rc = gst_rtsp_connection_send (gs->conn, &req, &gs->io_to); AC_GST_ANAL(rc);    /* Send */
-    contextId = 1005045;
-
     rc = gst_rtsp_connection_receive (gs->conn, &resp, &gs->io_to); AC_GST_ANAL(rc); /* Receive */
-    contextId = 1005046;
 
     if(resp.type != GST_RTSP_MESSAGE_RESPONSE) {
-        contextId = 1005047;
         pu_log(LL_ERROR, "%s: wrong GST message type %d. Expected one is %d", __FUNCTION__, resp.type, GST_RTSP_MESSAGE_RESPONSE);
-        contextId = 1005048;
         goto on_error;
     }
-    contextId = 1005049;
     if(resp.type_data.response.code != GST_RTSP_STS_OK) {
-        contextId = 1005050;
         pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(resp.type_data.response.code));
-        contextId = 1005051;
         goto on_error;
     }
 
 on_no_auth:
-    contextId = 1005052;
     sess->CSeq++;
-    contextId = 1005053;
-
     gst_rtsp_message_unset(&req);
-    contextId = 1005054;
     gst_rtsp_message_unset(&resp);
-    contextId = 1005055;
 
     return 1;
 on_error:
-    contextId = 1005056;
     gst_rtsp_message_unset(&req);
-    contextId = 1005057;
     gst_rtsp_message_unset(&resp);
-    contextId = 1005058;
     return 0;
 }
-/* 10 */
+
 int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
@@ -341,7 +278,6 @@ int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
     rc = gst_rtsp_message_init (&msg); AC_GST_ANAL(rc);
 //1. Add trackId = 0 or 1 to the url;
     char tmp_url[AC_RTSP_MAX_URL_SIZE] = {0};
-
 
     if(media_type == AC_RTSP_VIDEO_SETUP)
         snprintf(tmp_url, sizeof(tmp_url), "%s/%s%s", sess->url, AC_TRACK, AC_VIDEO_TRACK);
@@ -376,7 +312,7 @@ int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
     transport->trans = GST_RTSP_TRANS_RTP;
 
     gchar* text_transport = gst_rtsp_transport_as_text(transport);
-    pu_log(LL_DEBUG, "%s: Transport string for %s prepared = %s", __FUNCTION__, (media_type == AC_RTSP_VIDEO_SETUP)?"video":"audio", text_transport);
+
     rc = gst_rtsp_message_add_header (&msg, GST_RTSP_HDR_TRANSPORT, text_transport); AC_GST_ANAL(rc);
     g_free(text_transport); text_transport = NULL;
     gst_rtsp_transport_free(transport); transport = NULL;
@@ -434,7 +370,7 @@ on_error:
     gst_rtsp_message_unset(&msg);
     return 0;
 }
-/* 11 */
+
 int ac_WowzaPlay(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
@@ -469,7 +405,7 @@ on_error:
     gst_rtsp_message_unset(&msg);
     return 0;
 }
-/* 12 */
+
 int ac_WowzaTeardown(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_WOWZA, 0);
     GstRTSPResult rc;
@@ -506,7 +442,7 @@ on_error:
     gst_rtsp_message_unset(&msg);
     return 0;
 }
-/* 13 */
+
 const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, const char* vs_url, int port, const char* vs_session_id) {
     char s_port[20];
     url[0] = '\0';
@@ -522,7 +458,7 @@ const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, cons
     return url;
 
 }
-/* 14 */
+
 int getWowzaConnSocket(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_WOWZA, -1);
 

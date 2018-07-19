@@ -46,6 +46,10 @@ const char* ao_stream_approve(char* buf, size_t size, const char* session_id);
  */
 const char* ao_connection_request(char* buf, size_t size, const char* session_id);
 /*
+ * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU", "requestViewers":true}
+ */
+const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id);
+/*
  * Returns {"responses": [{"commandId": <command_id> "result": <rc>}]}
  */
 const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc);

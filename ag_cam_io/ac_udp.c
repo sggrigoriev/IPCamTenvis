@@ -161,16 +161,16 @@ t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) 
 
     t_ac_udp_read_result rc={-1, 0};
 
-    struct timespec t = {1,100}, rem;
+    struct timespec t = {0,10000}, rem;
 
     if(rc.rc = read(sock, buf, size), rc.rc < 0) {
-
-        if(errno == ECONNREFUSED) pu_log(LL_ERROR, "%s: Connection refuzed", __FUNCTION__);
-        if((errno == ECONNREFUSED) || (errno == EAGAIN)) {
-            if(nanosleep(&t, &rem)) {
-                pu_log(LL_ERROR, "%s: nanosleep returns %d", __FUNCTION__, errno);
-                rc.rc = -1;
-            }
+        if(errno == ECONNREFUSED) {
+            pu_log(LL_ERROR, "%s: Connection refuzed", __FUNCTION__);
+            rc.rc = -1;
+        }
+        if(errno == EAGAIN) {
+//            pu_log(LL_ERROR, "%s: Sleep", __FUNCTION__);
+            nanosleep(&t, &rem);
             rc.rc = 0; /* Let it try again */
         }
         else {
@@ -184,20 +184,23 @@ t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) 
     return rc;
 }
 int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
-    struct timespec t = {0,100}, rem;
+    struct timespec t = {0,10000}, rem;
     long rc = 0;
 
-    while(!rc) {
-        if (rc = write(sock, buf, size), rc < 0) {
-            if ((errno == ECONNREFUSED) || (errno == EAGAIN)) {
-                nanosleep(&t, &rem);
-                rc = 0; //Let it try again
-            }
-            else {
-                pu_log(LL_ERROR, "%s: Write on UDP socket error: RC = %d - %s. Buffer size = %d", __FUNCTION__, errno, strerror(errno), size);
-                return 0;
-            }
+    if (rc = write(sock, buf, size), rc < 0) {
+        if(errno == ECONNREFUSED) {
+            pu_log(LL_ERROR, "%s: Connection refuzed", __FUNCTION__);
+            return -1;
+        }
+        if(errno == EAGAIN) {
+//            pu_log(LL_ERROR, "%s: Sleep", __FUNCTION__);
+            nanosleep(&t, &rem);
+            return 0;           //Let it try again
+        }
+        else {
+            pu_log(LL_ERROR, "%s: Write socket error: RC = %d - %s. Buffer size = %d", __FUNCTION__, errno, strerror(errno), size);
+            return -1;
         }
     }
-    return rc;
+    return (int)rc;
 }

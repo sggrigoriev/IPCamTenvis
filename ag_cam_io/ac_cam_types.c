@@ -194,6 +194,13 @@ static void replace_ip(char* buf, size_t size, t_sdp_read_desr* sdp, const char*
     strncat(buf, SDP_END_STR, size - strlen(buf)-1);
 }
 /*
+ * change recvonly to sendonly or do nothing
+ */
+static void replace_recv_to_send(char* buf, size_t size, t_sdp_read_desr* sdp) {
+/*    if((sdp->str_name == "a") && */
+
+}
+/*
  * replace control: value if sdp contans the control or do nothing
  * a=control:
  */
@@ -270,6 +277,7 @@ int ac_rtsp_make_announce_body(char* new_sdp, size_t size, const char* old_sdp, 
             case AC_COMMON:
                 replace_o(sdp_string, sizeof(sdp_string), sdp);
                 replace_ip(sdp_string, sizeof(sdp_string), sdp, control_url);
+                replace_recv_to_send(sdp_string, sizeof(sdp_string), sdp);/* change recvonly to sendonly if any */
                 break;
             case AC_AUDIO:
                 if(!common_control_inserted) {

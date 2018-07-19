@@ -194,7 +194,6 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
             break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
-            rc = 0;
             goto on_error;
     }
 
@@ -322,17 +321,14 @@ int ac_req_play(t_at_rtsp_session* sess) {
     return ret;
 }
 int ac_req_teardown(t_at_rtsp_session* sess) {
-    pu_log(LL_DEBUG, "%s starts", __FUNCTION__);
     assert(sess);
     int ret;
     switch(sess->device) {
         case AC_CAMERA:
             ret = ac_alfaProTeardown(sess);
-            pu_log(LL_DEBUG, "%s after ac_alfaProTeardown", __FUNCTION__);
             break;
         case AC_WOWZA:
             ret = ac_WowzaTeardown(sess);
-            pu_log(LL_DEBUG, "%s after ac_WowzaTeardown", __FUNCTION__);
             break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);

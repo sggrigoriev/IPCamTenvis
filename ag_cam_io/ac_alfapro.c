@@ -381,7 +381,6 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
-    pu_log(LL_INFO, "%s: start", __FUNCTION__);
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
     if(res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->url), res != CURLE_OK) goto on_error;
@@ -394,7 +393,6 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
 
     curl_easy_setopt(cs->h, CURLOPT_RANGE, NULL);
 
-    pu_log(LL_INFO, "%s: finished OK", __FUNCTION__);
     reset_curl_buffers(cs);
     return 1;
 on_error:
@@ -404,7 +402,6 @@ on_error:
 }
 
 int ac_alfaProTeardown(t_at_rtsp_session* sess) {
-    pu_log(LL_DEBUG, "%s starts", __FUNCTION__);
     CURLcode res = CURLE_OK;
     t_curl_session* cs = sess->session;
 
@@ -418,7 +415,6 @@ int ac_alfaProTeardown(t_at_rtsp_session* sess) {
 
     if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
 
-    pu_log(LL_INFO, "%s: Finished OK", __FUNCTION__);
     reset_curl_buffers(cs);
     return 1;
 }

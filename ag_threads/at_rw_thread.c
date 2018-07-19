@@ -21,24 +21,18 @@
 
 #include <pthread.h>
 #include <malloc.h>
-#include <netinet/in.h>
-#include <ag_cam_io/ac_cam_types.h>
-#include <pu_queue.h>
-#include <ag_queues/aq_queues.h>
 #include <string.h>
-#include <ag_converter/ao_cmd_cloud.h>
-#include <ag_cam_io/ac_udp.h>
-#include <lib_timer.h>
-#include <ag_cam_io/ac_alfapro.h>
 
 #include "pu_logger.h"
+#include "pu_queue.h"
+#include "lib_timer.h"
 
-#include "ab_ring_bufer.h"
+#include "aq_queues.h"
+#include "ao_cmd_cloud.h"
 #include "ac_udp.h"
-#include "ac_rtsp.h"
+#include "ac_alfapro.h"
 #include "ag_settings.h"
-#include "ag_defaults.h"
-#include "ac_cam_types.h"
+
 #include "at_rw_thread.h"
 
 #define AT_THREAD_NAME "STREAMING_RW"
@@ -77,36 +71,79 @@ static int write_il_sock = -1;
 static pthread_t rdwr_id;
 static pthread_attr_t rdwr_attr;
 
+static pthread_t hb_id;
+static pthread_attr_t hb_attr;
+
 static t_ab_byte* rdwr_buf;
 
 static t_at_rtsp_session* the_session;
 
 pu_queue_t* fromRW;
 
+static volatile unsigned int bytes_passed = 0;
+static char err_buf[120];
+static const char* stop_msg;
+
+static int hb_function() {
+    int ret = 0;
+    t_at_rtsp_session* sess = calloc(sizeof(t_at_rtsp_session), 1);
+    if(!sess) goto on_error;
+
+    sess->url = strdup(the_session->url);
+    if(!sess->url) goto on_error;
+
+    if(!ac_alfaProInit(sess)) goto on_error;
+    if(!ac_alfaProOptions(sess, 1)) goto on_error;
+
+    ret = 1;
+on_error:
+    if(sess) ac_alfaProDown(sess);
+    return ret;
+}
+
+static void* hart_beat(void* params) {
+    pu_queue_t* q = (pu_queue_t*)params;
+
+    lib_timer_clock_t hart_beat = {0};
+    lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
+
+    lib_timer_clock_t rw_state = {0};
+    lib_timer_init(&rw_state, 3);
+    pu_log(LL_INFO, "%s start", __FUNCTION__);
+    while(!stop) {
+        sleep(1);
+        if(lib_timer_alarm(hart_beat)) {
+            if(!hb_function()) {     /* hart beats from the Camera */
+                pu_log(LL_ERROR, "%s: Camera is out: stop streaming process", __FUNCTION__);
+                pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+            }
+            else {
+                lib_timer_init(&hart_beat, 30);
+                pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
+                bytes_passed = 0;
+            }
+        }
+        if(lib_timer_alarm(rw_state)) {
+            lib_timer_init(&rw_state, 3);
+            if(!bytes_passed) {
+                pu_log(LL_ERROR, "%s: WOWZA stops get the stream!", __FUNCTION__);
+                pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+            }
+        }
+    }
+    pu_log(LL_INFO, "%s stop", __FUNCTION__);
+    sleep(1);
+    pthread_exit(NULL);
+}
+
 static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_byte* buf, pu_queue_t* q) {
     pu_log(LL_INFO, "%s start", name);
 #ifdef RW_CYCLES
     int step = RW_CYCLES;
 #endif
-    lib_timer_clock_t hart_beat = {0};
-    lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
-    unsigned int bytes_passed = 0;
 
-    char err_buf[120];
-    const char* stop_msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
     while(!stop) {
         t_ac_udp_read_result ret;
-
-        if(lib_timer_alarm(hart_beat)) {
-            if(!ac_alfaProOptions(the_session, 1)) {     /* hart beats from the Camera */
-                pu_log(LL_ERROR, "%s: Camera is out: restart streaming process", __FUNCTION__);
-                pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
-                goto on_stop;
-            }
-            lib_timer_init(&hart_beat, 30);
-            pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
-            bytes_passed = 0;
-        }
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
 
@@ -116,16 +153,18 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         else if(ret.rc < 0) {        /* Error */
             pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
             pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
-            goto on_stop;
         }
-//        pu_log(LL_DEBUG, "%s: %d bytes read", __FUNCTION__, ret.rc);
+
         int rt;
-        if(rt = ac_udp_write(write_sock, buf, (size_t)ret.rc), !rt) {
+        rt = ac_udp_write(write_sock, buf, (size_t)ret.rc);
+        if(!rt) {          /* timeout */
+            continue;
+        }
+        else if(rt < 0) {
             pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
             pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
-            goto on_stop;
         }
-//        pu_log(LL_DEBUG, "%s: %d bytes written", __FUNCTION__, rt);
+
         bytes_passed += rt;
 #ifdef RW_CYCLES
         if(!step--) {
@@ -137,7 +176,6 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         }
 #endif
     }
-on_stop:
     pu_log(LL_INFO, "%s stop %s", AT_THREAD_NAME, name);
     sleep(1);
     pthread_exit(NULL);
@@ -187,7 +225,13 @@ on_error:
 static int at_start_interleaved_rw_thread() {
     if(at_is_rw_thread_run()) return 1;
 
+    stop_msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+
     stop = 0;
+    if(pthread_attr_init(&hb_attr)) goto on_error;
+    if(pthread_create(&hb_id, &hb_attr, &hart_beat, fromRW)) goto on_error;
+
+
     if(pthread_attr_init(&rdwr_attr)) goto on_error;
     if(pthread_create(&rdwr_id, &rdwr_attr, &a_rdwr_the_thread, NULL)) goto on_error;
 
@@ -284,10 +328,15 @@ void at_stop_rw() {
         pu_log(LL_ERROR, "%s: RW threads are down", AT_THREAD_NAME);
     }
     else {
-//        pthread_cancel(rdwr_id);
+        pthread_cancel(rdwr_id);
+        pthread_cancel(hb_id);
         void *ret;
         pthread_join(rdwr_id, &ret);
         pthread_attr_destroy(&rdwr_attr);
+
+        pthread_join(hb_id, &ret);
+        pthread_attr_destroy(&hb_attr);
+
 
 //We do not close existing connections - they will be used for RTSP Teardown
 

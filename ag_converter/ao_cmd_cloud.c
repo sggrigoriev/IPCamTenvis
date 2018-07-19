@@ -149,7 +149,17 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
     snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
     return buf;
 }
+/*
+ * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU", "requestViewers":true}
+ */
 
+const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id) {
+    const char* part1 = "{\"sessionId\":\"";
+    const char* part2 = "\", \"requestViewers\":true}";
+
+    snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
+    return buf;
+}
 /*
  * {"responses": [{"commandId": <command_id> "result": <rc>}]}
  */

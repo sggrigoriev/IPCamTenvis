@@ -136,21 +136,18 @@ static void run_rw_command(t_agent_command cmd) {
             break;
         case AT_ST_CONNECTED:
             switch(cmd) {
-                case AT_CMD_RW_START:   // Restart case!
-                    ac_stop_video();
-                    rw_status = AT_ST_DISCONNECTED;
-
-                    if(ac_start_video()) {
-                        rw_status = AT_ST_CONNECTED;
-                        waiting_command = AT_CMD_NOTHING;
-                    }
-                    else {
-                        waiting_command = cmd;
-                        pu_log(LL_ERROR, "%s: Error RW start. RW inactive", AT_THREAD_NAME);
-                    }
+                case AT_CMD_RW_START:   // Nothing to do
                     break;
                 case AT_CMD_RW_STOP:
+/*
+ * RW stops if we are here. So:
+ * 1. Stop video process
+ * 2. Change RW status
+ * 3. Ask WS for active viewers
+ * 4. No command returned!
+ */
                     ac_stop_video();
+                    ac_send_active_viwers_request();
                     rw_status = AT_ST_DISCONNECTED;
                     break;
                 default:
@@ -337,16 +334,15 @@ static t_agent_command process_ws_message(char* msg) {
             ret = AT_CMD_WS_PING;
             break;
         case AO_WS_ABOUT_STREAMING: {
-            unsigned int old_viewers_amount = at_ws_get_active_viewers_amount();
             unsigned int new_viewers_amount = (data.ws_answer.viwers_count < 0) ?
-                                              old_viewers_amount + data.ws_answer.viewers_delta :
+                                              at_ws_get_active_viewers_amount() + data.ws_answer.viewers_delta :
                                               (unsigned int) data.ws_answer.viwers_count;
 
-            if ((data.ws_answer.is_start) || ((new_viewers_amount != 0) && (old_viewers_amount == 0))) {
-                pu_log(LL_INFO, "%s: Sart streaming requested by Web Socket.", AT_THREAD_NAME);
+            if ((data.ws_answer.is_start) || (new_viewers_amount != 0)) {
+                pu_log(LL_INFO, "%s: Streaming requested by Web Socket.", AT_THREAD_NAME);
                 ret = (rw_status == AT_ST_CONNECTED)?AT_CMD_NOTHING:AT_CMD_RW_START;
-            } else if ((new_viewers_amount == 0) && (old_viewers_amount != 0)) {
-                pu_log(LL_INFO, "%s: Stop streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
+            } else if (new_viewers_amount == 0) {
+                pu_log(LL_INFO, "%s: No streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
                 ret = AT_CMD_RW_STOP;
             }
             at_ws_set_active_viewers_amount(new_viewers_amount);
@@ -373,9 +369,10 @@ static t_agent_command process_rw_message(char* msg) {
         pu_log(LL_ERROR, "%s: Can't process message from streaming R/W treads. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
         return ret;
     }
-    pu_log(LL_ERROR, "%s: Error from streaming R/W treads. RC = %d %s. Reconnect", AT_THREAD_NAME,
+    pu_log(LL_ERROR, "%s: Error from streaming R/W treads. RC = %d %s.", AT_THREAD_NAME,
            data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
-    ret = (rw_status = AT_ST_CONNECTED)?AT_CMD_RW_START:AT_CMD_NOTHING;
+
+    ret = AT_CMD_RW_STOP;
     return ret;
 }
 
