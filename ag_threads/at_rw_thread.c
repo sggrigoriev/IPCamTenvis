@@ -244,7 +244,7 @@ on_error:
 int at_set_rt_rw(t_rtsp_media_pairs rd, t_rtsp_media_pairs wr) {
     if(at_is_rw_thread_run()) return 1;
     fromRW = aq_get_gueue(AQ_FromRW);
-    fromRW = aq_get_gueue(AQ_FromRW);
+
     rd_socks = rd;
     wr_socks = wr;
     is_rt_mode = 1;
@@ -330,11 +330,8 @@ void at_stop_rw() {
     else {
         pthread_cancel(rdwr_id);
         pthread_cancel(hb_id);
-        void *ret;
-        pthread_join(rdwr_id, &ret);
-        pthread_attr_destroy(&rdwr_attr);
 
-        pthread_join(hb_id, &ret);
+        pthread_attr_destroy(&rdwr_attr);
         pthread_attr_destroy(&hb_attr);
 
 
