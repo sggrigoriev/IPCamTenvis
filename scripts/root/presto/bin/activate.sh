@@ -44,9 +44,29 @@ else
 fi;
 }
 
-#issue bell sound
+# qr prompt
 start_qr_command () {
 	r=$(eval $START_QR_COMMAND);
+}
+
+#qr success
+success_qr_command () {
+if [ -f $AUTH_TOKEN_FILE ];
+then
+	echo No qr success sound;
+else
+	r=$(eval $QR_SUCCESS_COMMAND);
+fi;
+}
+
+#issue bell sound
+bell_command () {
+if [ -f $AUTH_TOKEN_FILE ];
+then
+	echo No bell sound;
+else
+	r=$(eval $BELL_COMMAND);
+fi;
 }
 
 #issue bell sound
@@ -72,16 +92,15 @@ fi;
 # reset and rebooot device
 reset_and_reboot () {
 
-	./killall -9 sound.sh
+	killall -9 sound.sh
 	sleep 2;
-	./killall -9 sound.sh
+	killall -9 sound.sh
 	whoops_command;
 	sleep 2;
 	whoops_command;
 	sleep 2;
 	rm $CLOUD_URL_FILE;
 	rm $AUTH_TOKEN_FILE;
-#	printf "[config]\ncloud = \nkey = \nloc_id = 0\n" > /mnt/mtd/alp_tw.ini
 	cp $PRESTO_PATH/bin/alp_tw.ini /mnt/mtd
 	cd /mnt/mtd;
 	rm -f cfg/*
@@ -176,26 +195,68 @@ done;
 return "$v_connected";
 }
 
+#
+# this function permanently checks ip accessibility and in case of any connectivity issue, reboots camera
+#
+permanent_check_ip_connectivity () {
+ntries=0;
+ret=0;
+while [ "0" == "0" ];
+do
+	r=$(ping -c $IP_PING_TRIES $IP_PING_ADDRESS)
+	ret=$?;
+	if [ "$ret" == "0" ];
+	then
+		echo "IP Connectivity is OK.";
+		ntries=0;
+		sleep 5;
+		continue;
+    else
+	    # some connectivity issue
+		ntries=$(expr $ntries + 1);
+		if [ "$ntries" -gt  "$IP_CONNECTIVITY_MAX_TRIES" ];
+		then
+			echo "WARNING: Maximum number of tries exceeded, rebooting.";
+			sync;
+			$REBOOT_COMMAND;
+			break;
+		fi;
+		echo "WARNING: NO IP connectivity. Try $ntries of total $IP_CONNECTIVITY_MAX_TRIES tries";
+		sleep 5;
+    fi;
+done;
+}
+
+
+
 # check CGI for the cloud/key attributes. every cycle repeat start_qr.wav
 
 read_cloud_parameters ()
 {
 cloud_url="";
 api_key="";
+ssid="";
 while [ "1" == "1" ];
 do
     JSON=$(eval $CURL_COMMAND $CGI_URL 2>/dev/null);
     sleep 1;
+    if [ "$JSON" == "" ];
+    then
+            continue;
+    fi;
     echo "!!!!! <- ALP parameters" $JSON;
-    cloud_url=$(echo $JSON | $JQ_COMMAND cloud );
-    api_key=$(echo $JSON | $JQ_COMMAND key );
-    if  [ "$cloud_url" == "" ] || [ "$api_key" == "" ];
+    cloud_url=$(echo $JSON | $JQ_COMMAND cloud 2>/dev/null );
+    api_key=$(echo $JSON | $JQ_COMMAND key 2>/dev/null);
+    ssid=$(echo $JSON | $JQ_COMMAND ssid 2>/dev/null);
+    if  [ "$cloud_url" == "" ] || [ "$api_key" == "" ] || [ "$ssid" == "" ];
     then
             echo "Playing QR prompt sound";
             start_qr_command;
             sleep 7;
     else
+            success_qr_command;
             break;
+            sleep 2;
     fi;
 done;
 }
@@ -204,7 +265,7 @@ done;
 #
 #############################################################################
 
-sleep 10;
+sleep 5;
 
 cd $PRESTO_PATH/bin;
 killall -9 Proxy WUD Tenvis
@@ -216,24 +277,28 @@ firmware_upgrade;
 read_cloud_parameters;
 # ++++++++++++ check WiFi attach & WLAN interface readiness  ++++++++++++
 ./sound.sh Ping.wav &
-check_wpa_state;
-v_vpa=$?
-if [ "$v_vpa" == "0" ];
-then
-	echo "INFO: WPA state is OK";
-else
-	echo "WARNING: WPA is not connected";
-fi;
 
-check_wlan_interface;
-v_wlan=$?;
-if [ "$v_wlan" == "0" ];
+check_ip_connectivity;
+v_ip=$?
+if [ "$v_ip" != "0" ];
 then
-	echo "INFO: WLAN state is OK";
-else
-	echo "WARNING: WLAN is not connected";
+        check_wpa_state;
+        v_vpa=$?
+        if [ "$v_vpa" == "0" ];
+        then
+	        echo "INFO: WPA state is OK";
+        else
+	        echo "WARNING: WPA is not connected";
+        fi;
+        check_wlan_interface;
+        v_wlan=$?;
+        if [ "$v_wlan" == "0" ];
+        then
+	        echo "INFO: WLAN state is OK";
+        else
+	        echo "WARNING: WLAN is not connected";
+        fi;
 fi;
-
 # ++++++++++++ check IP Connectivity prior to dealing with the cloud ++++++++++++
 check_ip_connectivity;
 v_ip=$?
@@ -423,5 +488,6 @@ printf "$AUTH_TOKEN" > $AUTH_TOKEN_FILE;
 printf "$cloud_url" > $CLOUD_URL_FILE
 echo  "Now we can start Presto stuff";
 ./WUD &
-
+# start ip check in a background
+permanent_check_ip_connectivity;
 

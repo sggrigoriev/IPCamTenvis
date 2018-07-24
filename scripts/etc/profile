@@ -1,7 +1,7 @@
 # ~/.bashrc: executed by bash(1) for non-login interactive shells.
 
 
-export PATH="/usr/bin:/usr/sbin:/bin:/sbin:/bin/vs/cgi-bin:/bin/vs:/usr/local/sbin:/usr/local/bin:/rt/bin"
+export PATH="/usr/bin:/usr/sbin:/bin:/sbin:/bin/vs/cgi-bin:/bin/vs:/usr/local/sbin:/usr/local/bin:/root/presto/bin"
 export LD_LIBRARY_PATH="/usr/local/lib:/usr/lib:/rt/lib:/root/presto/lib"
 # If running interactively, then:
 if [ "$PS1" ]; then
