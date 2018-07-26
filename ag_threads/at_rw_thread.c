@@ -108,7 +108,7 @@ static void* hart_beat(void* params) {
     lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
 
     lib_timer_clock_t rw_state = {0};
-    lib_timer_init(&rw_state, 3);
+    lib_timer_init(&rw_state, 10);
     pu_log(LL_INFO, "%s start", __FUNCTION__);
     while(!stop) {
         sleep(1);
@@ -119,16 +119,19 @@ static void* hart_beat(void* params) {
             }
             else {
                 lib_timer_init(&hart_beat, 30);
-                pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
-                bytes_passed = 0;
             }
         }
         if(lib_timer_alarm(rw_state)) {
-            lib_timer_init(&rw_state, 3);
+            lib_timer_init(&rw_state, 10);
             if(!bytes_passed) {
                 pu_log(LL_ERROR, "%s: WOWZA stops get the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
             }
+            else {
+                pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
+                bytes_passed = 0;
+            }
+
         }
     }
     pu_log(LL_INFO, "%s stop", __FUNCTION__);
@@ -141,7 +144,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
 #ifdef RW_CYCLES
     int step = RW_CYCLES;
 #endif
-
+    bytes_passed = 0;
     while(!stop) {
         t_ac_udp_read_result ret;
 
@@ -155,14 +158,13 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
         }
 
-        int rt;
-        rt = ac_udp_write(write_sock, buf, (size_t)ret.rc);
-        if(!rt) {          /* timeout */
-            continue;
-        }
-        else if(rt < 0) {
-            pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
-            pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+        int rt = 0;
+        while(!rt && !stop) {
+            rt = ac_udp_write(write_sock, buf, (size_t) ret.rc);
+            if (rt < 0) {
+                pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
+                pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
+            }
         }
 
         bytes_passed += rt;

@@ -193,7 +193,6 @@ int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
             return -1;
         }
         if(errno == EAGAIN) {
-//            pu_log(LL_ERROR, "%s: Sleep", __FUNCTION__);
             nanosleep(&t, &rem);
             return 0;           //Let it try again
         }
