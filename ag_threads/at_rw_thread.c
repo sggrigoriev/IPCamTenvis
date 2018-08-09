@@ -81,23 +81,20 @@ static t_at_rtsp_session* the_session;
 pu_queue_t* fromRW;
 
 static volatile unsigned int bytes_passed = 0;
+static volatile unsigned int bytes_accepted = 0;
 static char err_buf[120];
 static const char* stop_msg;
 
+
 static int hb_function() {
     int ret = 0;
-    t_at_rtsp_session* sess = calloc(sizeof(t_at_rtsp_session), 1);
-    if(!sess) goto on_error;
 
-    sess->url = strdup(the_session->url);
-    if(!sess->url) goto on_error;
+    if(!the_session) goto on_error;
 
-    if(!ac_alfaProInit(sess)) goto on_error;
-    if(!ac_alfaProOptions(sess, 1)) goto on_error;
+    if(!ac_alfaProOptions(the_session, 0)) goto on_error;
 
     ret = 1;
 on_error:
-    if(sess) ac_alfaProDown(sess);
     return ret;
 }
 
@@ -123,12 +120,21 @@ static void* hart_beat(void* params) {
         }
         if(lib_timer_alarm(rw_state)) {
             lib_timer_init(&rw_state, 10);
-            if(!bytes_passed) {
-                pu_log(LL_ERROR, "%s: WOWZA stops get the stream!", __FUNCTION__);
+            if(!bytes_accepted) {
+                pu_log(LL_ERROR, "%s: Cam stops provide the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
             }
             else {
-                pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
+                pu_log(LL_DEBUG, "%s: Bytes red = %d", __FUNCTION__, bytes_accepted);
+                bytes_accepted = 0;
+            }
+
+            if(!bytes_passed) {
+                pu_log(LL_ERROR, "%s: WOWZA stops receive the stream!", __FUNCTION__);
+                pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+            }
+            else {
+                pu_log(LL_DEBUG, "%s: Bytes written = %d", __FUNCTION__, bytes_passed);
                 bytes_passed = 0;
             }
 
@@ -148,6 +154,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
     while(!stop) {
         t_ac_udp_read_result ret;
 
+
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
 
         if(!ret.rc) {            /* timeout */
@@ -157,6 +164,8 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
             pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
         }
+        else
+            bytes_accepted += ret.rc;
 
         int rt = 0;
         while(!rt && !stop) {
@@ -168,6 +177,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         }
 
         bytes_passed += rt;
+
 #ifdef RW_CYCLES
         if(!step--) {
             char b[120];
