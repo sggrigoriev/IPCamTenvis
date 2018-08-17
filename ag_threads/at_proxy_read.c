@@ -61,33 +61,34 @@ static void* proxy_read(void* params) {
     }
 
     while(!at_are_childs_stop()) {
-        lib_tcp_rd_t *conn = lib_tcp_read(all_conns, 1); /* connection removed inside */
-        if (!conn) {
-            pu_log(LL_ERROR, "%s. Read op failed %d %s. Reconnect", AT_THREAD_NAME, errno, strerror(errno));
-            at_set_stop_proxy_rw_children();
-            break;
-        }
-        if(conn == LIB_TCP_READ_EOF) {
+        int rc;
+        lib_tcp_rd_t *conn = lib_tcp_read(all_conns, 1, &rc); /* connection removed inside */
+        if(rc == LIB_TCP_READ_EOF) {
             pu_log(LL_ERROR, "%s. Read op failed. Nobody on remote side (EOF). Reconnect", AT_THREAD_NAME);
             at_set_stop_proxy_rw_children();
             break;
         }
-        if (conn == LIB_TCP_READ_TIMEOUT) {
+        if (rc == LIB_TCP_READ_TIMEOUT) {
 //            pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
             continue;   /* timeout */
         }
-        if (conn == LIB_TCP_READ_MSG_TOO_LONG) {
+        if (rc == LIB_TCP_READ_MSG_TOO_LONG) {
             pu_log(LL_ERROR, "%s: incoming mesage too large. Ignored", AT_THREAD_NAME);
             continue;
         }
-        if (conn == LIB_TCP_READ_NO_READY_CONNS) {
+        if (rc == LIB_TCP_READ_NO_READY_CONNS) {
             pu_log(LL_ERROR, "%s: internal error - no ready sockets. Reconnect", AT_THREAD_NAME);
             at_set_stop_proxy_rw_children();
             break;
         }
+        if (!conn) {
+            pu_log(LL_ERROR, "%s. Undefined error - connection not found. Reconnect", AT_THREAD_NAME);
+            at_set_stop_proxy_rw_children();
+            break;
+        }
+
         while (lib_tcp_assemble(conn, out_buf, sizeof(out_buf))) {     /* Read all fully incoming messages */
             pu_queue_push(from_proxy, out_buf, strlen(out_buf) + 1);
-
             pu_log(LL_INFO, "%s: message received: %s", AT_THREAD_NAME, out_buf);
         }
     }

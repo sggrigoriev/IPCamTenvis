@@ -22,10 +22,11 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include <curl/curl.h>  /* for global init/deinit */
 #include <gst/gst.h>    /* for gloal init/deinit */
-#include <stdint.h>
+
 
 #include "pu_logger.h"
 
@@ -91,9 +92,9 @@ static void print_Agent_start_params() {
 /*
  * Debugging utility
  */
-volatile uint32_t contextId;
+volatile uint32_t contextId = 0;
 void signalHandler( int signum ) {
-    pu_log(LL_ERROR, "%s: Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", __FUNCTION__, signum, contextId, pthread_self());
+    pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", __FUNCTION__, signum, contextId, pthread_self());
     exit(signum);
 }
 
@@ -103,6 +104,7 @@ int main() {
     signal(SIGBUS, signalHandler);
     signal(SIGINT, signalHandler);
     signal(SIGFPE, signalHandler);
+    signal(SIGKILL, signalHandler);
 
     printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
 

@@ -101,23 +101,12 @@ on_error:
 static void* hart_beat(void* params) {
     pu_queue_t* q = (pu_queue_t*)params;
 
-    lib_timer_clock_t hart_beat = {0};
-    lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
 
     lib_timer_clock_t rw_state = {0};
     lib_timer_init(&rw_state, 10);
     pu_log(LL_INFO, "%s start", __FUNCTION__);
     while(!stop) {
         sleep(1);
-        if(lib_timer_alarm(hart_beat)) {
-            if(!hb_function()) {     /* hart beats from the Camera */
-                pu_log(LL_ERROR, "%s: Camera is out: stop streaming process", __FUNCTION__);
-                pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
-            }
-            else {
-                lib_timer_init(&hart_beat, 30);
-            }
-        }
         if(lib_timer_alarm(rw_state)) {
             lib_timer_init(&rw_state, 10);
             if(!bytes_accepted) {
@@ -151,8 +140,21 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
     int step = RW_CYCLES;
 #endif
     bytes_passed = 0;
+    bytes_accepted = 0;
+    lib_timer_clock_t hart_beat = {0};
+    lib_timer_init(&hart_beat, 30);     /* TODO: should be taken from session timeout parameter from RTSP session */
     while(!stop) {
         t_ac_udp_read_result ret;
+
+        if(lib_timer_alarm(hart_beat)) {
+            if(!hb_function()) {     /* hart beats from the Camera */
+                pu_log(LL_ERROR, "%s: Camera is out: stop streaming process", __FUNCTION__);
+                pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+            }
+            else {
+                lib_timer_init(&hart_beat, 30);
+            }
+        }
 
 
         ret = ac_udp_read(read_sock, buf, media_buf_size, 10);
