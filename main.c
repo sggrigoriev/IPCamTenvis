@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <unistd.h>
+#include <getopt.h>
 
 #include <curl/curl.h>  /* for global init/deinit */
 #include <gst/gst.h>    /* for gloal init/deinit */
