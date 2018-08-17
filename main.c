@@ -99,16 +99,27 @@ void signalHandler( int signum ) {
 }
 
 
-int main() {
+int main(int argc, char* argv[]) {
     signal(SIGSEGV, signalHandler);
     signal(SIGBUS, signalHandler);
     signal(SIGINT, signalHandler);
     signal(SIGFPE, signalHandler);
     signal(SIGKILL, signalHandler);
 
+    char* config = DEFAULT_CFG_FILE_NAME;
+
+    if(argc > 1) {
+        int c = getopt(argc, argv, "p:");
+        if(c != 'p') {
+            fprintf(stderr, "Wrong start parameter. Only -p<config_file_path_and_name> allowed");
+            exit(-1);
+        }
+        config = optarg;
+    }
+
     printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
 
-    if(!ag_load_config(ag_getCfgFileName())) exit(-1);
+    if(!ag_load_config(config)) exit(-1);
 
     pu_start_logger(ag_getLogFileName(), ag_getLogRecordsAmt(), ag_getLogVevel());
     print_Agent_start_params();
