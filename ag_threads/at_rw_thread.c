@@ -112,6 +112,7 @@ static void* hart_beat(void* params) {
             if(!bytes_accepted) {
                 pu_log(LL_ERROR, "%s: Cam stops provide the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+                sleep(3600);
             }
             else {
                 pu_log(LL_DEBUG, "%s: Bytes red = %d", __FUNCTION__, bytes_accepted);
@@ -121,6 +122,7 @@ static void* hart_beat(void* params) {
             if(!bytes_passed) {
                 pu_log(LL_ERROR, "%s: WOWZA stops receive the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+                sleep(3600);
             }
             else {
                 pu_log(LL_DEBUG, "%s: Bytes written = %d", __FUNCTION__, bytes_passed);
@@ -150,6 +152,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             if(!hb_function()) {     /* hart beats from the Camera */
                 pu_log(LL_ERROR, "%s: Camera is out: stop streaming process", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+                sleep(3600);
             }
             else {
                 lib_timer_init(&hart_beat, 30);
@@ -165,6 +168,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
         else if(ret.rc < 0) {        /* Error */
             pu_log(LL_ERROR, "%s: Lost connection to the camera for %s", AT_THREAD_NAME, name);
             pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
+            sleep(3600);
         }
         else
             bytes_accepted += ret.rc;
@@ -175,6 +179,7 @@ static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_by
             if (rt < 0) {
                 pu_log(LL_ERROR, "%s: Lost connection to the %s server", AT_THREAD_NAME, name);
                 pu_queue_push(q, stop_msg, strlen(stop_msg) + 1);
+                sleep(3600);
             }
         }
 
@@ -322,7 +327,6 @@ void at_stop_rw() {
         pu_log(LL_WARNING, "%s is already down", AT_THREAD_NAME);
         return;
     }
-    stop = 1;
     if(is_rt_mode) {
         pthread_cancel(v_rtp_id);
         pthread_cancel(v_rtcp_id);
@@ -339,11 +343,16 @@ void at_stop_rw() {
         if(a_rtp_buf) free(a_rtp_buf);
         if(a_rtcp_buf) free(a_rtcp_buf);
         v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
+        stop = 1;
         pu_log(LL_ERROR, "%s: RW threads are down", AT_THREAD_NAME);
     }
     else {
+        void *ret;
         pthread_cancel(rdwr_id);
         pthread_cancel(hb_id);
+
+        pthread_join(rdwr_id, &ret);
+        pthread_join(hb_id, &ret);
 
         pthread_attr_destroy(&rdwr_attr);
         pthread_attr_destroy(&hb_attr);
@@ -353,7 +362,9 @@ void at_stop_rw() {
 
         if(rdwr_buf) free(rdwr_buf);
         rdwr_buf = NULL;
+        stop = 1;
         pu_log(LL_ERROR, "%s: RW thread is down", AT_THREAD_NAME);
+        pu_log(LL_ERROR, "%s: HartBeat thread is down", AT_THREAD_NAME);
     }
 }
 /*****************************
