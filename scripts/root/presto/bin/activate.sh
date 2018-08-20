@@ -1,5 +1,11 @@
 #!/bin/ash
 
+
+#
+#
+#
+
+
 source /root/presto/bin/presto.conf
 
 export PATH=$PRESTO_PATH/bin:$PATH
@@ -207,7 +213,7 @@ do
 	ret=$?;
 	if [ "$ret" == "0" ];
 	then
-		echo "IP Connectivity is OK.";
+#		echo "IP Connectivity is OK.";
 		ntries=0;
 		sleep 5;
 		continue;
@@ -448,7 +454,14 @@ else
 	then
 		# this is wrong token, initiating reset
 		echo $( echo $result | $JQ_COMMAND resultCodeMessage );
-		echo "!!!!!!! WRONG TOKEN"
+		echo "<<<<<<<<<<<<<<<<< WRONG TOKEN >>>>>>>>>>>>>>>>>>>>>>>"
+		reset_and_reboot;
+	fi;
+	if [ "$resultCode" == "22" ];
+	then
+		# this is wrong token, initiating reset
+		echo $( echo $result | $JQ_COMMAND resultCodeMessage );
+		echo "<<<<<<<<<<<<<<< Device under another location. Reset and reboot >>>>>>>>>>>>>>>>"
 		reset_and_reboot;
 	fi;
 
@@ -477,7 +490,12 @@ result=$(eval $JSON)
 echo "<-" $result;
 if [ "$( echo $result | $JQ_COMMAND status )" == "UNKNOWN" ];
 then
-	echo WARNING, AUTH_KEY is Obsolete, rebooting;
+	echo "<<<<<<<<<<<<<<<<<<< WARNING, AUTH_KEY is Obsolete, rebooting >>>>>>>>>>>>>>>>>>>>>>";
+	reset_and_reboot;
+fi;
+if [ "$( echo $result | $JQ_COMMAND status )" == "UNAUTHORIZED" ];
+then
+	echo "<<<<<<<<<<<<<<<<<<<<< WARNING, AUTH_KEY is bad, rebooting >>>>>>>>>>>>>>>>>>>>>>>>>>>";
 	reset_and_reboot;
 fi;
 
