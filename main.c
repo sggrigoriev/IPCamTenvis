@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
         config = optarg;
     }
 
-    printf("Presto v %s\n", AGENT_FIRMWARE_VERSION);
+    printf("Tenvis v %s\n", AGENT_FIRMWARE_VERSION);
 
     if(!ag_load_config(config)) exit(-1);
 

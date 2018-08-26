@@ -189,20 +189,17 @@ void ac_stop_video() {
 /*****************************************
  * To WebSocket messages
  */
-void ac_send_stream_initiation() {
+int ac_send_stream_initiation() {
     char buf[512];
-    at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
+    return at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
 }
-void ac_send_stream_confirmation() {
+int ac_send_stream_confirmation() {
     char buf[128];
-
-    if(!at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth))) {
-        pu_log(LL_ERROR, "%s: Error sending stream approve to WS, exit.", __FUNCTION__);
-    }
+     return at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth));
 }
-void ac_send_active_viwers_request() {
+int ac_send_active_viwers_request() {
     char buf[512];
-    at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
+    return at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
 }
 
 
