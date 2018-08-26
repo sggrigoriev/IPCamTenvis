@@ -101,12 +101,10 @@ reset_and_reboot () {
 	killall -9 sound.sh
 	sleep 2;
 	killall -9 sound.sh
-	whoops_command;
-	sleep 2;
-	whoops_command;
-	sleep 2;
 	rm $CLOUD_URL_FILE;
 	rm $AUTH_TOKEN_FILE;
+	whoops_command;
+	sleep 2;
 	cp $PRESTO_PATH/bin/alp_tw.ini /mnt/mtd
 	cd /mnt/mtd;
 	rm -f cfg/*
@@ -469,14 +467,15 @@ else
 	then
 		if [ "$( echo $result | $JQ_COMMAND exist )" == "true" ];
 		then
-			echo "Camera $DeviceID ALREADY registered"
+			echo "Camera $DeviceID ALREADY registered";
+		    reset_and_reboot;
 		else
 			echo "Camera $DeviceID SUCCESSFULLY registered"
 		fi;
 		AUTH_TOKEN=$( echo $result | $JQ_COMMAND authToken );
 		if [ "$AUTH_TOKEN" != "" ];
 		then
-			echo "Camera $DeviceID succesfully registered";
+			echo "Camera $DeviceID successfully registered";
 		fi;
 	fi;
 fi;
