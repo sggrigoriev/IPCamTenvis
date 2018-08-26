@@ -35,7 +35,7 @@ typedef enum {
     AO_IN_PROXY_ID,             /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
     AO_IN_CONNECTION_INFO,     /* Off line or on line */
     AO_IN_MANAGE_VIDEO,          /* Command to start video streaming received from the cloud */
-    AO_WS_ANSWER                 /* Answer from WS */
+    AO_WS_ANSWER                 /* Message from WS */
 } t_ao_msg_type;
 
 typedef enum {
@@ -77,11 +77,19 @@ typedef struct {
     int                 rc;
 } t_ao_ws_answer;
 
+/* AO_WS_PING */
+typedef struct {
+    t_ao_msg_type       command_type;   /* AO_WS_ANSWER */
+    t_ao_ws_msg_type    ws_msg_type;    /* AO_WS_PING */
+    int                 timeout;       /* cloud pings period */
+} t_ao_ws_ping;
+
 typedef union {
     t_ao_msg_type               command_type;
     t_ao_in_connection_state    in_connection_state;
     t_ao_in_manage_video        in_manage_video;
     t_ao_ws_answer              ws_answer;
+    t_ao_ws_ping                ws_ping;
 } t_ao_msg;
 
 #endif /* IPCAMTENVIS_AO_CMD_DATA_H */

@@ -116,14 +116,13 @@ static void run_rw_command(t_agent_command cmd) {
         case AT_ST_DISCONNECTED:
             switch(cmd) {
                 case AT_CMD_RW_START:
-                    if(ac_start_video()) {
-                        ac_send_stream_confirmation();
+                    if(ac_start_video() && ac_send_stream_confirmation()) {
                         rw_status = AT_ST_CONNECTED;
                         waiting_command = AT_CMD_NOTHING;
                     }
                     else {
-                        waiting_command = cmd;
-                        pu_log(LL_ERROR, "%s: Error RW start. RW inactive", AT_THREAD_NAME);
+                        waiting_command = AT_CMD_WS_START;  /* Restart WS + video */
+                        pu_log(LL_ERROR, "%s: Error RW start. RW inactive", __FUNCTION__);
                     }
                     break;
                 case AT_CMD_RW_STOP:
@@ -147,7 +146,10 @@ static void run_rw_command(t_agent_command cmd) {
  * 4. No command returned!
  */
                     ac_stop_video();
-                    ac_send_active_viwers_request();
+                    if(!ac_send_active_viwers_request()) {
+                        pu_log(LL_INFO, "%s: WS restart required", __FUNCTION__);
+                        waiting_command = AT_CMD_WS_START;
+                    }
                     rw_status = AT_ST_DISCONNECTED;
                     break;
                 default:
@@ -161,28 +163,27 @@ static void run_rw_command(t_agent_command cmd) {
     }
 }
 static void run_ws_command(t_agent_command cmd) {
-    pu_log(LL_DEBUG, "%s: Run WS command %s, WS = %s, RW = %s", AT_THREAD_NAME, cmd2text(cmd),
+    pu_log(LL_DEBUG, "%s: Run WS command %s, WS = %s, RW = %s", __FUNCTION__, cmd2text(cmd),
            state2text(ws_status), state2text(rw_status));
 
     switch(ws_status) {
         case AT_ST_DISCONNECTED:
             switch(cmd) {
                 case AT_CMD_WS_START:
-                    if(ac_connect_video()) {
-                        ac_send_stream_initiation();
-                        ws_status = AT_ST_CONNECTED;
-                        waiting_command = AT_CMD_NOTHING;
+                    if(ac_connect_video() && ac_send_stream_initiation()) {
+                            ws_status = AT_ST_CONNECTED;
+                            waiting_command = AT_CMD_NOTHING;
                     }
                     else {
-                        waiting_command = cmd;
-                        pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive", AT_THREAD_NAME);
+                        waiting_command = AT_CMD_WS_START;
+                        pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive", __FUNCTION__);
                     }
                     break;
                 case AT_CMD_WS_STOP:
                     /* Nothing to do */
                     break;
                 default:
-                    pu_log(LL_ERROR, "%s: Can't process command %s due to inactive WS", AT_THREAD_NAME, cmd2text(cmd));
+                    pu_log(LL_ERROR, "%s: Can't process command %s due to inactive WS", __FUNCTION__, cmd2text(cmd));
                     break;
             }
             break;
@@ -193,14 +194,13 @@ static void run_ws_command(t_agent_command cmd) {
                     ac_disconnect_video();
                     ws_status = AT_ST_DISCONNECTED;
 
-                    if(ac_connect_video()) {
-                        ac_send_stream_initiation();
+                    if(ac_connect_video() && ac_send_stream_initiation()) {
                         ws_status = AT_ST_CONNECTED;
                         waiting_command = AT_CMD_NOTHING;
                      }
                     else {
-                        waiting_command = cmd;
-                        pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive", AT_THREAD_NAME);
+                        waiting_command = AT_CMD_WS_START;
+                        pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive", __FUNCTION__);
                     }
                     break;
                 case AT_CMD_WS_STOP:
@@ -209,7 +209,10 @@ static void run_ws_command(t_agent_command cmd) {
                     ws_status = AT_ST_DISCONNECTED;
                      break;
                 case AT_CMD_WS_PING:
-                    at_ws_send(ao_answer_to_ws_ping());
+                    if(!at_ws_send(ao_answer_to_ws_ping())) {
+                        pu_log(LL_ERROR, "%s WS restart required", __FUNCTION__);
+                        waiting_command = AT_CMD_WS_START;
+                    }
                     break;
                 default:
                     run_rw_command(cmd);
@@ -217,7 +220,7 @@ static void run_ws_command(t_agent_command cmd) {
             }
             break;
         default:
-            pu_log(LL_ERROR, "%s: Unrecognized WS's status = %d", AT_THREAD_NAME, ws_status);
+            pu_log(LL_ERROR, "%s: Unrecognized WS's status = %d", __FUNCTION__, ws_status);
             break;
     }
 }
@@ -433,7 +436,13 @@ void at_main_thread() {
     lib_timer_clock_t wd_clock = {0};           /* timer for watchdog sending */
     lib_timer_init(&wd_clock, ag_getAgentWDTO());   /* Initiating the timer for watchdog sendings */
 
-    unsigned int events_timeout = 1; /* Wait until the end of universe */
+    int WS_TO = DEFAULT_CLOUD_PING_TO;  /* will be updated by WS ping in next versions... may be*/
+    lib_timer_clock_t ws_clock = {0};   /* timer for WEB viewer check */
+    lib_timer_init(&ws_clock, WS_TO);   /* TODO! Make it configurable! */
+
+
+
+    unsigned int events_timeout = 1; /* Wait 1 second */
 
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
@@ -484,6 +493,15 @@ void at_main_thread() {
             send_wd();
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
+        /*2. Ask viwer about active viewers - in case of WEB viewer timeout */
+        if(lib_timer_alarm(ws_clock) && (ws_status == AT_ST_CONNECTED)) {
+            if(!ac_send_active_viwers_request()) {
+                pu_log(LL_INFO, "%s: WS restart required", AT_THREAD_NAME);
+                waiting_command = AT_CMD_WS_START;
+            }
+            lib_timer_init(&ws_clock, WS_TO);
+        }
+
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);

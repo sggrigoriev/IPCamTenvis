@@ -38,6 +38,7 @@ static const char* CLOUD_SET_VALUE = "setValue";
 static const char* CLOUD_VIEWERS = "viewers";
 static const char* CLOUD_V_STATUS = "status";
 static const char* CLOUD_VIEWERS_COUNT = "viewersCount";
+static const char* CLOUD_PING_TO = "pingInterval";
 
 /*
  * "params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}]
@@ -112,7 +113,14 @@ t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
     data->ws_answer.is_start = 0;
 
     if(data->ws_answer.rc == AO_WS_PING_RC) {       // Ping
-        data->ws_answer.ws_msg_type = AO_WS_PING;
+        data->ws_ping.ws_msg_type = AO_WS_PING;
+        if((item = cJSON_GetObjectItem(obj, CLOUD_PING_TO), !item) || (item->type != cJSON_Number)) {
+            pu_log(LL_ERROR, "%s: Field %s not found in message or got non-numeric type. %s", __FUNCTION__, CLOUD_PING_TO, cloud_message);
+            data->ws_ping.timeout = DEFAULT_CLOUD_PING_TO;
+        }
+        else {
+            data->ws_ping.timeout = item->valueint;
+        }
         goto on_finish;
     }
     if(data->ws_answer.rc != 0) {                   //Error - if not a ping and not a zero

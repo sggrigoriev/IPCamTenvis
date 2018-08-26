@@ -57,28 +57,14 @@
 #define DEFAULT_IPCAM_PASSWORD  "admin"
 
 #define DEFAULT_IPCAM_INTERLEAVED_MODE  1
-/**********************************************************
- * Local test settings
- */
-#define DEFAULT_LOCAL_AGENT_PORT    8889
-/************************************************************
-    Non-configurable defaults
-*/
-#define DEFAULT_PROXY_WRITE_THREAD_TO_SEC   1   /* Timeout for incoming events in agent read/write threas. Zero means no timeout */
-#define DEFAULT_CAM_WRITE_THREAD_TO_SEC     3600 /* Timeout for incoming events in cam_write therad */
-#define DEFAULT_INTERNET_RECONNECT_ATTEMPTS 3   /* Times to repeat connection attempts to video server */
-#define DEFAULT_INTERNET_RECONECT_TIMEOUTS  10  /* TO to start new reconnect attempt */
-
-#define DEFAULT_CAM_RSTP_SESSION_ID_LEN  20
 
 #define DEFAULT_PPC_VIDEO_FOLDER        "ppcvideoserver"
-
-#define DEFAULT_CLOUD_CONN_STRING       "https://sbox.presencepro.com/cloud/json/settingsServer/streaming"
 
 #define DEFAULT_IS_SSL                     1
 
 #define DEFAULT_IPCAM_SSL_VERIFY_PEER      0
 
-#define AG_DBG  pu_log(LL_DEBUG, "%s: %d", __FUNCTION__, __LINE__)
+/* Local & non-configurable defaults */
+#define DEFAULT_CLOUD_PING_TO   300
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

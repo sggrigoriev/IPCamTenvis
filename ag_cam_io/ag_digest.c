@@ -37,6 +37,7 @@ static char* m;
 static char* u;
 
 static const char* AI(char* buf, size_t size, const char* p1, const char* p2, const char* p3) {
+/*
     unsigned char resp[EVP_MAX_MD_SIZE];
     unsigned int resp_len;
     EVP_MD_CTX mdctx;
@@ -55,7 +56,7 @@ static const char* AI(char* buf, size_t size, const char* p1, const char* p2, co
     EVP_MD_CTX_cleanup(&mdctx);
 
     if (!au_bytes_2_hex_str(buf, resp, resp_len, size)) return NULL;
-
+*/
     return buf;
 }
 

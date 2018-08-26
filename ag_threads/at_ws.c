@@ -211,14 +211,16 @@ int at_ws_send(const char* msg) {
     assert(msg);
     pu_log(LL_DEBUG, "%s: sending to Web Socket %s", AT_THREAD_NAME, msg);
     long size = (long)strlen(msg)+1;
+    int ret = 1;
 
     pthread_mutex_lock(&io_lock);
         if (nopoll_conn_send_text (conn, msg, size) != size) {
-            pu_log(LL_WARNING, "%s:unable to send %s to Web Socket", AT_THREAD_NAME, msg);
+            pu_log(LL_ERROR, "%s: RC = %d - %s. Unable to send %s to Web Socket.", AT_THREAD_NAME, errno, strerror(errno), msg);
+            ret = 0;
         }
     pthread_mutex_unlock(&io_lock);
 
-    return 1;
+    return ret;
 }
 
 unsigned int at_ws_get_active_viewers_amount() {
