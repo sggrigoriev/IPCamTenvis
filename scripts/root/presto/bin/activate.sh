@@ -26,7 +26,7 @@ echo " ****** checking for $UPGRADE_DIR/$OTA_UPGRADE_FILE  *******"
 if [ -e $UPGRADE_DIR/$OTA_UPGRADE_FILE ]; 
 then
 	echo "******** OTA upgrade file exists, preforming upgrade ******"
-	cd $UPGRADE_FOLDER
+	cd $UPGRADE_DIR
 	rm -rf /tmp/presto
 	tar xzf $OTA_UPGRADE_FILE -C /tmp
 	cd /tmp/presto
