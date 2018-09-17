@@ -72,7 +72,8 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     )
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions( -DGST_EXT)
-
+    add_definitions(-D__LINUX__)
+    add_definitions(-DEXTERN=)
     file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
 
@@ -88,7 +89,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 #    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 #    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 #    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam  -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
 
     set(REQUIRED_LIBRARIES
             curl
@@ -158,7 +159,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             target_link_libraries(jq m)
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
-
+            ${SYSROOT_PATH}/usr/lib/libcam.a
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
