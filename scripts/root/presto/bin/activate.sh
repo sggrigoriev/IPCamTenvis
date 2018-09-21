@@ -277,6 +277,7 @@ killall -9 Proxy WUD Tenvis
 # check and do fw aupgrade if  found
 firmware_upgrade;
 
+cd $PRESTO_PATH/bin;
 # check  cloud parameters (key/cloud) if not ready prompt qr code sound every 5 seconds
 read_cloud_parameters;
 # ++++++++++++ check WiFi attach & WLAN interface readiness  ++++++++++++
