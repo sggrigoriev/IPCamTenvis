@@ -5,7 +5,7 @@
 # **********************************************
 
 cmake_minimum_required(VERSION 3.5)
-project(IPCamTenvis C)
+project(IPCamTenvis)
 
 set(AGENT_PLATFORM $ENV{PLATFORM})
 set(PP_SDK_PATH $ENV{SDK_PATH})
@@ -23,7 +23,6 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     add_definitions(-D__LINUX__)
     add_definitions(-DEXTERN=)
-    set(IPCAM_LIB_PATH ${PROJECT_SOURCE_DIR}/../Libs/)
 
     if($ENV{NO_GST_PLAGINS} STREQUAL "1")        # To separate build for env with gst plugins installed
         add_definitions( -DGST_EXT )
@@ -38,7 +37,6 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     message("gst_LIBRARIES = ${gst_LIBRARIES}")
     message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
     message("PROXY_LIBS_PATH = ${PROXY_LIBS_PATH}")
-    message("IPCAM_LIB_PATH = ${IPCAM_LIB_PATH}")
 
     message(STATUS "Compiling for ubuntu")
 
@@ -65,6 +63,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
         ag_queues
         ag_ring_buffer
         au_string
+        libs/ipcam_inc
         gsrtsp_local
         ${PROXY_LIBS_PATH}/pu_logger
         ${PROXY_LIBS_PATH}/presto_commands
@@ -118,6 +117,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
         ag_queues
         ag_ring_buffer
         au_string
+        libs/ipcam_inc
         gsrtsp_local
         ${PROXY_LIBS_PATH}/proxy_eui64
         ${PROXY_LIBS_PATH}/pu_logger
@@ -155,13 +155,21 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/libtcp/*.c
         ${PROXY_LIBS_PATH}/json/*.c
 )
+#IPCam library
+file(GLOB SOURCE_FILES_IPCAM_LIB
+        libs/ipcam_src/*.cpp
+        libs/ipcam_src/*.c
+        )
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
+    add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
 
     add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
     target_link_libraries(jq ${REQUIRED_LIBRARIES})
+
     add_executable(Tenvis ${SOURCE_FILES})
-    target_link_libraries(Tenvis ${IPCAM_LIB_PATH}/libipcam.a ${REQUIRED_LIBRARIES})
+    target_link_libraries(Tenvis libipcam.a ${REQUIRED_LIBRARIES})
+
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
@@ -203,3 +211,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
             )
 endif()
+
+set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
+set_property(TARGET jq PROPERTY C_STANDARD 90)
+set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
