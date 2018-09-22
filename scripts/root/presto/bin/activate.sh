@@ -281,7 +281,7 @@ cd $PRESTO_PATH/bin;
 # check  cloud parameters (key/cloud) if not ready prompt qr code sound every 5 seconds
 read_cloud_parameters;
 # ++++++++++++ check WiFi attach & WLAN interface readiness  ++++++++++++
-./sound.sh Ping.wav &
+$PRESTO_PATH/bin/sound.sh Ping.wav &
 
 check_ip_connectivity;
 v_ip=$?
@@ -504,7 +504,7 @@ bell_command;
 printf "$AUTH_TOKEN" > $AUTH_TOKEN_FILE;
 printf "$cloud_url" > $CLOUD_URL_FILE
 echo  "Now we can start Presto stuff";
-./WUD &
+$PRESTO_PATH/bin/WUD &
 # start ip check in a background
 permanent_check_ip_connectivity;
 

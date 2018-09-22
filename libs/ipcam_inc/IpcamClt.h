@@ -1,0 +1,5 @@
+#ifndef __IpcamClt_h__
+
+typedef enum { ROTATION_NONE, ROTATION_HFLIP, ROTATION_VFLIP, ROTATION_TURNOVER } ROTATIONTYPE;
+
+#endif
