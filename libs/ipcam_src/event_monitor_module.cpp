@@ -79,6 +79,7 @@ int em_function(int to_sec) {
         else
             switch(eBuff.event) {
                 case DEVICEEVENT_PEERCLOSED:
+                        return EMM_PEERCLOSED;
                 case DEVICEEVENT_NO_RESPONSE:
                         return EMM_NO_RESPOND;
                 case NOTIFICATION_ALARM:

@@ -20,10 +20,3 @@
 */
 
 #include "ao_cma_cam.h"
-
-int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size) {
-    return 0;
-}
-
-
-

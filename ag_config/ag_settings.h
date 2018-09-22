@@ -84,5 +84,12 @@ int ag_getCurloptSSLVerifyPeer();
 
 int ag_load_config(const char* cfg_file_name);
 
+int ag_load_cam_settings(); /* Load cam settings from file. Return 0 if no file or file corrupted */
+const char* ag_request_cam_settings(); /* Return JSON with settings required or NULL if error */
+const char* ag_get_cam_properties(const char* property_name); /* Return JSON with camera propertiy and format. If property_name == NULL - returns all. NULL if error*/
+/* Alert reactions */
+int ag_isMsgSendOnAlert(t_ac_cam_events alert_type);
+int ag_isFileSendOnAlert(t_ac_cam_events alert_type);
+
 
 #endif /* IPCAMTENVIS_AG_SETTINGS_H */

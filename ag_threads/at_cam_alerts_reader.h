@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 People Power Company
+ *  Copyright 2018 People Power Company
  *
  *  This code was developed with funding from People Power Company
  *
@@ -16,27 +16,20 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 30/10/17.
- Write vieo stream to the cloud. Reconnects until stop or success if looses connection
+ Created by gsg on 18/09/18.
 */
 
-#ifndef IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H
-#define IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H
+#ifndef IPCAMTENVIS_AT_CAM_ALERTS_READER_H
+#define IPCAMTENVIS_AT_CAM_ALERTS_READER_H
 
-/**************************
- * Run streaming into cloud
- * @return - 1 if OK, 0 if not
- */
-int at_start_video_write(t_rtsp_pair wr);
-/**************************
- * Stop the thread (join)
- */
-void at_stop_video_write();
-/****************************
- * Check is streaming works
- * @return 1 if write stream runs
- */
-int at_is_video_write_run();
+/* Start thread */
+int at_start_cam_alerts_reader();
+
+/* Stop the thread */
+void at_stop_cam_alerts_reader();
+
+/* Set stip flag on for async stop */
+void at_set_stop_cam_alerts_reader();
 
 
-#endif /* IPCAMTENVIS_AT_CAM_VIDEO_WRITE_H */
+#endif /* IPCAMTENVIS_AT_CAM_ALERTS_READER_H */

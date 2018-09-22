@@ -22,12 +22,13 @@
 #include <pthread.h>
 #include <string.h>
 #include <errno.h>
-#include <ag_config/ag_settings.h>
 
 #include "lib_http.h"
 #include "lib_tcp.h"
-
 #include "aq_queues.h"
+
+#include "ag_settings.h"
+
 #include "at_wud_write.h"
 
 #define PT_THREAD_NAME "WUD_WRITE"

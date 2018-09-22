@@ -32,10 +32,13 @@
 
 typedef enum {
     AO_UNDEF,
-    AO_IN_PROXY_ID,             /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
-    AO_IN_CONNECTION_INFO,     /* Off line or on line */
-    AO_IN_MANAGE_VIDEO,          /* Command to start video streaming received from the cloud */
-    AO_WS_ANSWER                 /* Message from WS */
+    AO_IN_PROXY_ID,         /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
+    AO_IN_CONNECTION_INFO,  /* Off line or on line */
+    AO_IN_MANAGE_VIDEO,     /* Command to start video streaming received from the cloud */
+    AO_WS_ANSWER,           /* Message from WS */
+    AO_ASK_CAM,             /* request to camera may be from Proxy or from WS */
+    AO_ANS_CAM,             /* answer from camera. */
+    AO_ALRT_CAM             /* camera alert */
 } t_ao_msg_type;
 
 typedef enum {
@@ -84,12 +87,41 @@ typedef struct {
     int                 timeout;       /* cloud pings period */
 } t_ao_ws_ping;
 
+typedef enum {AO_WHO_UNDEF, AO_WHO_WS, AO_WHO_PROXY} t_ao_who;
+
+/* AO_ASK_CAM, AO_ANS_CAM */
+typedef struct {
+    t_ao_msg_type       command_type;   /* AO_ASK_CAM or AO_ANS_CAM*/
+    t_ao_who            src_dest;       /* msg source if command_type==AO_ASK_CAM, msd destination otherwise */
+    int                 command_id;     /* Makes sense if the message came from Proxy */
+    char*               msg;            /* string. NB! free memory after use! CLOUD/WS/CAM format depends on command_type and src_dest */
+} t_ao_cam_exchange;
+
+typedef enum {
+    AC_CAM_EVENT_UNDEF,
+    AC_CAM_START_MD, AC_CAM_STOP_MD, AC_CAM_START_SD, AC_CAM_STOP_SD, AC_CAM_START_IO, AC_CAM_STOP_IO,
+    AC_CAM_STOP_SERVICE,
+    AC_CAM_EVENTS_SIZE
+} t_ac_cam_events;
+
+const char* ac_cam_evens2string(t_ac_cam_events e);
+
+/* AO_ALRT_CAM */
+typedef struct {
+    t_ao_msg_type   command_type;   /* AO_ALRT_CAM */
+    t_ac_cam_events cam_event;
+    time_t start_date;              /* Alert start timestamp */
+    time_t end_date;                /* Alert end timestamp */
+} t_ao_cam_alert;
+
 typedef union {
     t_ao_msg_type               command_type;
     t_ao_in_connection_state    in_connection_state;
     t_ao_in_manage_video        in_manage_video;
     t_ao_ws_answer              ws_answer;
     t_ao_ws_ping                ws_ping;
+    t_ao_cam_exchange           cam_exchange;
+    t_ao_cam_alert              cam_alert;
 } t_ao_msg;
 
 #endif /* IPCAMTENVIS_AO_CMD_DATA_H */

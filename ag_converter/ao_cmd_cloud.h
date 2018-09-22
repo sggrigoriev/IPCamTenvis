@@ -70,8 +70,11 @@ const char* ao_ws_to_error_answer(char* buf, size_t size);
  */
 const char* ao_rw_error_answer(char* buf, size_t size);
 /*
- * Decode clod RC
+ * Decode cloud RC
  */
 const char* ao_ws_error(int rc);
+
+const char* ao_ws_alert_message(t_ac_cam_events event, time_t start_date, char* buf, size_t size);
+
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

@@ -21,28 +21,31 @@
 
 #include <memory.h>
 #include <errno.h>
-#include <ag_converter/ao_cmd_cloud.h>
-#include <ag_converter/ao_cmd_data.h>
-#include <au_string/au_string.h>
-
 
 #include "lib_timer.h"
 #include "pu_queue.h"
 #include "pu_logger.h"
+#include "pr_ptr_list.h"
 
 #include "aq_queues.h"
 #include "ag_settings.h"
 
+#include "at_proxy_rw.h"
+#include "at_wud_write.h"
+#include "at_cam_alerts_reader.h"
+#include "at_ws.h"
+
 #include "ao_cmd_data.h"
 #include "ao_cmd_proxy.h"
 #include "pr_commands.h"
-
-#include "at_proxy_rw.h"
-#include "at_wud_write.h"
 #include "ac_video.h"
 
+#include "ac_cam.h"
+#include "ao_cmd_cloud.h"
+#include "ao_cmd_data.h"
+#include "au_string.h"
+
 #include "at_main_thread.h"
-#include "at_ws.h"
 
 #define AT_THREAD_NAME  "IPCamTenvis"
 
@@ -53,7 +56,7 @@
 typedef enum {AT_ST_DISCONNECTED, AT_ST_CONNECTED, AT_ST_SIZE} t_entity_status;
 typedef enum {
     AT_CMD_NOTHING,             //No command
-    AT_CMD_AGENT_CONNECT,       //(Re)Connect Agent to the cloud
+    AT_CMD_AGENT_CONNECT,       //(Reconnect Agent to the cloud
     AT_CMD_AGENT_DISCONNECT,    //Disconnect Agent from the cloud
 
     AT_CMD_WS_START,            //(Re)Start Web Socket interface (restart included)
@@ -63,18 +66,21 @@ typedef enum {
     AT_CMD_RW_START,            //(Re)Start streaming NB! THese commands should came from WS and/or from the cloud
     AT_CMD_RW_STOP,             //Stop streaming
 
+    AT_CMD_ASK_CAM,             //Request to camera
+    AT_CMD_ANS_CAM,             //Response from camera
+
     AT_CMD_SIZE
 } t_agent_command;
 
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;         /* main thread events set */
-static pu_queue_t* from_poxy;           /* proxy_read -> main_thread */
-static pu_queue_t* to_wud;            /* main_thread -> wud_write  */
-static pu_queue_t* from_cam;         /* cam -> main_thread */
-static pu_queue_t* from_ws;        /* WS -> main_thread */
+static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;        /* main_thread->proxy */
-static pu_queue_t* from_stream_rw;         /* from streaming threads to main */
+static pu_queue_t* to_wud;          /* main_thread -> wud_write  */
+static pu_queue_t* from_cam;        /* cam -> main_thread */
+static pu_queue_t* from_ws;         /* WS -> main_thread */
+static pu_queue_t* from_stream_rw;  /* from streaming threads to main */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -107,6 +113,33 @@ static const char* cmd2text(t_agent_command cmd) {
     };
     return (cmd < AT_CMD_SIZE)?txt[cmd]:"Unrecognized cmmand!";
 }
+static void cam_dialogue(const t_ao_cam_exchange data) {
+    t_ao_cam_exchange out_msg = {0};
+    if (!ac_cam_dialogue(data, &out_msg)) {
+        pu_log(LL_ERROR, "%s: ac_cam_dialogue error. Ignored", __FUNCTION__);
+    }
+    else {
+        switch (data.src_dest) {
+            case AO_WHO_WS:
+                if (!at_ws_send(out_msg.msg)) {
+                    pu_log(LL_ERROR, "%s: Error sending the %s to WS!", __FUNCTION__);
+                } else {
+                    pu_log(LL_INFO, "%s: Message %s sent to WS", AT_THREAD_NAME, out_msg.msg);
+                }
+                break;
+            case AO_WHO_PROXY: {
+                pu_queue_push(to_proxy, out_msg.msg, strlen(out_msg.msg) + 1);
+                pu_log(LL_INFO, "%s: Message %s sent to Proxy", AT_THREAD_NAME, out_msg.msg);
+            }
+                break;
+            default:
+                pu_log(LL_ERROR, "%s: Unrecognized destination %d for message %s", __FUNCTION__, out_msg.src_dest,
+                       out_msg.msg);
+                break;
+        }
+        free(out_msg.msg);
+    }
+}
 /*
  * State machines to manage all this shit with Proxy/WS/RW incoming commands
  */
@@ -116,7 +149,7 @@ static void run_rw_command(t_agent_command cmd) {
         case AT_ST_DISCONNECTED:
             switch(cmd) {
                 case AT_CMD_RW_START:
-                    if(ac_start_video() && ac_send_stream_confirmation()) {
+                    if(ac_start_video()) {
                         rw_status = AT_ST_CONNECTED;
                         waiting_command = AT_CMD_NOTHING;
                     }
@@ -170,7 +203,7 @@ static void run_ws_command(t_agent_command cmd) {
         case AT_ST_DISCONNECTED:
             switch(cmd) {
                 case AT_CMD_WS_START:
-                    if(ac_connect_video() && ac_send_stream_initiation()) {
+                    if(ac_connect_video()) {
                             ws_status = AT_ST_CONNECTED;
                             waiting_command = AT_CMD_NOTHING;
                     }
@@ -194,7 +227,7 @@ static void run_ws_command(t_agent_command cmd) {
                     ac_disconnect_video();
                     ws_status = AT_ST_DISCONNECTED;
 
-                    if(ac_connect_video() && ac_send_stream_initiation()) {
+                    if(ac_connect_video()) {
                         ws_status = AT_ST_CONNECTED;
                         waiting_command = AT_CMD_NOTHING;
                      }
@@ -277,6 +310,21 @@ static void send_wd() {
         pr_make_wd_alert4WUD(buf, sizeof(buf), ag_getAgentName(), ag_getProxyID());
         pu_queue_push(to_wud, buf, strlen(buf)+1);
 }
+static void send_reboot() {
+    char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
+
+    pu_log(LL_INFO, "%s: Cam Agent requests for reboot", __FUNCTION__);
+    pr_make_reboot_command(buf, sizeof(buf), ag_getProxyID());
+    pu_queue_push(to_wud, buf, strlen(buf) + 1);
+}
+
+static void send_send_file(t_ao_cam_alert data) {
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char f_list[LIB_HTTP_MAX_MSG_SIZE];
+
+    pr_make_send_files4WUD(buf, sizeof(buf), ac_cam_get_files_name(data, f_list, sizeof(f_list)), ag_getProxyID());
+    pu_queue_push(to_wud, buf, strlen(buf)+1);
+}
 
 static t_agent_command process_proxy_message(char* msg) {
     t_ao_msg data;
@@ -317,6 +365,13 @@ static t_agent_command process_proxy_message(char* msg) {
             pu_queue_push(to_proxy, buf, strlen(buf) + 1);
         }
             break;
+        case AO_ASK_CAM: {
+            char buf[128];
+            ao_answer_to_command(buf, sizeof(buf), data.cam_exchange.command_id, 0);
+            cam_dialogue(data.cam_exchange);
+            free(data.cam_exchange.msg);
+        }
+            break;
         default:
             pu_log(LL_ERROR, "%s: Can't process message from Proxy. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
             break;
@@ -324,42 +379,49 @@ static t_agent_command process_proxy_message(char* msg) {
     return ret;
 }
 static t_agent_command process_ws_message(char* msg) {
-    t_ao_msg data;
+    t_ao_msg data = {0};
     t_ao_msg_type msg_type;
     t_agent_command ret = AT_CMD_NOTHING;
 
-    if(msg_type = ao_cloud_decode(msg, &data), msg_type != AO_WS_ANSWER) {
+    msg_type = ao_cloud_decode(msg, &data);
+
+    if(msg_type == AO_WS_ANSWER) {
+        switch (data.ws_answer.ws_msg_type) {
+            case AO_WS_PING:
+                ret = AT_CMD_WS_PING;
+                break;
+            case AO_WS_ABOUT_STREAMING: {
+                unsigned int new_viewers_amount = (data.ws_answer.viwers_count < 0) ?
+                                                  at_ws_get_active_viewers_amount() + data.ws_answer.viewers_delta :
+                                                  (unsigned int) data.ws_answer.viwers_count;
+
+                if ((data.ws_answer.is_start) || (new_viewers_amount != 0)) {
+                    pu_log(LL_INFO, "%s: Streaming requested by Web Socket.", AT_THREAD_NAME);
+                    ret = (rw_status == AT_ST_CONNECTED) ? AT_CMD_NOTHING : AT_CMD_RW_START;
+                } else if (new_viewers_amount == 0) {
+                    pu_log(LL_INFO, "%s: No streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
+                    ret = AT_CMD_RW_STOP;
+                }
+                at_ws_set_active_viewers_amount(new_viewers_amount);
+                pu_log(LL_DEBUG, "%s: Active viwers amount: %d", AT_THREAD_NAME, new_viewers_amount);
+            }
+                break;
+            case AO_WS_ERROR:
+                pu_log(LL_ERROR, "%s: Error from Web Socket. RC = %d %s. Reconnect", AT_THREAD_NAME, data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
+                ret = AT_CMD_WS_START;
+                break;
+            default:
+                pu_log(LL_INFO, "%s: Unrecognized message type %d from Web Socket. Ignored", AT_THREAD_NAME, data.ws_answer.ws_msg_type);
+                break;
+        }
+    }
+    else if(msg_type == AO_ASK_CAM) {
+        cam_dialogue(data.cam_exchange);
+        free(data.cam_exchange.msg);
+    }
+    else {
         pu_log(LL_ERROR, "%s: Can't process message from Web Socket. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
         return ret;
-    }
-    switch(data.ws_answer.ws_msg_type) {
-        case AO_WS_PING:
-            ret = AT_CMD_WS_PING;
-            break;
-        case AO_WS_ABOUT_STREAMING: {
-            unsigned int new_viewers_amount = (data.ws_answer.viwers_count < 0) ?
-                                              at_ws_get_active_viewers_amount() + data.ws_answer.viewers_delta :
-                                              (unsigned int) data.ws_answer.viwers_count;
-
-            if ((data.ws_answer.is_start) || (new_viewers_amount != 0)) {
-                pu_log(LL_INFO, "%s: Streaming requested by Web Socket.", AT_THREAD_NAME);
-                ret = (rw_status == AT_ST_CONNECTED)?AT_CMD_NOTHING:AT_CMD_RW_START;
-            } else if (new_viewers_amount == 0) {
-                pu_log(LL_INFO, "%s: No streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
-                ret = AT_CMD_RW_STOP;
-            }
-            at_ws_set_active_viewers_amount(new_viewers_amount);
-            pu_log(LL_DEBUG, "%s: Active viwers amount: %d", AT_THREAD_NAME, new_viewers_amount);
-        }
-            break;
-        case AO_WS_ERROR:
-            pu_log(LL_ERROR, "%s: Error from Web Socket. RC = %d %s. Reconnect", AT_THREAD_NAME,
-                   data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
-            ret = AT_CMD_WS_START;
-            break;
-        default:
-            pu_log(LL_INFO, "%s: Unrecognized message type %d from Web Socket. Ignored", AT_THREAD_NAME, data.ws_answer.ws_msg_type);
-            break;
     }
     return ret;
 }
@@ -379,6 +441,47 @@ static t_agent_command process_rw_message(char* msg) {
     return ret;
 }
 
+static void restart_events_monitor() {
+    at_stop_cam_alerts_reader();
+    if(!at_start_cam_alerts_reader()) {
+        pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
+        send_reboot();
+    }
+}
+static void process_alert(char* msg) {
+    t_ao_cam_alert data = ao_cam_decode_alert(msg);
+    pu_log(LL_DEBUG, "%s: Camera alert %d came");
+
+    switch (data.cam_event) {
+        case AC_CAM_START_MD:
+        case AC_CAM_START_SD:
+            if(ag_isMsgSendOnAlert(data.cam_event)) {
+                char buf[128];
+                if(!at_ws_send(ao_ws_alert_message(data.cam_event, data.start_date, buf, sizeof(buf)))) {
+                    pu_log(LL_ERROR, "%s: Can't send the alert to WS interface", __FUNCTION__);
+                    waiting_command = AT_CMD_WS_START;
+                }
+            };
+            break;
+        case AC_CAM_STOP_MD:    /* file(s) related to event arrived */
+        case AC_CAM_STOP_SD:
+            if(ag_isFileSendOnAlert(data.cam_event)) {   /* Use WUD interface to send file(s) */
+                send_send_file(data);
+            }
+            break;
+        case AC_CAM_START_IO:
+        case AC_CAM_STOP_IO:
+            pu_log(LL_ERROR, "%s: IO event came. Unsupported for now. Ignored", __FUNCTION__);
+            break;
+        case AC_CAM_STOP_SERVICE:
+            pu_log(LL_ERROR, "%s: Camera Events Monitor is out of service. Restart.", __FUNCTION__);
+            restart_events_monitor();
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Ignored", data.cam_event);
+            break;
+    }
+}
+
 static int main_thread_startup() {
 
     aq_init_queues();
@@ -395,18 +498,33 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromWS);
     events = pu_add_queue_event(events, AQ_FromRW);
 
+/* Camera settings upload */
+    if(!ac_load_cam_settings()) {
+        pu_log(LL_ERROR, "%s: ac_load_cam_settings() call error", __FUNCTION__);
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: Camera settings are loaded", __FUNCTION__);
+
 /* Threads start */
     if(!at_start_proxy_rw()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "PROXY_RW", strerror(errno));
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "PROXY_RW", strerror(errno));
         return 0;
     }
     pu_log(LL_INFO, "%s: started", "PROXY_RW");
 
     if(!at_start_wud_write()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", AT_THREAD_NAME, "WUD_WRITE", strerror(errno));
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "WUD_WRITE", strerror(errno));
         return 0;
     }
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
+
+    if(!at_start_cam_alerts_reader()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READED");
+
+
 
     return 1;
 }
@@ -417,6 +535,7 @@ static void main_thread_shutdown() {
     at_set_stop_proxy_rw();
     at_set_stop_wud_write();
 
+    at_stop_cam_alerts_reader();
     at_stop_wud_write();
     at_stop_proxy_rw();
 
@@ -439,8 +558,6 @@ void at_main_thread() {
     int WS_TO = DEFAULT_CLOUD_PING_TO;  /* will be updated by WS ping in next versions... may be*/
     lib_timer_clock_t ws_clock = {0};   /* timer for WEB viewer check */
     lib_timer_init(&ws_clock, WS_TO);   /* TODO! Make it configurable! */
-
-
 
     unsigned int events_timeout = 1; /* Wait 1 second */
 
@@ -471,7 +588,11 @@ void at_main_thread() {
                 }
                 break;
             case AQ_FromCam:
-                pu_log(LL_ERROR, "%s: %s Camera async interface not implemented yet", AT_THREAD_NAME, mt_msg);
+                while(pu_queue_pop(from_cam, mt_msg, &len)) {
+                    pu_log(LL_DEBUG, "%s: got message from the Cam async interface %s", AT_THREAD_NAME, mt_msg);
+                    process_alert(mt_msg);
+                    len = sizeof(mt_msg);
+                }
                 break;
             case AQ_Timeout:
                 if(waiting_command != AT_CMD_NOTHING) {

@@ -16,39 +16,18 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/02/18.
+ Created by gsg on 22/09/18.
 */
+#include "ao_cmd_data.h"
 
-#ifndef IPCAMTENVIS_AC_VIDEO_H
-#define IPCAMTENVIS_AC_VIDEO_H
+static const char* CAM_EVENTS_NAMES[AC_CAM_EVENTS_SIZE] = {
+    "AC_CAM_EVENT_UNDEF",
+    "AC_CAM_START_MD", "AC_CAM_STOP_MD", "AC_CAM_START_SD", "AC_CAM_STOP_SD", "AC_CAM_START_IO", "AC_CAM_STOP_IO",
+    "AC_CAM_STOP_SERVICE"
+};
 
-/*
- * 1. Get streaming & WS connection parameters
- * 2. Make initial Cam setuo
- * 3. Run WebSocket interface
- * 4. Run Cam's async interface (phase - II
- */
-int ac_connect_video();
-
-void ac_disconnect_video();
-
-/*
- * Rus video streaming (and audio - later)
- */
-int ac_start_video();
-
-/*
- * Stops videostreaming
- */
-
-void ac_stop_video();
-
-int ac_send_stream_initiation();
-int ac_send_stream_confirmation();
-int ac_send_active_viwers_request();
-/*
- * Send to WS all current camera parameters and values allowed
- */
-int ac_send_camera_parameters();
-
-#endif /* IPCAMTENVIS_AC_VIDEO_H */
+const char* ac_cam_evens2string(t_ac_cam_events e) {
+    return ((e < AC_CAM_EVENT_UNDEF) || (e >= AC_CAM_EVENTS_SIZE))?
+        "Unknown event" :
+        CAM_EVENTS_NAMES[e];
+}

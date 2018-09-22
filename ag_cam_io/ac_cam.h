@@ -22,10 +22,32 @@
 #ifndef IPCAMTENVIS_AC_CAM_H
 #define IPCAMTENVIS_AC_CAM_H
 
+#include "ao_cmd_data.h"
+
 /*
  * Make initial settings for the Camera
  */
 int ac_cam_init();
 int ac_cam_restart();
+
+/* Tries to get settings from the file.
+ * If not - get settings from camera and stores to the file (ac_settings)
+ * If yes - load file settings to the camera
+ * Returns 1 if OK and - if error
+*/
+int ac_load_cam_settings();
+
+/*
+ * Send to cam in_msg, receive out_msg. Return 1 of OK, return 0 if not
+ * NB! out_cmd.cam_exchange.msg is not decoded and has to be freed after use!
+ */
+int ac_cam_dialogue(const t_ao_cam_exchange in_msg, t_ao_cam_exchange* out_cmd);
+
+/*
+ * Create the JSON array with full file names& path for alert
+ */
+const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
+
+
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

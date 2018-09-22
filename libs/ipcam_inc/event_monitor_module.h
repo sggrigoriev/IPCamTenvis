@@ -36,11 +36,18 @@ extern "C" {
 #define EMM_AB_EVENT    -3   /* Abnormal event. Smth wrong in Danish Kingdom */
 #define EMM_SD_EVENT    -4
 
+#define EMM_TIMEOUT     0
 #define EMM_READ_ERROR  -5
 #define EMM_NO_RESPOND  -6
-#define EMM_TIMEOUT     0
 #define EMM_SELECT_ERR  -7
 #define EMM_ALRM_IGNOR  -8
+#define EMM_PEERCLOSED  -9
+
+/* Cam's known events */
+#define EMM_LOGIN       3
+#define EMM_CONN_START  110
+#define EMM_CONN_FINISH 111
+#define EMM_CAM_TO      116
 
 
 

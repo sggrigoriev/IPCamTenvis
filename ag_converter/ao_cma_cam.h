@@ -27,13 +27,25 @@
 
 #include "ao_cmd_data.h"
 
-typedef enum {
-    AO_RES_UNDEF,
-    AO_RES_LO,
-    AO_RES_HI
-} t_ao_cam_res;
 
-int ao_cam_encode(t_ao_msg data, const char* to_cam_msg, size_t size);
+/*
+ * Converts JSON to camera request
+ * Returns resulting string or NULL if error
+ * NB! returned memory should be freed after use!
+ */
+char* ao_cam_encode(const char* in);
+
+/*
+ * Converts camera request to JSON
+ * Returns resulting string or NULL if error
+ * NB! returned memory should be freed after use!
+ */
+char* ao_cam_decode(const char* in);
+
+/*
+ * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
+ */
+t_ao_cam_alert ao_cam_decode_alert(const char* in);
 
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

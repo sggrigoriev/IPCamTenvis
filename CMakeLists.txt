@@ -21,6 +21,10 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     #add_definitions( -DCURL_TRACE )            # Switches on CURL trace for AlfaPro RTSP session
     #add_definitions( -DRW_CYCLES=999 )        # will stop RW thread after RW_CYCLES iterations --  helpful for stress-tests
 
+    add_definitions(-D__LINUX__)
+    add_definitions(-DEXTERN=)
+    set(IPCAM_LIB_PATH ${PROJECT_SOURCE_DIR}/../Libs/)
+
     if($ENV{NO_GST_PLAGINS} STREQUAL "1")        # To separate build for env with gst plugins installed
         add_definitions( -DGST_EXT )
     endif()
@@ -34,6 +38,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     message("gst_LIBRARIES = ${gst_LIBRARIES}")
     message("gst_INCLUDE_DIRS = ${gst_INCLUDE_DIRS}")
     message("PROXY_LIBS_PATH = ${PROXY_LIBS_PATH}")
+    message("IPCAM_LIB_PATH = ${IPCAM_LIB_PATH}")
 
     message(STATUS "Compiling for ubuntu")
 
@@ -48,9 +53,11 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
         nopoll
         ssl
         crypto
+        stdc++
     )
     include_directories(
         ./
+        ac_cam
         ag_cam_io
         ag_converter
         ag_config
@@ -67,6 +74,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
         ${PROXY_LIBS_PATH}/libhttpcomm
         ${PROXY_LIBS_PATH}/libtcp
         ${PROXY_LIBS_PATH}/json
+        ${IPCAM_LIB_PATH}/ipcam_inc
         ${gst_INCLUDE_DIRS}
         /usr/local/include/nopoll
     )
@@ -102,6 +110,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
     include_directories(
         ./
+        ac_cam
         ag_cam_io
         ag_converter
         ag_config
@@ -152,7 +161,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
     target_link_libraries(jq ${REQUIRED_LIBRARIES})
     add_executable(Tenvis ${SOURCE_FILES})
-    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
+    target_link_libraries(Tenvis ${IPCAM_LIB_PATH}/libipcam.a ${REQUIRED_LIBRARIES})
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)

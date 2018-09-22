@@ -120,6 +120,8 @@ static int process_play() {
 /*
 * 1. Get streaming & WS connection parameters
 * 2. Run WebSocket interface waiting for streaming order
+* 3. Send streaming initiation request
+* 4. Send camera parameters
 */
 int ac_connect_video() {
     t_ao_conn ws_conn = {0};
@@ -132,6 +134,14 @@ int ac_connect_video() {
         pu_log(LL_ERROR, "%s: Error start WEB socket connector, exit.", __FUNCTION__);
         return 0;
     }
+    if(!ac_send_stream_initiation()) {
+        pu_log(LL_ERROR, "%s: Error streaming initiation, exit.", __FUNCTION__);
+        return 0;
+    }
+    if(!ac_send_camera_parameters()) {
+        pu_log(LL_ERROR, "%s: Error sending camera parameters to WS, exit.", __FUNCTION__);
+        return 0;
+    }
 
     return 1;
 }
@@ -142,6 +152,11 @@ void ac_disconnect_video() {
     video_conn.auth[0] = '\0';
 }
 
+/*
+ *  1. Perform RTSP negotiations for CAM & Wowza
+ *  2. Run streaming
+ *  3. Send to WS Stream confirmation request
+*/
 int ac_start_video() {
     if(!init_proc()) {
         pu_log(LL_ERROR, "%s: Video initiation error, exit", __FUNCTION__);
@@ -168,6 +183,11 @@ int ac_start_video() {
     }
 
     if(!ac_rtsp_start_streaming()) return 0;                                        //Start streaming thread(s)
+
+    if(!ac_send_stream_confirmation()) {                                            //Send to WS streaming start confirmation
+        pu_log(LL_ERROR, "%s: Stream confirmation send to WS failed");
+        goto on_error;
+    }
 
     return 1;
 on_error:
