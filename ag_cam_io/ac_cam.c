@@ -18,62 +18,115 @@
 /*
  Created by gsg on 25/02/18.
 */
-#include <au_string/au_string.h>
-#include <ag_config/ag_settings.h>
+
 #include <string.h>
+#include <time.h>
+#include <errno.h>
+#include <dirent.h>
+
+#include "pu_logger.h"
+
 #include "ac_cam.h"
-#include "ac_http.h"
 
+
+const char* make_dir_from_time(const char* path, time_t timestamp, char* buf, size_t size) {
+    struct tm t;
+    char name[11] = {0};
+
+    gmtime_r(&timestamp, &t);
+    strftime(name, sizeof(name), "%Y-%m-%d", &t);
+    strncpy(buf, path, size-1);
+    strncat(buf, "/", size-2);
+    strncat(buf, name, size - strlen(buf)-1);
+    return buf;
+}
 /*
- *  GET http://192.168.1.58/cgi-bin/hi3510/setvencattr.cgi?-chn=12&-brmode=4
+ * Return 1 if the file name is preffix%%%%%%postfix...
  */
-const char* HTTP_PREFFIX = "http://";
-const char* FIXED_QUALITY = "/cgi-bin/hi3510/setvencattr.cgi?-chn=12&-brmode=4";
+static int is_right_name(const char* name, const char*prefix, const char* postfix) {
+    if(strlen(name)<(strlen(prefix)+strlen(postfix)+6)) return 0;
+    if(strncmp(name, prefix, strlen(prefix)) != 0) return 0;
+    if(strncmp(name+strlen(prefix)+6, postfix, strlen(postfix)) != 0) return 0;
+    return 1;
+}
+/*
+ * convert hrs, mins, seconds from struct tm to the number hhmmss
+ */
+static unsigned long tm2dig(struct tm t) {
+    return (unsigned long)t.tm_sec+(unsigned long)t.tm_min*100+(unsigned long)t.tm_hour*10000;
+}
+/*
+ * return 1 if str conferted as hhmmss to long is between start and end
+ */
+static int is_between(unsigned long start, const char* str, unsigned long end) {
+    int h, m, s;
 
-static int set_fixed_quality() {
-    char buf[514] = {0};
-    char answer[521];
-    int rc, ret = 0;
-
-    au_strcpy(buf, HTTP_PREFFIX, sizeof(buf));
-    au_strcat(buf, ag_getCamIP(), sizeof(buf)-strlen(buf));
-    au_strcat(buf, "/", sizeof(buf)-strlen(buf));
-    au_strcat(buf, FIXED_QUALITY, sizeof(buf)-strlen(buf));
-
-    t_ac_http_handler* h = ac_http_prepare_get_conn(buf, NULL);
-    if(!h) return ret;
-
-    int rpt = AC_HTTP_REPEATS;
-    while(rpt) {
-        rc = ac_perform_get_conn(h, answer, sizeof(answer));
-        switch(rc) {
-            case -1:        /* Retry */
-                pu_log(LL_WARNING, "%s: Retry: attempt #%d", __FUNCTION__, rpt);
-                rpt--;
-                 sleep(1);
-                break;
-            case 0:         /* Error */
-                rpt = 0;
-                break;
-            case 1:        /* Success */
-                ret = 1;
-                rpt = 0;
-                break;
-            default:
-                pu_log(LL_ERROR, "%s: Unsupported RC = %d from ac_perform_get_conn()", __FUNCTION__, rc);
-                rpt = 0;
-                break;
-        }
+    int i = sscanf(str, "%2i%2i%2i", &h, &m, &s);
+    if(i != 3) {
+        printf("Error name scan: %d %s\n", errno, strerror(errno));
+        return 0;
     }
-    pu_log(LL_DEBUG, "%s: cam's request = %s cam's answer = %s", __FUNCTION__, buf, answer);
-    ac_http_close_conn(h);
-    return ret;
-}
+    unsigned long md = (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
 
-int ac_cam_restart() {
-    return 0;
+    return ((start <= md) && (md < end));
 }
+/* concatinate [name, name, ... name] */
+char* add_files_list(const char* dir_name, time_t start, time_t end, const char* postfix, char* buf, size_t size) {
+    DIR *dir = opendir(dir_name);
+    buf[0] = '\0';
+    if (dir == NULL)        /* Not a directory or doesn't exist */
+        return buf;
+    else {
+        struct dirent* dir_ent;
+        int first = 0;
+        while((dir_ent = readdir(dir)), dir_ent != NULL) {
+            struct tm tm_s, tm_e;
+            gmtime_r(&start, &tm_s);
+            gmtime_r(&end, &tm_e);
+            if(is_right_name(dir_ent->d_name, DEFAULT_DT_FILES_PREFIX, postfix) && is_between(tm2dig(tm_s), dir_ent->d_name+strlen(DEFAULT_DT_FILES_PREFIX), tm2dig(tm_e))) {
+                if(!first) {
+                    first = 1;
+                    strncat(buf, "[", size - strlen(buf)-1);
+                }
+                strncat(buf, dir_ent->d_name, size - strlen(buf)-1);
+                strncat(buf, ", ", size - strlen(buf)-1);
+            }
+        }
+        if(strlen(buf)) buf[strlen(buf)-2] = ']';  /* Replace last ',' to ']'*/
+        closedir(dir);
+    }
+    return buf;
+}
+/***************************************************************************************************************/
 
 int ac_cam_init() {
-    return set_fixed_quality();
+}
+
+/*
+ * Create the JSON array with full file names& path for alert "filesList":["name1",..."nameN"]
+ * If no files found - return empty string
+ * 1. Find directory "yyyy-mm-dd" in DEFAULT_MD_FILES_PATH
+ * 2. find files (S or M type) with filename as DEFAULT_ХХ_FILES_PREFIX+hhmmss+DEFAULT_XX_FILE_POSTFIX.*
+ *      where hhmmss is between start and end dates of the alert
+ */
+const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
+    char dir[256] = {0};
+    const char* postfix;
+
+    make_dir_from_time(DEFAULT_DT_FILES_PATH, data.start_date, dir, sizeof(dir));
+    if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_MD_FILE_POSTFIX;
+    else if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_SD_FILE_POSTFIX;
+    else {
+        pu_log(LL_ERROR, "%s: Wrong event %s only %s or %s expected", __FUNCTION__, ac_cam_evens2string(data.cam_event), ac_cam_evens2string(AC_CAM_STOP_MD), ac_cam_evens2string(AC_CAM_STOP_SD));
+        buf[0] = '\0';
+        return buf;
+    }
+    strncpy(buf, "filesList: ", size-1);
+    int len = strlen(buf);
+    add_files_list(dir, data.start_date, data.end_date, postfix, buf, size);
+    if(strlen(buf) <= len) {
+        pu_log(LL_WARNING, "%s: no files were found", __FUNCTION__);
+        buf[0] = '\0';
+    }
+    return buf;
 }

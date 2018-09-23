@@ -322,8 +322,13 @@ static void send_send_file(t_ao_cam_alert data) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char f_list[LIB_HTTP_MAX_MSG_SIZE];
 
-    pr_make_send_files4WUD(buf, sizeof(buf), ac_cam_get_files_name(data, f_list, sizeof(f_list)), ag_getProxyID());
-    pu_queue_push(to_wud, buf, strlen(buf)+1);
+    if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
+        pr_make_send_files4WUD(buf, sizeof(buf), f_list, ag_getProxyID());
+        pu_queue_push(to_wud, buf, strlen(buf) + 1);
+    }
+    else {
+        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to WUD", AT_THREAD_NAME);
+    }
 }
 
 static t_agent_command process_proxy_message(char* msg) {

@@ -47,5 +47,11 @@ char* ao_cam_decode(const char* in);
  */
 t_ao_cam_alert ao_cam_decode_alert(const char* in);
 
+/*
+ * Notify Agent about the event
+ * if start_date or end_date is 0 fields are ignored
+ */
+const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size);
+
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

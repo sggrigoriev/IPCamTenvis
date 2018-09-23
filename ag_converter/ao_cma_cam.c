@@ -20,3 +20,25 @@
 */
 
 #include "ao_cma_cam.h"
+
+/*
+ * Notify Agent about the event
+ * if start_date or end_date is 0 fields are ignored
+ * {"alertName" : "AC_CAM_STOP_MD", "startDate" : 1537627300, "endDate" : 1537627488}
+ */
+const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size) {
+    const char* alert = "{\"alertName\" : \"%s\"}";
+    const char* alert_start = "{\"alertName\" : \"%s\", \"startDate\" : %lu}";
+    const char* alert_stop = "{\"alertName\" : \"%s\", \"startDate\" : %lu, \"endDate\" : %lu}";
+
+    if(!start_date)
+        snprintf(buf, size-1, alert, ac_cam_evens2string(event));
+    else if(!end_date)
+        snprintf(buf, size-1, alert_start, ac_cam_evens2string(event), start_date);
+    else
+        snprintf(buf, size-1, alert_stop, ac_cam_evens2string(event), start_date, end_date);
+
+    buf[size] = '\0';
+    return buf;
+}
+

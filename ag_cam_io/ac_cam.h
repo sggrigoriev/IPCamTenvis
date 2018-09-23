@@ -28,7 +28,6 @@
  * Make initial settings for the Camera
  */
 int ac_cam_init();
-int ac_cam_restart();
 
 /* Tries to get settings from the file.
  * If not - get settings from camera and stores to the file (ac_settings)

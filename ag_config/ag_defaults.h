@@ -67,8 +67,8 @@
 /* Local & non-configurable defaults */
 #define DEFAULT_CLOUD_PING_TO   300
 
-#define DEFAULT_MD_FILES_PATH   "/mnt/rd/0/"
-#define DEFAULT_MD_FILES_PREFIX "0-"
+#define DEFAULT_DT_FILES_PATH   "/mnt/rd/0"
+#define DEFAULT_DT_FILES_PREFIX "0-"
 #define DEFAULT_MD_FILE_POSTFIX "M"
 #define DEFAULT_SD_FILE_POSTFIX "S"
 #define DEFAULT_AM_READ_TO_SEC  1
