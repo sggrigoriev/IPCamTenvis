@@ -43,6 +43,7 @@
 #include "ac_cam.h"
 #include "ao_cmd_cloud.h"
 #include "ao_cmd_data.h"
+#include "ag_db_mgr.h"
 #include "au_string.h"
 
 #include "at_main_thread.h"
@@ -54,23 +55,7 @@
 */
 
 typedef enum {AT_ST_DISCONNECTED, AT_ST_CONNECTED, AT_ST_SIZE} t_entity_status;
-typedef enum {
-    AT_CMD_NOTHING,             //No command
-    AT_CMD_AGENT_CONNECT,       //(Reconnect Agent to the cloud
-    AT_CMD_AGENT_DISCONNECT,    //Disconnect Agent from the cloud
 
-    AT_CMD_WS_START,            //(Re)Start Web Socket interface (restart included)
-    AT_CMD_WS_STOP,             //Stop Web Socket interface
-    AT_CMD_WS_PING,             //Answer to WS ping
-
-    AT_CMD_RW_START,            //(Re)Start streaming NB! THese commands should came from WS and/or from the cloud
-    AT_CMD_RW_STOP,             //Stop streaming
-
-    AT_CMD_ASK_CAM,             //Request to camera
-    AT_CMD_ANS_CAM,             //Response from camera
-
-    AT_CMD_SIZE
-} t_agent_command;
 
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
@@ -112,6 +97,9 @@ static const char* cmd2text(t_agent_command cmd) {
             "AT_CMD_RW_STOP"
     };
     return (cmd < AT_CMD_SIZE)?txt[cmd]:"Unrecognized cmmand!";
+}
+static void send_camera_properties_to_agent() {
+
 }
 static void cam_dialogue(const t_ao_cam_exchange data) {
     t_ao_cam_exchange out_msg = {0};
@@ -261,15 +249,15 @@ static void run_command(t_agent_command cmd) {
     if(cmd == AT_CMD_NOTHING) cmd = waiting_command;
 
     if(cmd != AT_CMD_NOTHING) {
-        pu_log(LL_DEBUG, "%s: Run command %s, AGENT = %s, WS = %s, RW = %s", AT_THREAD_NAME, cmd2text(cmd),
+        pu_log(LL_DEBUG, "%s: Run command %s. AGENT state = %s, WS state = %s, RW state = %s", AT_THREAD_NAME, cmd2text(cmd),
                state2text(agent_status), state2text(ws_status), state2text(rw_status));
     }
-
     switch (agent_status) {
         case AT_ST_DISCONNECTED:
             switch(cmd) {
                 case AT_CMD_AGENT_CONNECT:
                     agent_status = AT_ST_CONNECTED;
+                    send_camera_properties_to_agent();
                     run_ws_command(AT_CMD_WS_START);
                     break;
                 case AT_CMD_AGENT_DISCONNECT:
@@ -331,7 +319,28 @@ static void send_send_file(t_ao_cam_alert data) {
     }
 }
 
-static t_agent_command process_proxy_message(char* msg) {
+static void send_ACK_to_Proxy(int command_number) {
+    char buf[128];
+    ao_answer_to_command(buf, sizeof(buf), ao_proxy_get_cmd_no(command_number), 0);
+    pu_queue_push(to_proxy, buf, strlen(buf) + 1);
+}
+
+
+/*
+ * 0 - ERROR
+ * 1 - own (proxy)  "gw_cloudConnection"
+ * 2 - cloud        "commands"
+ * 3 - WS           "params"
+ */
+static int get_protocol_number(msg_obj_t* obj) {
+    if(!obj) return 0;
+    if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return 1;
+    if(cJSON_GetObjectItem(obj, "commands") != NULL) return 2;
+    if((cJSON_GetObjectItem(obj, "params")!=NULL) || (cJSON_GetObjectItem(obj, "viewersCount")!=NULL)) return 3;
+    return 0;
+}
+
+static t_agent_command process_own_proxy_message(msg_obj_t* own_msg){
     t_ao_msg data;
     t_ao_msg_type msg_type;
     t_agent_command ret = AT_CMD_NOTHING;
@@ -343,7 +352,7 @@ static t_agent_command process_proxy_message(char* msg) {
             int info_changed = 0;
 
             if(data.in_connection_state.is_online) {
-                 if(strcmp(ag_getProxyID(), data.in_connection_state.proxy_device_id) != 0) {
+                if(strcmp(ag_getProxyID(), data.in_connection_state.proxy_device_id) != 0) {
                     pu_log(LL_INFO, "%s:Proxy sent new ProxyID. Old one = %s, New one = %s.", AT_THREAD_NAME, ag_getProxyID(), data.in_connection_state.proxy_device_id);
                     ag_saveProxyID(data.in_connection_state.proxy_device_id);
                     info_changed = 1;
@@ -383,7 +392,110 @@ static t_agent_command process_proxy_message(char* msg) {
     }
     return ret;
 }
-static t_agent_command process_ws_message(char* msg) {
+/*
+ * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
+ */
+static void process_message(const char* msg) {
+    msg_obj_t *obj_msg = pr_parse_msg(msg);
+    if (obj_msg == NULL) {
+        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
+        return;
+    }
+    int protocol_number = get_protocol_number(obj_msg);
+    if(!protocol_number) {
+        pu_log(LL_ERROR, "%s: protocol for %s unrecognized. Message ignored.", __FUNCTION__, msg);
+        return;
+    }
+    if(protocol_number == 1) { /* Local message from Proxy to Agen */
+        process_own_proxy_message(obj_msg);
+        run_command();
+        return;
+    }
+    if(protocol_number == 2) { /* Cloud case */
+        int is_ack = ao_proxy_ack_required(obj_msg);
+        msg_obj_t* commands = pr_get_cmd_array(obj_msg);
+        int i;
+        for (i = 0; i < pr_get_array_size(commands); i++) {
+            msg_obj_t* cmd = pr_get_arr_item(commands, i);
+            if(is_ack) send_ACK_to_Proxy(ao_proxy_get_cmd_no(cmd));
+
+            int j;
+            msg_obj_t* params = ao_proxy_get_cloud_params_array(cmd);
+            for(j = 0; j < pr_get_array_size(params), j++) {
+                msg_obj_t* param = pr_get_arr_item(params, j);
+                const char* param_name = ao_proxy_get_cloud_param_name(param);
+/* run command shoul change the corresponging property'v value(s) afer run, so we'lll be able to send the current one's value */
+                run_command(ag_db_get_agent_command(param_name, ao_proxy_get_cloud_param_value(param));
+                send_answer_to_ws(ag_db_get_agent_command(param_name, ag_db_get_property_value(param_name)));
+            }
+        }
+    }
+    else { /* WS case */
+        int i;
+        msg_obj_t* params = ao_proxy_get_ws_params_array(obj_msg);
+/* First, lets store change on viewersCount and  pingInterval (if any). */
+
+        msg_obj_t* result_code = cJSON_GetObjectItem(params, "resultCode");
+        if(result_code && (result_code->valueint == 10)) {      /* Ping received - Pong should be sent */
+            ag_db_store_property("wsPongRequest", 1);
+        }
+
+        msg_obj_t* viewers_count = cJSON_GetObjectItem(params, "viewersCount");
+        if(viewers_count) ag_db_store_property("wsViewersCount", viewers_count->valuestring);
+
+        msg_obj_t* ping_interval = cJSON_GetObjectItem(params, "pingInterval");
+        if(viewers_count) ag_db_store_property("wsPingInterval", ping_interval->valuestring);
+
+        for(i = 0; i < pr_get_array_size(params); i++) {
+            msg_obj_t* param = pr_get_arr_item(params, i);
+            const char* param_name = ao_proxy_get_ws_param_name(param);
+/* run command shoul change the corresponging property'v value(s) afer run, so we'lll be able to send the current one's value */
+            run_command(ag_db_get_agent_command(param_name, ao_proxy_get_ws_param_value(param));
+            send_answer_to_ws(ag_db_get_agent_command(param_name, ag_db_get_property_value(param_name)));
+        }
+    }
+    pr_erase_msg(obj_msg);
+}
+/*
+ * 1) look for "status":ACK -> send reply
+ * 2) disassemble on separate parameters. If > 1 -> push into from_proxy queue
+ * 3) Process parameter
+ */
+static void process_proxy_message(char* msg) { /* run_command() will run from here! */
+    msg_obj_t* obj_msg = pr_parse_msg(msg);
+
+    if(obj_msg == NULL) {
+        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
+        return;
+    }
+    int is_ack = ao_proxy_ack_required(obj_msg);
+    msg_obj_t* commands = pr_get_cmd_array(obj_msg);
+
+    if((!pr_get_array_size(commands)) {
+        run_command(process_own_proxy_message(obj_msg));
+    }
+    else {
+        int i;
+        for (i = 0; i < pr_get_array_size(commands); i++) {
+            msg_obj_t* cmd = pr_get_arr_item(commands, i);
+            if(is_ack) send_ACK_to_Proxy(ao_proxy_get_cmd_no(cmd));
+
+            msg_obj_t* params = ao_proxy_get_params_array(cmd);
+            int j;
+            for(j = 0; j < pr_get_array_size(params), j++) {
+
+                switch
+            }
+
+        }
+    }
+    pr_erase_msg(obj_msg);
+}
+/*
+ * 1) disassemble on separate parameters. timeout & viewers amount treat as separate parameters! If >1 push int from ws_queue
+ * 2) Process parameter
+ */
+static void process_ws_message(char* msg) { /* run command() will be called from here */
     t_ao_msg data = {0};
     t_ao_msg_type msg_type;
     t_agent_command ret = AT_CMD_NOTHING;
@@ -529,7 +641,11 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "CAM_ALERT_READED");
 
-
+    if(!ag_db_load_cam_properties()) {
+        pu_log(LL_ERROR, "%s: Error Cam's properties loading.", __FUNCTION__);
+        return 0;
+    }
+    pu_log(LL_INFO, "Camera poperties loaded");
 
     return 1;
 }
@@ -543,6 +659,8 @@ static void main_thread_shutdown() {
     at_stop_cam_alerts_reader();
     at_stop_wud_write();
     at_stop_proxy_rw();
+
+    ag_db_unload_cam_properties();
 
     aq_erase_queues();
 }
@@ -574,14 +692,14 @@ void at_main_thread() {
             case AQ_FromProxyQueue:
                 while(pu_queue_pop(from_poxy, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
-                    run_command(process_proxy_message(mt_msg));
+                    process_message(mt_msg);
                     len = sizeof(mt_msg);
                  }
                  break;
             case AQ_FromWS:
                 while(pu_queue_pop(from_ws, mt_msg, &len)) {
                     pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s, len = %d", AT_THREAD_NAME, mt_msg, len);
-                    run_command(process_ws_message(mt_msg));
+                    process_message(mt_msg);
                     len = sizeof(mt_msg);
                 }
                 break;
@@ -627,7 +745,6 @@ void at_main_thread() {
             }
             lib_timer_init(&ws_clock, WS_TO);
         }
-
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);

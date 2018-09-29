@@ -121,7 +121,6 @@ static int process_play() {
 * 1. Get streaming & WS connection parameters
 * 2. Run WebSocket interface waiting for streaming order
 * 3. Send streaming initiation request
-* 4. Send camera parameters
 */
 int ac_connect_video() {
     t_ao_conn ws_conn = {0};
@@ -138,11 +137,6 @@ int ac_connect_video() {
         pu_log(LL_ERROR, "%s: Error streaming initiation, exit.", __FUNCTION__);
         return 0;
     }
-    if(!ac_send_camera_parameters()) {
-        pu_log(LL_ERROR, "%s: Error sending camera parameters to WS, exit.", __FUNCTION__);
-        return 0;
-    }
-
     return 1;
 }
 void ac_disconnect_video() {

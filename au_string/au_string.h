@@ -37,6 +37,11 @@
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 
+
+/*
+ * Super-strings funtion process - several strings in one array
+ */
+
 char* au_strcpy(char* dest, const char* source, size_t size);
 char* au_strcat(char* dest, const char* source, size_t size);
 char* au_strdup(const char* source);

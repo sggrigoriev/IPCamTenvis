@@ -16,35 +16,26 @@
  *  limitations under the License.
 */
 /*
- Created by gsg on 25/02/18.
+ Created by gsg on 25/09/18.
+ Cloud & cam properties db
 */
 
-#ifndef IPCAMTENVIS_AC_VIDEO_H
-#define IPCAMTENVIS_AC_VIDEO_H
+#include "ag_db_mgr.h"
 
-/*
- * 1. Get streaming & WS connection parameters
- * 2. Make initial Cam setuo
- * 3. Run WebSocket interface
- * 4. Run Cam's async interface (phase - II
+/* Own properties list
+ agent_status: 0/1 -- offline or connected
+ ws_status: 0/1
+ rw_status: 0/1
+
+
+wsViewersCount: int
+    set when WS sends the "viewersCount"
+    Actions:
+        from >0 to 0 -> stop streaming
+        other changes -> no action
+wsPingInterval: int
+    set whin WS send the "pingInterval"
+wsPongRequest: 0/1
+    if 1 - Pong shuould be sent to WS.
+
  */
-int ac_connect_video();
-
-void ac_disconnect_video();
-
-/*
- * Rus video streaming (and audio - later)
- */
-int ac_start_video();
-
-/*
- * Stops videostreaming
- */
-
-void ac_stop_video();
-
-int ac_send_stream_initiation();
-int ac_send_stream_confirmation();
-int ac_send_active_viwers_request();
-
-#endif /* IPCAMTENVIS_AC_VIDEO_H */

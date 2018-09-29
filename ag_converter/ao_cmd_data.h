@@ -29,6 +29,29 @@
 /*************************************************************************
  * All from and to Agent messages internak format: from Proxy, from Cam
  */
+typedef enum {
+    AO_CMD_NOTHING,             //No command
+    AO_CMD_AGENT_CONNECT,       //Reconnect Agent to the cloud
+    AO_CMD_AGENT_DISCONNECT,    //Disconnect Agent from the cloud
+
+    AO_CMD_WS_START,            //(Re)Start Web Socket interface (restart included)
+    AO_CMD_WS_STOP,             //Stop Web Socket interface
+    AO_CMD_WS_PING,             //Answer to WS ping
+
+    AO_CMD_RW_START,            //(Re)Start streaming NB! THese commands should came from WS and/or from the cloud
+    AO_CMD_RW_STOP,             //Stop streaming
+
+    AO_CMD_ASK_CAM,             //Request to camera
+    AO_CMD_ANS_CAM,             //Response from camera
+
+    AT_CMD_SIZE
+} t_ao_agent_command;
+
+typedef enum {
+    AO_ACT_NO,              /* No action expected */
+    AO_ACT_ALIEN_PROPERTY   /* No shch a property in dB */
+
+} t_ao_app_actions;
 
 typedef enum {
     AO_UNDEF,
@@ -105,6 +128,7 @@ typedef enum {
 } t_ac_cam_events;
 
 const char* ac_cam_evens2string(t_ac_cam_events e);
+
 
 /* AO_ALRT_CAM */
 typedef struct {

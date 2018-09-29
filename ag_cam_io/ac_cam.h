@@ -29,13 +29,6 @@
  */
 int ac_cam_init();
 
-/* Tries to get settings from the file.
- * If not - get settings from camera and stores to the file (ac_settings)
- * If yes - load file settings to the camera
- * Returns 1 if OK and - if error
-*/
-int ac_load_cam_settings();
-
 /*
  * Send to cam in_msg, receive out_msg. Return 1 of OK, return 0 if not
  * NB! out_cmd.cam_exchange.msg is not decoded and has to be freed after use!
