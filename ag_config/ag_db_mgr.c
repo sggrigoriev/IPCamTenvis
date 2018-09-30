@@ -22,20 +22,36 @@
 
 #include "ag_db_mgr.h"
 
-/* Own properties list
- agent_status: 0/1 -- offline or connected
- ws_status: 0/1
- rw_status: 0/1
+
+/*
+Own properties list
+ state_agent_on: 0/1 -- offline or connected
+ connect_agent_cmd: 0/1  -- 0 - no_command, 1 - (re)connect!
+ send_wd_agent_cmd: 0/1 -- 0 - no command, 1 - send request
+
+ state_ws_on: 0/1    -- offline or connected
+ connect_ws_cmd: 0/1    -- 0 - no_command, 1 - (re)connect!
+ send_pong_ws_cmd: 0/1  -- 0 - no command, 1 - send pong!
+ ask_4_viewers_cmd: 0/1 -- 0 - no_command, 1 - send request
+
+ state_rw_on: 0/1    -- offline or online
+ connect_rw_cmd: 0/1        -- 0 - no command, 1 - (re)connect
+ disconnect_rw_cmd: 0/1     -- 0 - no command, 1 - disconnect
 
 
-wsViewersCount: int
+
+
+
+ Cam properties list
+ wsViewersCount: int
     set when WS sends the "viewersCount"
     Actions:
         from >0 to 0 -> stop streaming
         other changes -> no action
-wsPingInterval: int
+ wsPingInterval: int
     set whin WS send the "pingInterval"
-wsPongRequest: 0/1
-    if 1 - Pong shuould be sent to WS.
+
+ streamStatus: 0/1  0 - no streaming or stop streaming. 1 - streaming required
+
 
  */

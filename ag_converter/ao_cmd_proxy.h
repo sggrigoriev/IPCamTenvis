@@ -47,9 +47,6 @@ const char* ao_proxy_get_ws_param_name(msg_obj_t* param);
 const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
 
 
-
-
-
-t_ao_msg_type ao_proxy_decode(const char* msg, t_ao_msg* data);
+void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data);
 
 #endif /* IPCAMTENVIS_AO_CMD_PROXY_H */
