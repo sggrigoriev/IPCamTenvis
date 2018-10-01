@@ -43,22 +43,22 @@ typedef enum {
  * NB2 Returned list should be erased after use !!!
  */
 char** ag_db_get_changes_report(ag_db_property_type_t filter);
-void ag_erase_changes_report(ag_db_property_type_t filter)
+void ag_erase_changes_report(ag_db_property_type_t filter);
 
 
-/* Work with bool parameters - flags */
-/* value set to 1 */
-void ag_db_set_flag_on(const char* bool_property_name);
-/* value set to 0 */
-void ag_db_set_flag_off(const char* bool_property_name);
+/* Work with property's flags */
+/* property's flag value set to 1 */
+void ag_db_set_flag_on(const char* property_name);
+/* property's flag value set to 0 */
+void ag_db_set_flag_off(const char* property_name);
 /*
- * return value
+ * return property's flag value
  */
-int ag_db_get_flag(const char* bool_property_name);
+int ag_db_get_flag(const char* property_name);
 
 /*
  * Return 0 if no change; return 1 if proprrty changed
- * property_value -> new_value
+ * !Set the property's flag ON in any case!.
  */
 int ag_db_store_property(const char* property_name, const char* property_value);
 
@@ -80,13 +80,33 @@ ag_db_property_type_t ag_get_property_type(const char* property_name);
 #define AG_DB_STATE_WS_ON       "state_ws_on"
 #define AG_DB_CMD_CONNECT_WS        "connect_ws_cmd"
 #define AG_DB_CMD_ASK_4_VIEWERS_WS  "ask_4_viewers_cmd"
+#define AG_DB_CMD_PONG_REQUEST      "send_pong_ws_cmd"
 
 #define AG_DB_STATE_RW_ON       "state_rw_on"
 #define AG_DB_CMD_CONNECT_RW    "connect_rw_cmd"
 #define AG_DB_CMD_DISCONNECT_RW "disconnect_rw_cmd"
 
 /* AG_DB_CAM */
-#define AG_DB_STATE_VIEWERS_COUNT   "wsViewersCount"
-#define AG_DB_STATE_STREAM_STATUS   "streamStatus"
+#define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"
+#define AG_DB_STATE_PING_INTERVAL   "pingInterval"
+#define AG_DB_STATE_STREAM_STATUS   "ppc.streamStatus"
+#define AG_DB_STATE_RAPID_MOTION    "ppc.rapidMotionStatus"
+#define AB_DB_STATE_MD              "motionStatus"
+#define AB_DB_STATE_SD              "audioStatus"
+#define AB_DB_STATE_RECORDING       "recordStatus"
+#define AB_DB_STATE_RECORD_SECS     "ppc.recordSeconds"
+#define AB_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"
+#define AB_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"
+#define AB_DB_STATE_MD_ON           "ppc.motionActivity"
+#define AB_DB_STATE_SD_ON           "ppc.audioActivity"
+#define AB_DB_STATE_AUDIO           "audioStreaming"
+#define AB_DB_STATE_VIDEO           "videoStreaming"
+#define AB_DB_STATE_VIDEOCALL       "supportsVideoCall"
+#define AB_DB_STATE_SW_VERSION      "version"
+#define AB_DB_STATE_MEM_AVAILABLE   "availableBytes"
+#define AB_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"
+#define AB_DB_STATE_SNAPSHOT        "ppc.captureImage"
+#define AB_DB_STATE_STREAMERROR     "streamError"
+#define AB_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"
 
 #endif /* IPCAMTENVIS_AG_DB_MGR_H */

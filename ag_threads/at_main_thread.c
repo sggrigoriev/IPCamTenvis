@@ -71,33 +71,6 @@ static volatile int main_finish;        /* stop flag for main thread */
 static void send_camera_properties_to_agent() {
 
 }
-static void cam_dialogue(const t_ao_cam_exchange data) {
-    t_ao_cam_exchange out_msg = {0};
-    if (!ac_cam_dialogue(data, &out_msg)) {
-        pu_log(LL_ERROR, "%s: ac_cam_dialogue error. Ignored", __FUNCTION__);
-    }
-    else {
-        switch (data.src_dest) {
-            case AO_WHO_WS:
-                if (!at_ws_send(out_msg.msg)) {
-                    pu_log(LL_ERROR, "%s: Error sending the %s to WS!", __FUNCTION__);
-                } else {
-                    pu_log(LL_INFO, "%s: Message %s sent to WS", AT_THREAD_NAME, out_msg.msg);
-                }
-                break;
-            case AO_WHO_PROXY: {
-                pu_queue_push(to_proxy, out_msg.msg, strlen(out_msg.msg) + 1);
-                pu_log(LL_INFO, "%s: Message %s sent to Proxy", AT_THREAD_NAME, out_msg.msg);
-            }
-                break;
-            default:
-                pu_log(LL_ERROR, "%s: Unrecognized destination %d for message %s", __FUNCTION__, out_msg.src_dest,
-                       out_msg.msg);
-                break;
-        }
-        free(out_msg.msg);
-    }
-}
 static void send_wd() {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
@@ -110,6 +83,44 @@ static void send_reboot() {
     pu_log(LL_INFO, "%s: Cam Agent requests for reboot", __FUNCTION__);
     pr_make_reboot_command(buf, sizeof(buf), ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf) + 1);
+}
+static void send_snapshot(const char* full_path) {
+    const char* fmt = "\"filesList\": [%s]";
+    char flist[256+strlen(fmt)+1];
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+
+    snprintf(flist, sizeof(flist), fmt, full_path);
+    pr_make_send_files4WUD(buf, sizeof(buf), flist, ag_getProxyID());
+    pu_queue_push(to_wud, buf, strlen(buf) + 1);
+}
+static void send_send_file(t_ao_cam_alert data) {
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char f_list[LIB_HTTP_MAX_MSG_SIZE];
+
+    if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
+        pr_make_send_files4WUD(buf, sizeof(buf), f_list, ag_getProxyID());
+        pu_queue_push(to_wud, buf, strlen(buf) + 1);
+    }
+    else {
+        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to WUD", AT_THREAD_NAME);
+    }
+}
+static void send_ACK_to_Proxy(int command_number) {
+    char buf[128];
+    ao_answer_to_command(buf, sizeof(buf), command_number, 0);
+    pu_queue_push(to_proxy, buf, strlen(buf) + 1);
+}
+static int send_to_ws(const char* msg) {
+    if(!at_ws_send(msg)) {
+        pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
+        ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
+        return 0;
+    }
+    return 1;
+}
+static int send_answers_to_ws(char** report) {
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    return send_to_ws(ao_ws_params(report, buf, sizeof(buf)));
 }
 
 static void run_agent_actions() {
@@ -160,7 +171,7 @@ static void run_ws_actions() {
             }
         }
     }
-
+/* Check if viewers count request happens */
     if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS) && ag_db_get_flag(AG_DB_STATE_WS_ON)) {
         if(!ac_send_active_viwers_request()) {
             pu_log(LL_INFO, "%s: WS restart required", AT_THREAD_NAME);
@@ -169,6 +180,10 @@ static void run_ws_actions() {
         else {
             ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
         }
+    }
+/* Check for ping from WS */
+    if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {
+        send_to_ws(ao_answer_to_ws_ping());
     }
 }
 static void run_streaming_actions() {
@@ -203,15 +218,48 @@ static void run_streaming_actions() {
             }
         }
     }
+/* Clear possible error message from straeming thread */
+    ag_db_store_property(AB_DB_STATE_STREAMERROR, "");
 /* Check if there is anybody to watch the show */
     if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) == 0) {
-        if(ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
+        if(ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);  /* Stop straeming - nobody at home */
+    }
+    else if(!ag_db_get_flag(AG_DB_STATE_RW_ON)) {
+        ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);        /* Start streaming - somebody wana show! */
     }
 /* Check for start streaming requests */
     if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && !ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
 }
 static void run_snapshot_actions() {
+    int snapshot_command = ag_db_get_int_property(AB_DB_STATE_SNAPSHOT);
+    if (snapshot_command < 1) return;
 
+    const char *filename = "pictureXXXXXX";
+    const char *path = "./";
+    char full_path[strlen(filename) + strlen(path) + 1];
+    strcpy(full_path, path);
+    strcat(full_path, filename);
+    mktemp(full_path + strlen(path));
+    if (!ac_cam_make_snapshot(full_path)) {
+        pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
+        return;
+    }
+    send_snapshot(full_path);
+    ag_db_store_property(AB_DB_STATE_SNAPSHOT, "0");
+/*
+ * if snapshot_command == 1 the alert should be sent. Was removed as unnecessary
+ */
+}
+static void run_camera_actions() {
+    /* scan all cam's-related properties and update it if smth changed */
+    ac_cam_update_property(AG_DB_STATE_RAPID_MOTION);
+    ac_cam_update_property(AB_DB_STATE_MD);
+    ac_cam_update_property(AB_DB_STATE_SD);
+    ac_cam_update_property(AB_DB_STATE_RECORDING);
+    ac_cam_update_property(AB_DB_STATE_RECORD_SECS);
+    ac_cam_update_property(AB_DB_STATE_MD_SENSITIVITY);
+    ac_cam_update_property(AB_DB_STATE_MD_COUNTDOWN);
+    ac_cam_update_property(AB_DB_STATE_SD_SENSITIVITY);
 }
 static void run_actions() {
     run_agent_actions();        /* Agent connet/reconnect */
@@ -222,32 +270,12 @@ static void run_actions() {
 
     char** changes_report = ag_db_get_changes_report(AG_DB_CAM);
     if(changes_report) {
-        send_answers_to_ws(changes_report);
+        if(send_answers_to_ws(changes_report)) {
+            ag_erase_changes_report(AG_DB_CAM);
+        }
         free(changes_report);
     }
 }
-
-
-
-static void send_send_file(t_ao_cam_alert data) {
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char f_list[LIB_HTTP_MAX_MSG_SIZE];
-
-    if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
-        pr_make_send_files4WUD(buf, sizeof(buf), f_list, ag_getProxyID());
-        pu_queue_push(to_wud, buf, strlen(buf) + 1);
-    }
-    else {
-        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to WUD", AT_THREAD_NAME);
-    }
-}
-
-static void send_ACK_to_Proxy(int command_number) {
-    char buf[128];
-    ao_answer_to_command(buf, sizeof(buf), ao_proxy_get_cmd_no(command_number), 0);
-    pu_queue_push(to_proxy, buf, strlen(buf) + 1);
-}
-
 
 /*
  * 0 - ERROR
@@ -293,7 +321,7 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
             }
         }
 
-        if(info_changed) ag_db_set_switcher_on(AG_DB_P_AG_CMD);
+        if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
     }
     else {
         pu_log(LL_ERROR, "%s: Can't process message from Proxy. Message type = %d. Message ignored", AT_THREAD_NAME, data.command_type);
@@ -343,14 +371,14 @@ static void process_message(char* msg) {
 
             msg_obj_t* result_code = cJSON_GetObjectItem(params, "resultCode");
             if(result_code && (result_code->valueint == 10)) {      /* Ping received - Pong should be sent */
-                ag_db_store_property("wsPongRequest", 1);
+                ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST);
             }
 
-            msg_obj_t* viewers_count = cJSON_GetObjectItem(params, "viewersCount");
-            if(viewers_count) ag_db_store_property("wsViewersCount", viewers_count->valuestring);
+            msg_obj_t* viewers_count = cJSON_GetObjectItem(params, AG_DB_STATE_VIEWERS_COUNT);
+            if(viewers_count) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valuestring);
 
-            msg_obj_t* ping_interval = cJSON_GetObjectItem(params, "pingInterval");
-            if(viewers_count) ag_db_store_property("wsPingInterval", ping_interval->valuestring);
+            msg_obj_t* ping_interval = cJSON_GetObjectItem(params, AG_DB_STATE_PING_INTERVAL);
+            if(viewers_count) ag_db_store_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valuestring);
 
             size_t i;
             for(i = 0; i < pr_get_array_size(params); i++) {
@@ -366,72 +394,26 @@ static void process_message(char* msg) {
     }
     pr_erase_msg(obj_msg);
 }
-
-/*
- * 1) disassemble on separate parameters. timeout & viewers amount treat as separate parameters! If >1 push int from ws_queue
- * 2) Process parameter
- */
-static void process_ws_message(char* msg) { /* run command() will be called from here */
-    t_ao_msg data = {0};
-    t_ao_msg_type msg_type;
-    t_agent_command ret = AT_CMD_NOTHING;
-
-    msg_type = ao_cloud_decode(msg, &data);
-
-    if(msg_type == AO_WS_ANSWER) {
-        switch (data.ws_answer.ws_msg_type) {
-            case AO_WS_PING:
-                ret = AT_CMD_WS_PING;
-                break;
-            case AO_WS_ABOUT_STREAMING: {
-                unsigned int new_viewers_amount = (data.ws_answer.viwers_count < 0) ?
-                                                  at_ws_get_active_viewers_amount() + data.ws_answer.viewers_delta :
-                                                  (unsigned int) data.ws_answer.viwers_count;
-
-                if ((data.ws_answer.is_start) || (new_viewers_amount != 0)) {
-                    pu_log(LL_INFO, "%s: Streaming requested by Web Socket.", AT_THREAD_NAME);
-                    ret = (rw_status == AT_ST_CONNECTED) ? AT_CMD_NOTHING : AT_CMD_RW_START;
-                } else if (new_viewers_amount == 0) {
-                    pu_log(LL_INFO, "%s: No streaming requested by Web Socket - no connected viewers", AT_THREAD_NAME);
-                    ret = AT_CMD_RW_STOP;
-                }
-                at_ws_set_active_viewers_amount(new_viewers_amount);
-                pu_log(LL_DEBUG, "%s: Active viwers amount: %d", AT_THREAD_NAME, new_viewers_amount);
-            }
-                break;
-            case AO_WS_ERROR:
-                pu_log(LL_ERROR, "%s: Error from Web Socket. RC = %d %s. Reconnect", AT_THREAD_NAME, data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
-                ret = AT_CMD_WS_START;
-                break;
-            default:
-                pu_log(LL_INFO, "%s: Unrecognized message type %d from Web Socket. Ignored", AT_THREAD_NAME, data.ws_answer.ws_msg_type);
-                break;
-        }
+static void process_rw_message(char* msg) {
+  char error_code[10] = {0};
+    char err_message[256] = {0};
+    msg_obj_t *obj_msg = pr_parse_msg(msg);
+    if (obj_msg == NULL) {
+        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
+        return;
     }
-    else if(msg_type == AO_ASK_CAM) {
-        cam_dialogue(data.cam_exchange);
-        free(data.cam_exchange.msg);
+    msg_obj_t* rc = cJSON_GetObjectItem(obj_msg, "resultCode");
+    if(!rc) {
+        pu_log(LL_ERROR, "%s: Can't process message %s from streaming thread", __FUNCTION__, msg);
+        strncpy(error_code, "internal", sizeof(error_code)-1);
     }
-    else {
-        pu_log(LL_ERROR, "%s: Can't process message from Web Socket. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
-        return ret;
-    }
-    return ret;
-}
-static t_agent_command process_rw_message(char* msg) {
-    t_ao_msg data;
-    t_ao_msg_type msg_type;
-    t_agent_command ret = AT_CMD_NOTHING;
+    else
+        snprintf(error_code, sizeof(error_code)-1, "%d", rc->valueint);
 
-    if((msg_type = ao_cloud_decode(msg, &data), msg_type != AO_WS_ANSWER) || (data.ws_answer.ws_msg_type != AO_WS_ERROR)) {
-        pu_log(LL_ERROR, "%s: Can't process message from streaming R/W treads. Message type = %d. Message ignored", AT_THREAD_NAME, msg_type);
-        return ret;
-    }
-    pu_log(LL_ERROR, "%s: Error from streaming R/W treads. RC = %d %s.", AT_THREAD_NAME,
-           data.ws_answer.rc, ao_ws_error(data.ws_answer.rc));
+    snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
+    ag_db_store_property(AB_DB_STATE_STREAMERROR, err_message);
 
-    ret = AT_CMD_RW_STOP;
-    return ret;
+    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask RW for (re) connect */
 }
 
 static void restart_events_monitor() {
@@ -447,20 +429,28 @@ static void process_alert(char* msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-        case AC_CAM_START_SD:
-            if(ag_isMsgSendOnAlert(data.cam_event)) {
-                char buf[128];
-                if(!at_ws_send(ao_ws_alert_message(data.cam_event, data.start_date, buf, sizeof(buf)))) {
-                    pu_log(LL_ERROR, "%s: Can't send the alert to WS interface", __FUNCTION__);
-                    waiting_command = AT_CMD_WS_START;
-                }
-            };
+            ag_db_store_property(AB_DB_STATE_MD_ON, "1");
+            ag_db_store_property(AB_DB_STATE_MD, "1");
+            ag_db_store_property(AB_DB_STATE_RECORDING, "1");
             break;
-        case AC_CAM_STOP_MD:    /* file(s) related to event arrived */
+        case AC_CAM_START_SD:
+            ag_db_store_property(AB_DB_STATE_SD_ON, "1");
+            ag_db_store_property(AB_DB_STATE_SD, "1");
+            ag_db_store_property(AB_DB_STATE_RECORDING, "1");
+            break;
+        case AC_CAM_STOP_MD:
+            ag_db_store_property(AB_DB_STATE_MD_ON, "0");
+            ag_db_store_property(AB_DB_STATE_MD, "0");
+            ag_db_store_property(AB_DB_STATE_RECORDING, "0");
+
+            send_send_file(data);
+            break;
         case AC_CAM_STOP_SD:
-            if(ag_isFileSendOnAlert(data.cam_event)) {   /* Use WUD interface to send file(s) */
-                send_send_file(data);
-            }
+            ag_db_store_property(AB_DB_STATE_SD_ON, "0");
+            ag_db_store_property(AB_DB_STATE_SD, "0");
+            ag_db_store_property(AB_DB_STATE_RECORDING, "0");
+
+            send_send_file(data);
             break;
         case AC_CAM_START_IO:
         case AC_CAM_STOP_IO:
@@ -468,6 +458,7 @@ static void process_alert(char* msg) {
             break;
         case AC_CAM_STOP_SERVICE:
             pu_log(LL_ERROR, "%s: Camera Events Monitor is out of service. Restart.", __FUNCTION__);
+            sleep(1);   /* Just on case... */
             restart_events_monitor();
         default:
             pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Ignored", data.cam_event);

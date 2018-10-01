@@ -26,6 +26,7 @@
 
 #include "pu_logger.h"
 
+#include "ag_db_mgr.h"
 #include "ac_cam.h"
 
 
@@ -129,4 +130,11 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
         buf[0] = '\0';
     }
     return buf;
+}
+
+int ac_cam_update_property(const char* property_name) {
+    if(ag_db_get_flag(property_name)) {
+        lkjhlkjhlkjhlkjhlkjhlkjhlkjhlkjh
+        ag_db_set_flag_off(property_name);
+    }
 }

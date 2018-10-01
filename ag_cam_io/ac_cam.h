@@ -40,6 +40,20 @@ int ac_cam_dialogue(const t_ao_cam_exchange in_msg, t_ao_cam_exchange* out_cmd);
  */
 const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
 
+/*
+ * Make pictire and store it by full_path
+ * Return 0 if error
+ * Return 1 if OK
+ */
+int ac_cam_make_snapshot(const char* full_path);
+
+/*
+ * Send the corresponding cam's property to the camera,
+ * Read back the cam's property, update the db_properties
+ * Return 1 if OK, 0 if no property found
+ */
+int ac_cam_update_property(const char* property_name);
+
 
 
 #endif /* IPCAMTENVIS_AC_CAM_H */
