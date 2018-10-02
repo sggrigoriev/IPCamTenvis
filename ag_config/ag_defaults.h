@@ -74,6 +74,6 @@
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
 
-const char* DEFAULT_CAMERA_SETTINGS = "";
+const char* DEFAULT_DB_PATH = "./ipcam_db_stor.txt";
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

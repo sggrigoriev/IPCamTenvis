@@ -79,6 +79,11 @@ const char* ao_ws_alert_message(t_ac_cam_events event, time_t start_date, char* 
  * {"params":[{"name":"<param_name>","value":"<param_value>"},...]}
  */
 const char* ao_ws_params(char** report, char* buf, size_t size);
+/*
+ * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
+ * Return NULL if the message is too long
+ */
+const char* ao_cloud_measures(char** report, const char* deviceID, char* buf, size_t size);
 
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

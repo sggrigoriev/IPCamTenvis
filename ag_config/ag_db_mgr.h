@@ -19,6 +19,7 @@
  Created by gsg on 25/09/18.
  Module contains all interfaces and datatypes for properties dB
  This is common data & mapping for the cloud & the cam properties
+ All functions except load/unload are thread-protected!
 */
 
 #ifndef IPCAMTENVIS_AG_DB_MGR_H
@@ -44,6 +45,10 @@ typedef enum {
  */
 char** ag_db_get_changes_report(ag_db_property_type_t filter);
 void ag_erase_changes_report(ag_db_property_type_t filter);
+/*
+ * Create JSON report same format as above for all properties has to be reported at startup phase
+ */
+char** ag_db_get_startup_report();
 
 
 /* Work with property's flags */
@@ -62,51 +67,45 @@ int ag_db_get_flag(const char* property_name);
  */
 int ag_db_store_property(const char* property_name, const char* property_value);
 
-/*
- * Return value
- */
-const char* ag_db_get_property(const char* property_name);
 int ag_db_get_int_property(const char* property_name);
-
-ag_db_property_type_t ag_get_property_type(const char* property_name);
 
 
 /**************** Property names definitions */
 /* AG_DB_OWN */
-#define AG_DB_STATE_AGENT_ON    "state_agent_on"
+#define AG_DB_STATE_AGENT_ON        "state_agent_on"
 #define AG_DB_CMD_CONNECT_AGENT     "connect_agent_cmd"
 #define AG_DB_CMD_SEND_WD_AGENT     "send_wd_agent_cmd"
 
-#define AG_DB_STATE_WS_ON       "state_ws_on"
+#define AG_DB_STATE_WS_ON           "state_ws_on"
 #define AG_DB_CMD_CONNECT_WS        "connect_ws_cmd"
 #define AG_DB_CMD_ASK_4_VIEWERS_WS  "ask_4_viewers_cmd"
 #define AG_DB_CMD_PONG_REQUEST      "send_pong_ws_cmd"
 
-#define AG_DB_STATE_RW_ON       "state_rw_on"
-#define AG_DB_CMD_CONNECT_RW    "connect_rw_cmd"
-#define AG_DB_CMD_DISCONNECT_RW "disconnect_rw_cmd"
+#define AG_DB_STATE_RW_ON           "state_rw_on"
+#define AG_DB_CMD_CONNECT_RW        "connect_rw_cmd"
+#define AG_DB_CMD_DISCONNECT_RW     "disconnect_rw_cmd"
 
 /* AG_DB_CAM */
 #define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"
 #define AG_DB_STATE_PING_INTERVAL   "pingInterval"
 #define AG_DB_STATE_STREAM_STATUS   "ppc.streamStatus"
 #define AG_DB_STATE_RAPID_MOTION    "ppc.rapidMotionStatus"
-#define AB_DB_STATE_MD              "motionStatus"
-#define AB_DB_STATE_SD              "audioStatus"
-#define AB_DB_STATE_RECORDING       "recordStatus"
-#define AB_DB_STATE_RECORD_SECS     "ppc.recordSeconds"
-#define AB_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"
-#define AB_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"
-#define AB_DB_STATE_MD_ON           "ppc.motionActivity"
-#define AB_DB_STATE_SD_ON           "ppc.audioActivity"
-#define AB_DB_STATE_AUDIO           "audioStreaming"
-#define AB_DB_STATE_VIDEO           "videoStreaming"
-#define AB_DB_STATE_VIDEOCALL       "supportsVideoCall"
-#define AB_DB_STATE_SW_VERSION      "version"
-#define AB_DB_STATE_MEM_AVAILABLE   "availableBytes"
-#define AB_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"
-#define AB_DB_STATE_SNAPSHOT        "ppc.captureImage"
-#define AB_DB_STATE_STREAMERROR     "streamError"
-#define AB_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"
+#define AG_DB_STATE_MD              "motionStatus"
+#define AG_DB_STATE_SD              "audioStatus"
+#define AG_DB_STATE_RECORDING       "recordStatus"
+#define AG_DB_STATE_RECORD_SECS     "ppc.recordSeconds"
+#define AG_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"
+#define AG_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"
+#define AG_DB_STATE_MD_ON           "ppc.motionActivity"
+#define AG_DB_STATE_SD_ON           "ppc.audioActivity"
+#define AG_DB_STATE_AUDIO           "audioStreaming"
+#define AG_DB_STATE_VIDEO           "videoStreaming"
+#define AG_DB_STATE_VIDEOCALL       "supportsVideoCall"
+#define AG_DB_STATE_SW_VERSION      "version"
+#define AG_DB_STATE_MEM_AVAILABLE   "availableBytes"
+#define AG_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"
+#define AG_DB_STATE_SNAPSHOT        "ppc.captureImage"
+#define AG_DB_STATE_STREAMERROR     "streamError"
+#define AG_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"
 
 #endif /* IPCAMTENVIS_AG_DB_MGR_H */

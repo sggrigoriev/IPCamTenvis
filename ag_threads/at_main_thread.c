@@ -69,7 +69,17 @@ static volatile int main_finish;        /* stop flag for main thread */
     Local functions deinition
 */
 static void send_camera_properties_to_agent() {
-
+    char** report = ag_db_get_startup_report();
+    if(report) {
+        char buf[LIB_HTTP_MAX_MSG_SIZE];
+        char* msg = ao_cloud_measures(report, ag_getProxyID(), buf, sizeof(buf)-1);
+        free(report);
+        if(!msg) {
+            pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
+            return;
+        }
+        pu_queue_push(to_proxy, msg, strlen(msg)+1);
+    }
 }
 static void send_wd() {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -219,7 +229,7 @@ static void run_streaming_actions() {
         }
     }
 /* Clear possible error message from straeming thread */
-    ag_db_store_property(AB_DB_STATE_STREAMERROR, "");
+    ag_db_store_property(AG_DB_STATE_STREAMERROR, "");
 /* Check if there is anybody to watch the show */
     if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) == 0) {
         if(ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);  /* Stop straeming - nobody at home */
@@ -231,7 +241,7 @@ static void run_streaming_actions() {
     if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && !ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
 }
 static void run_snapshot_actions() {
-    int snapshot_command = ag_db_get_int_property(AB_DB_STATE_SNAPSHOT);
+    int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
     if (snapshot_command < 1) return;
 
     const char *filename = "pictureXXXXXX";
@@ -245,7 +255,7 @@ static void run_snapshot_actions() {
         return;
     }
     send_snapshot(full_path);
-    ag_db_store_property(AB_DB_STATE_SNAPSHOT, "0");
+    ag_db_store_property(AG_DB_STATE_SNAPSHOT, "0");
 /*
  * if snapshot_command == 1 the alert should be sent. Was removed as unnecessary
  */
@@ -253,13 +263,13 @@ static void run_snapshot_actions() {
 static void run_camera_actions() {
     /* scan all cam's-related properties and update it if smth changed */
     ac_cam_update_property(AG_DB_STATE_RAPID_MOTION);
-    ac_cam_update_property(AB_DB_STATE_MD);
-    ac_cam_update_property(AB_DB_STATE_SD);
-    ac_cam_update_property(AB_DB_STATE_RECORDING);
-    ac_cam_update_property(AB_DB_STATE_RECORD_SECS);
-    ac_cam_update_property(AB_DB_STATE_MD_SENSITIVITY);
-    ac_cam_update_property(AB_DB_STATE_MD_COUNTDOWN);
-    ac_cam_update_property(AB_DB_STATE_SD_SENSITIVITY);
+    ac_cam_update_property(AG_DB_STATE_MD);
+    ac_cam_update_property(AG_DB_STATE_SD);
+    ac_cam_update_property(AG_DB_STATE_RECORDING);
+    ac_cam_update_property(AG_DB_STATE_RECORD_SECS);
+    ac_cam_update_property(AG_DB_STATE_MD_SENSITIVITY);
+    ac_cam_update_property(AG_DB_STATE_MD_COUNTDOWN);
+    ac_cam_update_property(AG_DB_STATE_SD_SENSITIVITY);
 }
 static void run_actions() {
     run_agent_actions();        /* Agent connet/reconnect */
@@ -411,7 +421,7 @@ static void process_rw_message(char* msg) {
         snprintf(error_code, sizeof(error_code)-1, "%d", rc->valueint);
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
-    ag_db_store_property(AB_DB_STATE_STREAMERROR, err_message);
+    ag_db_store_property(AG_DB_STATE_STREAMERROR, err_message);
 
     ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask RW for (re) connect */
 }
@@ -429,26 +439,26 @@ static void process_alert(char* msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            ag_db_store_property(AB_DB_STATE_MD_ON, "1");
-            ag_db_store_property(AB_DB_STATE_MD, "1");
-            ag_db_store_property(AB_DB_STATE_RECORDING, "1");
+            ag_db_store_property(AG_DB_STATE_MD_ON, "1");
+            ag_db_store_property(AG_DB_STATE_MD, "1");
+            ag_db_store_property(AG_DB_STATE_RECORDING, "1");
             break;
         case AC_CAM_START_SD:
-            ag_db_store_property(AB_DB_STATE_SD_ON, "1");
-            ag_db_store_property(AB_DB_STATE_SD, "1");
-            ag_db_store_property(AB_DB_STATE_RECORDING, "1");
+            ag_db_store_property(AG_DB_STATE_SD_ON, "1");
+            ag_db_store_property(AG_DB_STATE_SD, "1");
+            ag_db_store_property(AG_DB_STATE_RECORDING, "1");
             break;
         case AC_CAM_STOP_MD:
-            ag_db_store_property(AB_DB_STATE_MD_ON, "0");
-            ag_db_store_property(AB_DB_STATE_MD, "0");
-            ag_db_store_property(AB_DB_STATE_RECORDING, "0");
+            ag_db_store_property(AG_DB_STATE_MD_ON, "0");
+            ag_db_store_property(AG_DB_STATE_MD, "0");
+            ag_db_store_property(AG_DB_STATE_RECORDING, "0");
 
             send_send_file(data);
             break;
         case AC_CAM_STOP_SD:
-            ag_db_store_property(AB_DB_STATE_SD_ON, "0");
-            ag_db_store_property(AB_DB_STATE_SD, "0");
-            ag_db_store_property(AB_DB_STATE_RECORDING, "0");
+            ag_db_store_property(AG_DB_STATE_SD_ON, "0");
+            ag_db_store_property(AG_DB_STATE_SD, "0");
+            ag_db_store_property(AG_DB_STATE_RECORDING, "0");
 
             send_send_file(data);
             break;

@@ -100,7 +100,11 @@ char* add_files_list(const char* dir_name, time_t start, time_t end, const char*
 }
 /***************************************************************************************************************/
 
+/* 
+ * All initial camera-related preparations should be here!
+ */
 int ac_cam_init() {
+    return ag_db_load_cam_properties();
 }
 
 /*
@@ -134,7 +138,14 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
 
 int ac_cam_update_property(const char* property_name) {
     if(ag_db_get_flag(property_name)) {
-        lkjhlkjhlkjhlkjhlkjhlkjhlkjhlkjh
+        lkjhlkjhlkjhlkjhlkjhlkjhlkjhlkjh <- some cam-related logic should be here!
         ag_db_set_flag_off(property_name);
     }
 }
+
+
+typedef struct {
+    int post;               /* 1 if POST method, 0 if GET */
+    char* command_name;     /* name used in POST/GET */
+    char* parameters;       /* string with parameters name */
+} ag_db_cam_request;
