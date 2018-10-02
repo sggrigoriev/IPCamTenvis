@@ -506,12 +506,11 @@ static int main_thread_startup() {
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
 
 /* Camera initiation & settings upload */
-    if(!ac_cam_init()) {
-        pu_log(LL_ERROR, "%s: ac_cam_init() call error", __FUNCTION__);
+    if(!ag_db_load_cam_properties()) {
+        pu_log(LL_ERROR, "%s: Error camera initiation", __FUNCTION__);
         return 0;
     }
-    pu_log(LL_INFO, "%s: Camera settings are loaded, Camera initiated", __FUNCTION__);
-
+    pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
 
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));

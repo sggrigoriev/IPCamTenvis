@@ -22,18 +22,19 @@
 #ifndef IPCAMTENVIS_AC_CAM_H
 #define IPCAMTENVIS_AC_CAM_H
 
+#include "cJSON.h"
+
 #include "ao_cmd_data.h"
 
 /*
  * Make initial settings for the Camera
  */
 int ac_cam_init();
-
 /*
- * Send to cam in_msg, receive out_msg. Return 1 of OK, return 0 if not
- * NB! out_cmd.cam_exchange.msg is not decoded and has to be freed after use!
+ * Free camDB
  */
-int ac_cam_dialogue(const t_ao_cam_exchange in_msg, t_ao_cam_exchange* out_cmd);
+void ac_cam_deinit();
+
 
 /*
  * Create the JSON array with full file names& path for alert
@@ -48,12 +49,11 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
 int ac_cam_make_snapshot(const char* full_path);
 
 /*
- * Send the corresponding cam's property to the camera,
- * Read back the cam's property, update the db_properties
- * Return 1 if OK, 0 if no property found
+ * set cam_value to the cam:
+ *  if cam's db has same value - no call camera
+ *  else - send to cam, re-read, return what came from cam; store it into cam's db as well
  */
-int ac_cam_update_property(const char* property_name);
-
+const char* ac_update_cam_parameter(const char* cam_name, const char* cam_value);
 
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

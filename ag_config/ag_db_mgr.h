@@ -25,6 +25,8 @@
 #ifndef IPCAMTENVIS_AG_DB_MGR_H
 #define IPCAMTENVIS_AG_DB_MGR_H
 
+#include "cJSON.h"
+
 #include "ao_cmd_data.h"
 
 int ag_db_load_cam_properties();
@@ -38,18 +40,18 @@ typedef enum {
 } ag_db_property_type_t;
 /*
  * filter - what types of property changes should be commited
- * return NULL terminated list of "{\"name\":\"<ParameterName>\", \"value\":\"<ParameterValue\", \"forward\":0}'\0'"
+ * return cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * for all parameters which changed their values
  * NB1 Changes list deleted after use!
  * NB2 Returned list should be erased after use !!!
  */
-char** ag_db_get_changes_report(ag_db_property_type_t filter);
-void ag_erase_changes_report(ag_db_property_type_t filter);
+cJSON* ag_db_get_changes_report();
 /*
  * Create JSON report same format as above for all properties has to be reported at startup phase
  */
-char** ag_db_get_startup_report();
-
+cJSON* ag_db_get_startup_report();
+/* Clear changes flag */
+void ag_erase_changes_report();
 
 /* Work with property's flags */
 /* property's flag value set to 1 */
