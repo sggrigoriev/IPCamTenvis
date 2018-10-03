@@ -46,5 +46,9 @@ void ac_stop_video();
 int ac_send_stream_initiation();
 int ac_send_stream_confirmation();
 int ac_send_active_viwers_request();
-
+void ac_set_stream_error(const char* err);
+void ac_clear_stream_error();
+/* return 1 if stlen() > 0 */
+int ac_is_stream_error();
+int ac_send_stream_error();
 #endif /* IPCAMTENVIS_AC_VIDEO_H */

@@ -120,6 +120,20 @@ static void send_ACK_to_Proxy(int command_number) {
     ao_answer_to_command(buf, sizeof(buf), command_number, 0);
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
 }
+static int send_answers_to_ws() {
+/*
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char** changes_report = ag_db_get_changes_report(AG_DB_CAM);
+    if(changes_report) {
+        if(send_answers_to_ws(changes_report)) {
+            ag_erase_changes_report(AG_DB_CAM);
+        }
+        free(changes_report);
+    }
+    return send_to_ws(ao_ws_params(report, buf, sizeof(buf)));
+*/
+???
+}
 static int send_to_ws(const char* msg) {
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
@@ -127,10 +141,6 @@ static int send_to_ws(const char* msg) {
         return 0;
     }
     return 1;
-}
-static int send_answers_to_ws(char** report) {
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    return send_to_ws(ao_ws_params(report, buf, sizeof(buf)));
 }
 
 static void run_agent_actions() {
@@ -155,6 +165,10 @@ static void run_agent_actions() {
 }
 static void run_ws_actions() {
     if(ag_db_get_flag(AG_DB_STATE_WS_ON)) { /* WS is ON */
+        if(ac_is_stream_error()) {       /* sent stream error to WS */
+            ac_send_stream_error();
+            ac_clear_stream_error();
+         }
         if(ag_db_get_flag(AG_DB_CMD_CONNECT_WS)) {  /* Reconnect case */
             pu_log(LL_DEBUG, "%s WS: WS is ON. Reconnect requested", __FUNCTION__);
             ac_disconnect_video();
@@ -183,17 +197,13 @@ static void run_ws_actions() {
     }
 /* Check if viewers count request happens */
     if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS) && ag_db_get_flag(AG_DB_STATE_WS_ON)) {
-        if(!ac_send_active_viwers_request()) {
-            pu_log(LL_INFO, "%s: WS restart required", AT_THREAD_NAME);
-            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
-        }
-        else {
-            ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
-        }
+        ac_send_active_viwers_request();                    /* NB! The ws ability to send doesn't checked here! */
+        ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
     }
 /* Check for ping from WS */
     if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {
         send_to_ws(ao_answer_to_ws_ping());
+        ag_db_set_flag_off(AG_DB_CMD_PONG_REQUEST);
     }
 }
 static void run_streaming_actions() {
@@ -209,14 +219,18 @@ static void run_streaming_actions() {
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
             }
         }
-        if (ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW)) {/* Stop streaming request */
-            pu_log(LL_DEBUG, "%s: Streaming is ON. Stop requested", __FUNCTION__);
+        if (ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW) || (ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) == 0)) {/* Stop streaming request */
+            pu_log(LL_DEBUG, "%s: Streaming is ON. Active viwers amount is %d. Stop requested", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
             ac_stop_video();
             ag_db_set_flag_off(AG_DB_STATE_RW_ON);
             ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
         }
     }
     else {  /* Streaming is off */
+        if(ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS) || (ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) > 0)) {
+            ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
+            if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, "1");
+        }
         if (ag_db_get_flag(AG_DB_CMD_CONNECT_RW)) {
             pu_log(LL_DEBUG, "%s: Streaming is OFF. Start requested", __FUNCTION__);
             if (!ac_start_video()) {
@@ -225,20 +239,28 @@ static void run_streaming_actions() {
             else {
                 ag_db_set_flag_on(AG_DB_STATE_RW_ON);
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
+                ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS); /* Start video sends answers about streaming */
             }
         }
     }
-/* Clear possible error message from straeming thread */
-    ag_db_store_property(AG_DB_STATE_STREAMERROR, "");
-/* Check if there is anybody to watch the show */
-    if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) == 0) {
-        if(ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);  /* Stop straeming - nobody at home */
+}
+static void run_cam_actions() {
+    if(ag_db_get_flag(AG_DB_STATE_MD) && ag_db_get_int_property(AG_DB_STATE_MD)) {    /* Switch On MD */
+        ac_set_md_on();
+        ag_db_set_flag_off(AG_DB_STATE_MD);
     }
-    else if(!ag_db_get_flag(AG_DB_STATE_RW_ON)) {
-        ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);        /* Start streaming - somebody wana show! */
+    if(ag_db_get_flag(AG_DB_STATE_MD) && !ag_db_get_int_property(AG_DB_STATE_MD)) {    /* Switch Off MD */
+        ac_set_md_off();
+        ag_db_set_flag_off(AG_DB_STATE_MD);
     }
-/* Check for start streaming requests */
-    if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && !ag_db_get_flag(AG_DB_STATE_RW_ON)) ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
+    if(ag_db_get_flag(AG_DB_STATE_SD) && ag_db_get_int_property(AG_DB_STATE_SD)) {    /* Switch On SD */
+        ac_set_sd_on();
+        ag_db_set_flag_off(AG_DB_STATE_SD);
+    }
+    if(ag_db_get_flag(AG_DB_STATE_SD) && !ag_db_get_int_property(AG_DB_STATE_SD)) {    /* Switch Off SD */
+        ac_set_sd_off();
+        ag_db_set_flag_off(AG_DB_STATE_SD);
+    }
 }
 static void run_snapshot_actions() {
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
@@ -260,31 +282,14 @@ static void run_snapshot_actions() {
  * if snapshot_command == 1 the alert should be sent. Was removed as unnecessary
  */
 }
-static void run_camera_actions() {
-    /* scan all cam's-related properties and update it if smth changed */
-    ac_cam_update_property(AG_DB_STATE_RAPID_MOTION);
-    ac_cam_update_property(AG_DB_STATE_MD);
-    ac_cam_update_property(AG_DB_STATE_SD);
-    ac_cam_update_property(AG_DB_STATE_RECORDING);
-    ac_cam_update_property(AG_DB_STATE_RECORD_SECS);
-    ac_cam_update_property(AG_DB_STATE_MD_SENSITIVITY);
-    ac_cam_update_property(AG_DB_STATE_MD_COUNTDOWN);
-    ac_cam_update_property(AG_DB_STATE_SD_SENSITIVITY);
-}
+
 static void run_actions() {
     run_agent_actions();        /* Agent connet/reconnect */
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
     run_snapshot_actions();     /* make a photo */
-    run_camera_actions();       /* change camera properties */
-
-    char** changes_report = ag_db_get_changes_report(AG_DB_CAM);
-    if(changes_report) {
-        if(send_answers_to_ws(changes_report)) {
-            ag_erase_changes_report(AG_DB_CAM);
-        }
-        free(changes_report);
-    }
+    run_cam_actions();          /* MD/SD on-off */
+    send_answers_to_ws();       /* Send changes report */
 }
 
 /*
@@ -421,7 +426,7 @@ static void process_rw_message(char* msg) {
         snprintf(error_code, sizeof(error_code)-1, "%d", rc->valueint);
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
-    ag_db_store_property(AG_DB_STATE_STREAMERROR, err_message);
+    ac_set_stream_error(err_message);
 
     ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask RW for (re) connect */
 }
@@ -440,24 +445,20 @@ static void process_alert(char* msg) {
     switch (data.cam_event) {
         case AC_CAM_START_MD:
             ag_db_store_property(AG_DB_STATE_MD_ON, "1");
-            ag_db_store_property(AG_DB_STATE_MD, "1");
             ag_db_store_property(AG_DB_STATE_RECORDING, "1");
             break;
         case AC_CAM_START_SD:
             ag_db_store_property(AG_DB_STATE_SD_ON, "1");
-            ag_db_store_property(AG_DB_STATE_SD, "1");
             ag_db_store_property(AG_DB_STATE_RECORDING, "1");
             break;
         case AC_CAM_STOP_MD:
             ag_db_store_property(AG_DB_STATE_MD_ON, "0");
-            ag_db_store_property(AG_DB_STATE_MD, "0");
             ag_db_store_property(AG_DB_STATE_RECORDING, "0");
 
             send_send_file(data);
             break;
         case AC_CAM_STOP_SD:
             ag_db_store_property(AG_DB_STATE_SD_ON, "0");
-            ag_db_store_property(AG_DB_STATE_SD, "0");
             ag_db_store_property(AG_DB_STATE_RECORDING, "0");
 
             send_send_file(data);
@@ -549,9 +550,8 @@ void at_main_thread() {
     lib_timer_clock_t wd_clock = {0};           /* timer for watchdog sending */
     lib_timer_init(&wd_clock, ag_getAgentWDTO());   /* Initiating the timer for watchdog sendings */
 
-    int WS_TO = DEFAULT_CLOUD_PING_TO;  /* will be updated by WS ping in next versions... may be*/
     lib_timer_clock_t ws_clock = {0};   /* timer for WEB viewer check */
-    lib_timer_init(&ws_clock, WS_TO);   /* TODO! Make it configurable! */
+    lib_timer_init(&ws_clock, ag_db_get_int_property(AG_DB_STATE_PING_INTERVAL));
 
     unsigned int events_timeout = 1; /* Wait 1 second */
 
@@ -608,7 +608,7 @@ void at_main_thread() {
         /*2. Ask viwer about active viewers - in case of WEB viewer timeout */
         if(lib_timer_alarm(ws_clock) && (ag_db_get_flag(AG_DB_STATE_WS_ON))) {
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
-            lib_timer_init(&ws_clock, WS_TO);
+            lib_timer_init(&ws_clock, ag_db_get_int_property(AG_DB_STATE_PING_INTERVAL));
         }
 /* Interpret changes made in properties */
         run_actions();

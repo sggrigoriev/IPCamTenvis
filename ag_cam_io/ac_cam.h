@@ -53,7 +53,12 @@ int ac_cam_make_snapshot(const char* full_path);
  *  if cam's db has same value - no call camera
  *  else - send to cam, re-read, return what came from cam; store it into cam's db as well
  */
-const char* ac_update_cam_parameter(const char* cam_name, const char* cam_value);
+int ac_update_cam_parameter(const char* par_name, int par_value);
+
+int ac_set_md_on();
+int ac_set_md_off();
+int ac_set_sd_on();
+int ac_set_sd_off();
 
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

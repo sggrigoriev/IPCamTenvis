@@ -20,6 +20,7 @@
  Cloud & cam properties db
 */
 #include <string.h>
+#include <limits.h>
 
 #include "pu_logger.h"
 
@@ -72,12 +73,13 @@ Cam properties list
  * Returned memory should be freed!
  * NB! input NULL checked!
  */
-typedef char* (*converter_t)(const char* in_value);
+typedef int (*in_t)(const char* in_value);
+typedef int (*out_t)(int in_value);
 typedef enum {rundef=0, rmin_max=1, rlist=2} rule_t;
 
 typedef struct {
 /*01*/  char* name;             /*Cloud or own name */
-/*02*/  char* value;            /* Could be NULL if flag only. For OWN flags(commands) */
+/*02*/  int value;            /* Could not be used if flag only. For OWN flags(commands) */
 
 /*03*/  int change_flag;          /* If there is own logic for param - it will work if change_flag == 1 */
 /*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
@@ -87,13 +89,14 @@ typedef struct {
 
 /*08*/  char* cam_name;         /*Corresponding name in Camera. NULL if no correspondence */
 
-/*09*/  char* default_value;
+/*09*/  int default_value;
 
-/*10*/  converter_t cloud_cam_converter;    /* Converts value to cam_value Could be NULL */
-/*11*/  converter_t cam_cloud_converter;    /* Converts cam_value to value Could be NULL */
+/*10*/  in_t input_converter;        /*Adjusts input value to the cloud accordingly rules & limits */
+/*11*/  out_t cloud_cam_converter;    /* Converts value to cam_value Could be NULL */
+/*12*/  out_t cam_cloud_converter;    /* Converts cam_value to value Could be NULL */
 
-/*12*/    rule_t rule;                        /* Rule for convertors */
-/*13*/    char* limits;                       /*Min, Max for rmin_max rule and v1,...,vN for rlist rule */
+/*13*/    rule_t rule;                        /* Rule for convertors */
+/*14*/    int limits[];                       /*Min, Max for rmin_max rule and v1,...,vN, INT_MAX for rlist rule */
 } ag_db_record_t;
 
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
@@ -101,20 +104,73 @@ typedef struct {
                         pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__); \
                         goto on_error; \
                     }
-#define FREE(a)     if((a)) { free(a); a = NULL;}
+#define FREE(a)     if((a)) { free(a); /*a = NULL;*/}
 
 static const ag_db_record_t SCHEME[] = {
-/*  1       2       3   4   5   6   7       8       9       10      11      12          13*/
-{"mama",    NULL,   0,  0,  0,  0,  1,      NULL,   "4",    NULL,   NULL,   rmin_max,   "1\n2\n"}
+/*  1       2   3   4   5   6   7   8       9   10      11      12      13          14      */
+{"mama",    0,  0,  0,  0,  0,  1,  NULL,   4,  NULL,   NULL,   NULL,   rmin_max,   {1,2, INT_MAX}}
 };
 
 static ag_db_record_t *IMDB = 0;
+int char2int(const char* str) {
+    int ret;
+    if(!str) return 0;
+    sscanf(str, "%d", &ret);
+    return ret;
+}
 /*
  * return 1 if v1 == v2
  */
-int equal(const char* v1, const char* v2) {
-    return (strcmp(v1, v2) == 0);
+int equal(const char* in, int own) {
+    return char2int(in) == own;
 }
+/*
+ * Convertors. We got only 2 params, so make 4 functions and that's all
+*/
+/* limits got structure as number,..,number,INT_MAX*/
+static int ic(const char* in_value, rule_t rule, int limits[]) {
+    int v = char2int(in_value);
+
+    if(rule == rmin_max) {
+        if(v < limits[0]) return limits[0];
+        if(v > limits[1]) return limits[1];
+        return v;
+    }
+/* list of values if we're here */
+    int i = 0;
+    while(limits[i] < INT_MAX) {
+        if(v <= limits[i]) return limits[i];
+        if(v >= limits[i+1]) {
+            i++;
+            continue;      /* let's check next pair */
+        }
+        /* Case between */
+        int l_pos = v - limits[i];
+        int r_pos = limits[i+1] - v;
+        if(r_pos <= l_pos) return limits[i+1];
+        else return limits[i];
+    }
+    return v;
+}
+/* cloud [0..100], cam [0..9] */
+static int SS_cloud_2_cam(int cloud_value) {
+    if(cloud_value > 90) cloud_value = 90;
+    return (cloud_value%10 >= 5)?cloud_value/10+1:cloud_value/10;
+}
+static int SS_cam_2_cloud(int cam_value) {
+    return cam_value*10;
+}
+/* Cloud [0,10, 20, 30, 40]
+ * Cam [0,1, 2, 3, 4, 5]
+*/
+static int MS_cloud_2_cam(int cloud_value) {
+    return cloud_value/10;
+}
+static int MS_cam_2_cloud(int cam_value) {
+    if(cam_value > 4) cam_value = 4;
+    return cam_value*10;
+}
+
 /*
  * Return string {"params_array":[{"name":"<name>", "value":"<value>"}, ...]} or NULL
  */
@@ -140,13 +196,20 @@ char* get_persistent_data(const char* file_name) {
     }
     return JSON_string;
 }
+
 /*
  * Return IMDB index if found or -1 if not
  * search by name filed
  * NB! add not found into log!!
  */
 static int find_param(const char* name) {
-    !!!
+    int i;
+    if(!name) return -1;
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(!strcmp(IMDB[i].name, name)) return i;
+    }
+    pu_log(LL_WARNING, "%s Parameter %s not found in dB", __FUNCTION__, name);
+    return -1;
 }
 /*
  * Return IMDB index if found or -1 if not
@@ -155,34 +218,55 @@ static int find_param(const char* name) {
  * NB! add not found into log!!
  */
 static find_camera_param(const char* cam_name) {
-    !!!!!!!!!!!!!!!!!!!!!!!!!
+    int i;
+    if(!cam_name) return -1;
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(!IMDB[i].cam_name) continue;
+        if(!strcmp(IMDB[i].cam_name, cam_name)) return i;
+    }
+    pu_log(LL_WARNING, "%s Parameter %s not found in dB", __FUNCTION__, cam_name);
+    return -1;
 }
 /*
- * Return 0 if memory problems. Set change_flag & updated flags
+ * Set change_flag & updated flags
  */
-static int replace_param_value(int idx, const char* value) {
-    !!!
+static void replace_param_value(int idx, const char* value) {
+    if(!value) return;
+
+    int val = char2int(value);
+    if(val == IMDB[idx].value) return;
+
+    IMDB[idx].value = val;
+    IMDB[idx].change_flag = 1;
+    if(!IMDB[idx].in_changes_report) IMDB[idx].updated = 1;
 }
 
-
+static int* copyLimits(const int from[]){
+    size_t sz=0;
+    while(from[sz++] < INT_MAX);
+    int* ret= calloc(sz, sizeof(int));
+    memcpy(ret, from, sz);
+    return ret;
+}
 static int create_imdb() {
     IMDB = NULL;
     IMDB = calloc(sizeof(ag_db_record_t), NELEMS(SCHEME));
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
 /*01*/  IMDB[i].name = strdup(SCHEME[i].name); ANAL(IMDB[i].name);
-/*02*/  IMDB[i].value = strdup(SCHEME[i].default_value); ANAL(IMDB[i].value);
+/*02*/  IMDB[i].value = SCHEME[i].default_value;
 /*03*/  /*change_flag = 0 */
 /*04*/  IMDB[i].in_startup_report = SCHEME[i].in_startup_report;
 /*05*/  IMDB[i].in_changes_report = SCHEME[i].in_changes_report;
 /*06*/  /* updated = 0 */
 /*07*/  IMDB[i].persistent = SCHEME[i].persistent;
 /*08*/  if(SCHEME[i].cam_name) {IMDB[i].cam_name = strdup(SCHEME[i].cam_name); ANAL(IMDB[i].cam_name);}
-/*09*/  /* default_value = NULL not needed and not used */
-/*10*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
-/*11*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
-/*12*/  IMDB[i].rule = SCHEME[i].rule;
-/*13*/  if(SCHEME[i].limits) {IMDB[i].limits = strdup(SCHEME[i].limits); ANAL(IMDB[i].limits);}
+/*09*/  /* default_value not needed and not used */
+/*10*/  IMDB[i].input_converter = SCHEME[i].input_converter;
+/*11*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
+/*12*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
+/*13*/  IMDB[i].rule = SCHEME[i].rule;
+/*14*/  if(SCHEME[i].limits) IMDB[i].limits = copyLimits(SCHEME[i].limits);
     }
     return 1;
 on_error:
@@ -227,10 +311,7 @@ static int load_persistent_data() {
             pu_log(LL_WARNING, "%s: %dth parameter %s is not found in IMDB. Ignored", __FUNCTION__, i, item->valuestring);
             continue;
         }
-        if(!replace_param_value(pos, value->valuestring)) {
-            pu_log(LL_ERROR, "%s: Error update IMDB parameter %s by value %s", __FUNCTION__, IMDB[pos].name, value->valuestring);
-            goto on_error;
-        }
+        replace_param_value(pos, value->valuestring);
     }
     ret = 1;    /* we're here if OK */
 on_error:
@@ -244,23 +325,19 @@ on_error:
  *      if new parameter <> cam parameter -> store new one to IMDB
  */
 static int sync_camera_param(int idx) {
-    int ret = 0;
     if(!IMDB[idx].cam_name) return 1;     /* This parameter hasn't cam analogue */
     if(!IMDB[idx].cam_cloud_converter || !IMDB[idx].cloud_cam_converter) {
         pu_log(LL_ERROR, "%s: data error! conveter functions are unavailable!", __FUNCTION__);
         return 0;
     }
-    char* cam_value = IMDB[idx].cloud_cam_converter(IMDB[idx].value);  ANAL(cam_value);
-    const char* from_cam_value = ac_update_cam_parameter(IMDB[idx].cam_name, cam_value);
-    char* new_cloud_value = IMDB[idx].cam_cloud_converter(from_cam_value); ANAL(new_cloud_value);
-    if(!equal(IMDB[idx].value, new_cloud_value)) {
-        replace_param_value(idx, new_cloud_value);
-    }
-    ret = 1;
-on_error:
-    FREE(cam_value);
-    FREE(new_cloud_value);
-    return ret;
+    int cam_value = IMDB[idx].cloud_cam_converter(IMDB[idx].value);
+    int from_cam_value = ac_update_cam_parameter(IMDB[idx].cam_name, cam_value);
+    int new_cloud_value = IMDB[idx].cam_cloud_converter(from_cam_value); 
+    char buf[10] = {0};
+    snprintf(buf, sizeof(buf)-1, "%d", new_cloud_value);
+    replace_param_value(idx, buf);
+
+    return 1;
 }
 /*
  * 1. Initialize camera data: upload cam parameters from camera
@@ -313,18 +390,18 @@ void ag_db_unload_cam_properties() {
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
         FREE(IMDB[i].name);
-        FREE(IMDB[i].value);
         FREE(IMDB[i].cam_name);
-        FREE(IMDB[i].default_value);
         FREE(IMDB[i].limits);
     }
     FREE(IMDB);
 };
 
-static void add_reported_property(cJSON* report, const char* name, const char* value) {
+static void add_reported_property(cJSON* report, const char* name, int value) {
     cJSON* obj = cJSON_CreateObject();
     cJSON* par_name = cJSON_CreateString(name);
-    cJSON* par_value = cJSON_CreateString(value);
+    char buf[10]={0};
+    snprintf(buf, sizeof(buf)-1, "%d", value);
+    cJSON* par_value = cJSON_CreateString(buf);
 
     cJSON_AddItemToObject(obj, "name", par_name);
     cJSON_AddItemToObject(obj, "value", par_value);
@@ -389,27 +466,24 @@ int ag_db_get_flag(const char* property_name) {
  * !Set the property's flag ON in any case!.
  */
 int ag_db_store_property(const char* property_name, const char* property_value) {
-    int ret;
+    int ret=0;
     int pos = find_param(property_name);
     if(pos < 0) return 0;
     if(!equal(property_value, IMDB[pos].value)) {
         replace_param_value(pos, property_value);
-        sync_camera_param(pos);
+        if(IMDB[pos].cam_name) sync_camera_param(pos);
         ret = 1;
-    }
-    else {
-        IMDB[pos].change_flag = 1;  /* set the flag anyway */
-        ret = 0;
     }
     return ret;
 }
 
 int ag_db_get_int_property(const char* property_name) {
-    int ret = 0;
     int pos = find_param(property_name);
-    if(pos < 0) return ret;
-    sscanf(IMDB[pos].value, "%d", &ret);
-    return ret;
+    if(pos < 0) return 0;
+
+    return IMDB[pos].value;
 }
+
+
 
 
