@@ -245,21 +245,35 @@ static void run_streaming_actions() {
     }
 }
 static void run_cam_actions() {
-    if(ag_db_get_flag(AG_DB_STATE_MD) && ag_db_get_int_property(AG_DB_STATE_MD)) {    /* Switch On MD */
+/* Switch On MD */
+    if(ag_db_get_flag(AG_DB_STATE_MD) && ag_db_get_int_property(AG_DB_STATE_MD)) {
         ac_set_md_on();
         ag_db_set_flag_off(AG_DB_STATE_MD);
     }
-    if(ag_db_get_flag(AG_DB_STATE_MD) && !ag_db_get_int_property(AG_DB_STATE_MD)) {    /* Switch Off MD */
+/* Switch Off MD */
+    if(ag_db_get_flag(AG_DB_STATE_MD) && !ag_db_get_int_property(AG_DB_STATE_MD)) {
         ac_set_md_off();
         ag_db_set_flag_off(AG_DB_STATE_MD);
     }
-    if(ag_db_get_flag(AG_DB_STATE_SD) && ag_db_get_int_property(AG_DB_STATE_SD)) {    /* Switch On SD */
+/* Switch On SD */
+    if(ag_db_get_flag(AG_DB_STATE_SD) && ag_db_get_int_property(AG_DB_STATE_SD)) {
         ac_set_sd_on();
         ag_db_set_flag_off(AG_DB_STATE_SD);
     }
-    if(ag_db_get_flag(AG_DB_STATE_SD) && !ag_db_get_int_property(AG_DB_STATE_SD)) {    /* Switch Off SD */
+/* Switch Off SD */
+    if(ag_db_get_flag(AG_DB_STATE_SD) && !ag_db_get_int_property(AG_DB_STATE_SD)) {
         ac_set_sd_off();
         ag_db_set_flag_off(AG_DB_STATE_SD);
+    }
+/* Change Audio sensitivity */
+    if(ag_db_get_flag(AG_DB_STATE_SD_SENSITIVITY)) {
+        ag_db_update_cam_parameter(AG_DB_STATE_SD_SENSITIVITY);
+        ag_db_set_flag_off(AG_DB_STATE_SD_SENSITIVITY);
+    }
+/* Change Video sensitivity */
+    if(ag_db_get_flag(AG_DB_STATE_MD_SENSITIVITY)) {
+        ag_db_update_cam_parameter(AG_DB_STATE_MD_SENSITIVITY);
+        ag_db_set_flag_off(AG_DB_STATE_MD_SENSITIVITY);
     }
 }
 static void run_snapshot_actions() {

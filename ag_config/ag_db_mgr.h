@@ -70,6 +70,8 @@ int ag_db_get_flag(const char* property_name);
 int ag_db_store_property(const char* property_name, const char* property_value);
 
 int ag_db_get_int_property(const char* property_name);
+/* Cloud-Cam parameter set: set on cam, re-read and store into DB */
+int ag_db_update_cam_parameter(const char* property_name);
 
 
 /**************** Property names definitions */
@@ -107,7 +109,6 @@ int ag_db_get_int_property(const char* property_name);
 #define AG_DB_STATE_MEM_AVAILABLE   "availableBytes"
 #define AG_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"
 #define AG_DB_STATE_SNAPSHOT        "ppc.captureImage"
-#define AG_DB_STATE_STREAMERROR     "streamError"
 #define AG_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"
 
 #endif /* IPCAMTENVIS_AG_DB_MGR_H */

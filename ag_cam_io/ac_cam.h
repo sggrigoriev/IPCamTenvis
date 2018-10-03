@@ -48,17 +48,17 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
  */
 int ac_cam_make_snapshot(const char* full_path);
 
-/*
- * set cam_value to the cam:
- *  if cam's db has same value - no call camera
- *  else - send to cam, re-read, return what came from cam; store it into cam's db as well
- */
-int ac_update_cam_parameter(const char* par_name, int par_value);
 
 int ac_set_md_on();
 int ac_set_md_off();
 int ac_set_sd_on();
 int ac_set_sd_off();
 
+/*
+ * Set new value, re-read it from the cam and return it back
+ */
+int ac_set_sd_sensitivity(int value);
+int ac_set_md_sensitivity(int value);
+int ac_set_record_seconds(int value);
 
 #endif /* IPCAMTENVIS_AC_CAM_H */
