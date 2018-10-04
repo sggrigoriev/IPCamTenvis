@@ -245,36 +245,11 @@ static void run_streaming_actions() {
     }
 }
 static void run_cam_actions() {
-/* Switch On MD */
-    if(ag_db_get_flag(AG_DB_STATE_MD) && ag_db_get_int_property(AG_DB_STATE_MD)) {
-        ac_set_md_on();
-        ag_db_set_flag_off(AG_DB_STATE_MD);
-    }
-/* Switch Off MD */
-    if(ag_db_get_flag(AG_DB_STATE_MD) && !ag_db_get_int_property(AG_DB_STATE_MD)) {
-        ac_set_md_off();
-        ag_db_set_flag_off(AG_DB_STATE_MD);
-    }
-/* Switch On SD */
-    if(ag_db_get_flag(AG_DB_STATE_SD) && ag_db_get_int_property(AG_DB_STATE_SD)) {
-        ac_set_sd_on();
-        ag_db_set_flag_off(AG_DB_STATE_SD);
-    }
-/* Switch Off SD */
-    if(ag_db_get_flag(AG_DB_STATE_SD) && !ag_db_get_int_property(AG_DB_STATE_SD)) {
-        ac_set_sd_off();
-        ag_db_set_flag_off(AG_DB_STATE_SD);
-    }
+/* Switch On/Off MD */
+/* Switch On/Off SD */
 /* Change Audio sensitivity */
-    if(ag_db_get_flag(AG_DB_STATE_SD_SENSITIVITY)) {
-        ag_db_update_cam_parameter(AG_DB_STATE_SD_SENSITIVITY);
-        ag_db_set_flag_off(AG_DB_STATE_SD_SENSITIVITY);
-    }
 /* Change Video sensitivity */
-    if(ag_db_get_flag(AG_DB_STATE_MD_SENSITIVITY)) {
-        ag_db_update_cam_parameter(AG_DB_STATE_MD_SENSITIVITY);
-        ag_db_set_flag_off(AG_DB_STATE_MD_SENSITIVITY);
-    }
+    ag_db_update_changed_cam_parameters();
 }
 static void run_snapshot_actions() {
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
@@ -521,8 +496,13 @@ static int main_thread_startup() {
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
 
 /* Camera initiation & settings upload */
+    if(!ac_cam_init()) {
+        pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
+        return 0;
+    }
+
     if(!ag_db_load_cam_properties()) {
-        pu_log(LL_ERROR, "%s: Error camera initiation", __FUNCTION__);
+        pu_log(LL_ERROR, "%s: Error load camera properties", __FUNCTION__);
         return 0;
     }
     pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
@@ -547,6 +527,7 @@ static void main_thread_shutdown() {
     at_stop_proxy_rw();
 
     ag_db_unload_cam_properties();
+    ac_cam_deinit();
 
     aq_erase_queues();
 }

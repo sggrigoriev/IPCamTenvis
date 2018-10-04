@@ -103,7 +103,7 @@ const char* ac_tcp_read(int sock, char* buf, size_t size, int stop) {
     return buf;
 }
 
-int ac_tcp_write(int sock, t_ab_byte* msg, size_t len, int stop) {
+int ac_tcp_write(int sock, char* msg, size_t len, int stop) {
     int again = 1;
     ssize_t rc = -1;
     while(!stop && again) {

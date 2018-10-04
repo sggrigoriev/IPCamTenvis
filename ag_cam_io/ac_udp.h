@@ -25,8 +25,6 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "ab_ring_bufer.h"
-
 #include "ac_cam_types.h"
 
 typedef struct {
@@ -43,7 +41,7 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
 void ac_udp_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to);
-int ac_udp_write(int sock, const t_ab_byte* buf, size_t size);
+t_ac_udp_read_result ac_udp_read(int sock, unsigned char* buf, size_t size, int to);
+int ac_udp_write(int sock, const unsigned char* buf, size_t size);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */

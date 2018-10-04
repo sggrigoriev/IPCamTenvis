@@ -22,16 +22,15 @@
 #ifndef IPCAMTENVIS_AC_CAM_H
 #define IPCAMTENVIS_AC_CAM_H
 
-#include "cJSON.h"
 
 #include "ao_cmd_data.h"
 
 /*
- * Make initial settings for the Camera
+ * Make initial something for the Camera
  */
 int ac_cam_init();
 /*
- * Free camDB
+ * Opposite...
  */
 void ac_cam_deinit();
 
@@ -48,17 +47,16 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
  */
 int ac_cam_make_snapshot(const char* full_path);
 
+/* on = 1 set On, set = 0 set Off */
+int ac_set_md(int on);
+int ac_set_sd(int on);
 
-int ac_set_md_on();
-int ac_set_md_off();
-int ac_set_sd_on();
-int ac_set_sd_off();
 
 /*
  * Set new value, re-read it from the cam and return it back
  */
 int ac_set_sd_sensitivity(int value);
 int ac_set_md_sensitivity(int value);
-int ac_set_record_seconds(int value);
+
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

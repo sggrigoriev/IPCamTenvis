@@ -33,7 +33,6 @@
 
 #include "pu_logger.h"
 
-#include "ab_ring_bufer.h"
 #include "ac_cam_types.h"
 #include "ac_udp.h"
 
@@ -157,7 +156,7 @@ void ac_udp_close_connection(int sock) {
 }
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) {
+t_ac_udp_read_result ac_udp_read(int sock, unsigned char* buf, size_t size, int to) {
 
     t_ac_udp_read_result rc={-1, 0};
 
@@ -183,7 +182,7 @@ t_ac_udp_read_result ac_udp_read(int sock, t_ab_byte* buf, size_t size, int to) 
 
     return rc;
 }
-int ac_udp_write(int sock, const t_ab_byte* buf, size_t size) {
+int ac_udp_write(int sock, const unsigned char* buf, size_t size) {
     struct timespec t = {0,10000}, rem;
     long rc = 0;
 

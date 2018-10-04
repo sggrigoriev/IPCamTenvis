@@ -74,6 +74,7 @@
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
 
-#define DEFAULT_DB_PATH "./ipcam_db_stor.txt"
+#define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
+#define DEFAULT_SNAP_PATH   "./the_snapshot.jpg"
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

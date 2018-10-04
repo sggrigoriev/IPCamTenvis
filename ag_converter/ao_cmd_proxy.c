@@ -19,7 +19,7 @@
  Created by gsg on 09/12/17.
 */
 #include <string.h>
-#include <au_string/au_string.h>
+#include "au_string.h"
 
 #include "cJSON.h"
 #include "pu_logger.h"

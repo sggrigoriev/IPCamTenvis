@@ -19,18 +19,14 @@
  Created by gsg on 25/02/18.
 */
 
-#include <ag_converter/ao_cmd_data.h>
-#include <ag_converter/ao_cmd_cloud.h>
+#include "ao_cmd_data.h"
+#include "ao_cmd_cloud.h"
 #include "pu_logger.h"
 
 #include "au_string.h"
 #include "ao_cmd_data.h"
 #include "ag_settings.h"
 
-#include"ab_ring_bufer.h"
-
-#include "at_cam_video_read.h"
-#include "at_cam_video_write.h"
 #include "at_ws.h"
 
 #include "ac_cloud.h"

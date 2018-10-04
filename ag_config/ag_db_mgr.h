@@ -70,8 +70,10 @@ int ag_db_get_flag(const char* property_name);
 int ag_db_store_property(const char* property_name, const char* property_value);
 
 int ag_db_get_int_property(const char* property_name);
-/* Cloud-Cam parameter set: set on cam, re-read and store into DB */
-int ag_db_update_cam_parameter(const char* property_name);
+/* Cloud-Cam parameter set: set on cam, re-read and store into DB
+ * If re-read value differs - change_flag On if same after update - Off
+ */
+int ag_db_update_changed_cam_parameters();
 
 
 /**************** Property names definitions */

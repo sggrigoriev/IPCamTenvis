@@ -53,5 +53,18 @@ t_ao_cam_alert ao_cam_decode_alert(const char* in);
  */
 const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size);
 
+#define AO_CAM_CMD_SNAPSHOT 1
+#define AO_CAM_CMD_MD       2
+    #define AO_CAM_PAR_MD_SENS  1
+    #define AO_CAM_PAR_MD_ONOFF 2
+#define AO_CAM_CMD_SD       3
+    #define AO_CAM_PAR_SD_SENS  1
+    #define AO_CAM_PAR_SD_ONOFF 2
+
+char* ao_make_cam_uri(int cmd_id);
+char* ao_update_params_list(int cmd_id, int par_id, int par_value, char* lst);
+char* ao_make_params_from_list(int cmd_id, char* lst);
+int ao_get_param_from_list(int cmd_id, int par_id, char* lst);
+
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

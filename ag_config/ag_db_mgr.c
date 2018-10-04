@@ -73,26 +73,9 @@ Cam properties list
  * Returned memory should be freed!
  * NB! input NULL checked!
  */
+typedef char*(*i2c)(int value, char* buf, size_t size)
 typedef int (*in_t)(const char* in_value);
 typedef int (*out_t)(int in_value);
-typedef enum {rundef=0, rmin_max=1, rlist=2} rule_t;
-
-typedef struct {
-/*01*/  char* name;             /*Cloud or own name */
-/*02*/  int value;            /* Could not be used if flag only. For OWN flags(commands) */
-
-/*03*/  int change_flag;          /* If there is own logic for param - it will work if change_flag == 1 */
-/*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
-/*05*/  int in_changes_report;  /* 1: Sould be taken for changes report to WS if "changed == 1*/
-/*06*/  int updated;            /* 1 if updated and not reported. Set to 0 after ag_erase_changes_report() call */
-/*07*/  int persistent;         /* 1 if has to be stored on disk */
-
-/*08*/  int default_value;
-
-/*09*/  out_t cloud_cam_converter;  /* Converts value to cam_value Could be NULL */
-/*10*/  out_t cam_cloud_converter;  /* Converts cam_value to value Could be NULL */
-/*11*/  out_t cam_method;           /* Function to take param from camera and return back after re-read(see ac_cam.h) */
-} ag_db_record_t;
 
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 #define ANAL(a)     if((!a)) {\
@@ -122,24 +105,26 @@ static int MS_cam_2_cloud(int cam_value) {
     if(cam_value > 4) cam_value = 4;
     return cam_value*10;
 }
-/* Cloud [5..300]
- * Cam [20..600]
-*/
-static int RECSEC_cloud_2_cam(int cloud_value){
-    cloud_value *= 2;
-    if(cloud_value < 20) cloud_value = 20;
-    if(cloud_value > 600) cloud_value = 600;
-    return cloud_value;
-}
-static int RECSEC_cam_2_cloud(int cam_value){
-    cam_value /=2;
-    if(cam_value < 5) cam_value = 5;
-    if(cam_value > 300) cam_value = 300;
-    return cam_value;
-}
 
+typedef struct {
+/*01*/  char* name;             /*Cloud or own name */
+/*02*/  int value;            /* Could not be used if flag only. For OWN flags(commands) */
+
+/*03*/  int change_flag;          /* If there is own logic for param - it will work if change_flag == 1 */
+/*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
+/*05*/  int in_changes_report;  /* 1: Sould be taken for changes report to WS if "changed == 1*/
+/*06*/  int updated;            /* 1 if updated and not reported. Set to 0 after ag_erase_changes_report() call */
+/*07*/  int persistent;         /* 1 if has to be stored on disk */
+
+/*08*/  int default_value;
+
+/*09*/  out_t cloud_cam_converter;  /* Converts value to cam_value Could be NULL */
+/*10*/  out_t cam_cloud_converter;  /* Converts cam_value to value Could be NULL */
+/*11*/  out_t cam_method;           /* Function to take param from camera and return back after re-read(see ac_cam.h) */
+} ag_db_record_t;
 static const ag_db_record_t SCHEME[] = {
 /*  1                       2   3   4   5   6   7   8   9                   10                  11  */
+/*  name                    val chf str chr upd prs dfv clcam               camcl               camm */
 {AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  4,  NULL,               NULL,               NULL},
 {AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -157,12 +142,12 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
 {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  1,  0,  1,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD,            0,  0,  1,  1,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD,            0,  0,  1,  1,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD,            0,  0,  1,  1,  0,  0,  0,  NULL,               NULL,               ac_set_md},
+{AG_DB_STATE_SD,            0,  0,  1,  1,  0,  0,  0,  NULL,               NULL,               ac_set_sd},
 {AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_SECS,   0,  0,  1,  1,  0,  1,  300,RECSEC_cloud_2_cam, RECSEC_cam_2_cloud, ac_set_record_seconds},
+{AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  1,  0,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
-{AG_DB_STATE_MD_COUNTDOWN,  0,  0,  4,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_ON,         0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_ON,         0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_AUDIO,         0,  0,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
@@ -170,9 +155,11 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SW_VERSION,    0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
 {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  1,  0,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity}
+/*  name                    val chf str chr upd prs dfv clcam               camcl               camm */
+/*  1                       2   3   4   5   6   7   8   9                   10                  11  */
 };
 
 static ag_db_record_t *IMDB = 0;
@@ -321,10 +308,13 @@ on_error:
  *      Return new cloud value
  */
 static int sync_camera_param(int idx) {
-    if(!IMDB[idx].cam_cloud_converter || !IMDB[idx].cloud_cam_converter || !IMDB[idx].cam_method) return 0;
-    int cam_value = IMDB[idx].cloud_cam_converter(IMDB[idx].value);
+    if(!IMDB[idx].cam_method) return 0; /* Not a cam parameter */
+
+    int cam_value = (IMDB[idx].cloud_cam_converter)?IMDB[idx].cloud_cam_converter(IMDB[idx].value):IMDB[idx].value;
+
     cam_value = IMDB[idx].cam_method(cam_value);
-    int new_cloud_value = IMDB[idx].cam_cloud_converter(cam_value);
+
+    int new_cloud_value =(IMDB[idx].cam_cloud_converter)?IMDB[idx].cam_cloud_converter(cam_value):cam_value;
     if(new_cloud_value != IMDB[idx].value) {
         replace_int_param_value(idx, new_cloud_value);
     }
@@ -336,10 +326,6 @@ static int sync_camera_param(int idx) {
  */
 static int sync_camera_data() {
     int i;
-    if(!ac_cam_init()) {
-        pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
-        return 0;
-    }
     for(i = 0; i < NELEMS(SCHEME); i++) {
         sync_camera_param(i);
     }
@@ -376,7 +362,6 @@ int ag_db_load_cam_properties() {
  * Free CamDB
  */
 void ag_db_unload_cam_properties() {
-    ac_cam_deinit();
     if(!IMDB) return;
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
@@ -470,19 +455,19 @@ int ag_db_get_int_property(const char* property_name) {
     return IMDB[pos].value;
 }
 /*
- * Cloud-Cam parameter set: set on cam, re-read and store into DB
+ * Cloud-Cam parameters set: set on cam, re-read and store into DB
+ * If param was changed by cloud update - set it on Cam.
+ * If returned from cam value <> cloud update - set change flag On
  */
-int ag_db_update_cam_parameter(const char* property_name) {
-    int i = find_param(property_name);
-    if(i < 0) {
-        pu_log(LL_ERROR, "%s: %s is not found in dB");
-        return 0;
+int ag_db_update_changed_cam_parameters() {
+    int i;
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].change_flag) {
+            IMDB[i].change_flag = 0;
+            sync_camera_param(i);
+        }
     }
-    if(!IMDB[i].cloud_cam_converter || !IMDB[i].cam_cloud_converter || !IMDB[i].cam_method) {
-        pu_log(LL_ERROR, "%s: %s is not camera property");
-        return 0;
-    }
-    return sync_camera_param(i);
+    return 1;
 }
 
 
