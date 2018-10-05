@@ -27,6 +27,7 @@
 
 /*
  * Make initial something for the Camera
+ * Set correct string for SD & MD - everything is ready but ts0 just as "ts0="
  */
 int ac_cam_init();
 /*

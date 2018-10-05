@@ -27,28 +27,13 @@
 #include <curl/curl.h>
 
 #include "cJSON.h"
-
 #include "pu_logger.h"
 
+#include "ag_settings.h"
 #include "ao_cma_cam.h"
 #include "ac_http.h"
 #include "ag_db_mgr.h"
 #include "ac_cam.h"
-
-/* Cam's commands names */
-#define CAM_SD_CMD  "sounddet"
-#define CAM_MD_CMD  "cfgalertmd"
-
-/* Cam's parameters names */
-#define CAM_SD_ENABLE          "enable"
-#define CAM_SD_SENSITIVITY     "sensitivity"
-#define CAM_TAPE_CH         "tapech"
-#define CAM_REC_CH          "recch"
-#define CAM_DEAL_MODE       "dealmode"
-#define CAM_TS0             "ts0"
-#define CAM_CH              "chn"
-#define CAM_RECT0           "rect0"
-
 
 const char* make_dir_from_time(const char* path, time_t timestamp, char* buf, size_t size) {
     struct tm t;
@@ -122,8 +107,16 @@ char* add_files_list(const char* dir_name, time_t start, time_t end, const char*
 
 /* 
  * Some initial cam activites...
+ * Set MD as
+ * "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,6&$rect1=&rect2=&rect3=&chn=0" -- w/o any TS
+ * Set SD as
+ * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
+
+
+
  */
 int ac_cam_init() {
+
     return 1;
 }
 void ac_cam_deinit() {
@@ -197,16 +190,16 @@ static int send_command(const char* url_cmd, const char* params) {
     if(res = curl_easy_setopt(crl, CURLOPT_POSTFIELDS, params), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_POST, 1L), res != CURLE_OK) goto on_error;
 
-    CURLcode res = curl_easy_perform(crl);
+    res = curl_easy_perform(crl);
     if(ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
 
     ret = 1;
 on_error:
     if(hs) curl_slist_free_all(hs);
-    close_curl_session(clr);
+    close_curl_session(crl);
     return ret;
 }
-/* Return name value\n...name value\n\n string. NB! may not has '\0' at the end!*/
+/* Return name value\n...name value\n string. */
 static char* get_current_params(const char* url_cmd) {
     char* ret = NULL;
 
@@ -231,6 +224,7 @@ static char* get_current_params(const char* url_cmd) {
     if (ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
 
     ret = ptr;
+    ret[sz-1] = '\0';   /* to be sure about NULL-termination */
 on_error:
     fclose(fp);
     if(!ret && ptr) free(ptr);
@@ -242,17 +236,28 @@ on_error:
  */
 static int update_one_parameter(int cmd_id, int par_id, int par_value) {
     int ret = 0;
-    char* lst;
-    char* uri = ao_make_cam_uri(cmd_id);
-    if(!uri) return 0;
-    if(lst = get_current_params(uri), !lst) goto on_error;
+    char* lst=0;
+    char* read_uri=0;
+    char* write_uri=0;
+/*Read params */
+    if(read_uri = ao_make_cam_uri(cmd_id, AO_CAM_READ), !read_uri) goto on_error;
+    if(lst = get_current_params(read_uri), !lst) goto on_error;
+    pu_log(LL_DEBUG, "%s: Current params for %d = %s", __FUNCTION__, cmd_id, lst);
+/*Prepare new list */
     if(lst = ao_update_params_list(cmd_id, par_id, par_value, lst), !lst) goto on_error;
     if(lst = ao_make_params_from_list(cmd_id, lst), !lst) goto on_error;
-    if(!send_command(uri, lst)) goto on_error;
-    if(lst = get_current_params(uri, cmd_id), !lst) goto on_error;
-    ret = ao_get_param_from_list(cmd_id, par_id, lst);
+    pu_log(LL_DEBUG, "%s: Update list for %d = %s", __FUNCTION__, cmd_id, lst);
+/*Write updated params list */
+    if(write_uri = ao_make_cam_uri(cmd_id, AO_CAM_WRITE), !write_uri) goto on_error;
+    if(!send_command(write_uri, lst)) goto on_error;
+/* Re-read cam params. */
+    if(lst = get_current_params(read_uri), !lst) goto on_error;
+    ret = ao_get_param_value_from_list(cmd_id, par_id, lst);
+    pu_log(LL_DEBUG, "%s: New params for %d = %s", __FUNCTION__, cmd_id, lst);
+
 on_error:
-    if(uri) free(uri);
+    if(read_uri) free(read_uri);
+    if(write_uri) free(write_uri);
     if(lst) free(lst);
     return ret;
 }
@@ -273,15 +278,15 @@ int ac_cam_make_snapshot(const char* full_path) {
         pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
         goto on_error;
     }
-    char* uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT);
+    char* uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT, AO_CAM_WRITE);
     if(!uri) goto on_error;
 
     if(res = curl_easy_setopt(crl, CURLOPT_URL, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
-    curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
 
     res = curl_easy_perform(crl);
-    if (ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
 
     pu_log(LL_INFO, "%s: Got the picture!\n", __FUNCTION__);
     ret = 1;
@@ -290,20 +295,19 @@ on_error:
     close_curl_session(crl);
     return ret;
 }
-
 int ac_set_md(int on) {
-    return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ONOFF, on);
+    return update_one_parameter(AO_CAM_CMD_MD, (on)?AO_CAM_PAR_MD_ON:AO_CAM_PAR_MD_OFF, on);
 }
 int ac_set_sd(int on) {
-    return update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_ONOFF, on);
+    return update_one_parameter(AO_CAM_CMD_SD, (on)?AO_CAM_PAR_SD_ON:AO_CAM_PAR_SD_OFF, on);
 }
 
 /*
  * Set new value: read, update, re-read and return back
  */
 int ac_set_sd_sensitivity(int value) {
-    return update_one_parameter(CAM_CMD_SD, AO_CAM_PAR_SD_SENS, value);
+    return update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_SENS, value);
 }
 int ac_set_md_sensitivity(int value) {
-    return update_one_parameer(CAM_CMD_MD, AO_CAM_PAR_MD_SENS, value);
+    return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_SENS, value);
 }
