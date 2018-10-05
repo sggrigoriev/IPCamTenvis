@@ -240,10 +240,16 @@ char* ao_make_params_from_list(int cmd_id, char* lst) {
     char* ptr = lst;
     char buf[128];
     while(ptr=get_next_param(buf, sizeof(buf)-1, ptr), !ptr) {
-        strcat(ret, (ptr!=lst)?"&":"?");
-!!! set '=' between name and value!
+        if(ptr != lst) strcat(ret, "&");
+        int space = au_findSubstr(buf, " ", AU_CASE);
+        if(space < 0) {
+            pu_log(LL_ERROR, "%s:no space in parameter %s", __FUNCTION__, buf);
+            return NULL;
+        }
+        buf[space] = '=';
         strcat(ret, buf);
     }
+    free(lst);
     return ret;
 }
 int ao_get_param_value_from_list(int cmd_id, int par_id, const char* lst) {

@@ -69,16 +69,19 @@ static volatile int main_finish;        /* stop flag for main thread */
     Local functions deinition
 */
 static void send_camera_properties_to_agent() {
-    char** report = ag_db_get_startup_report();
+    cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
-        char* msg = ao_cloud_measures(report, ag_getProxyID(), buf, sizeof(buf)-1);
-        free(report);
+        const char* msg = ao_cloud_measures(report, ag_getProxyID(), buf, sizeof(buf)-1);
+        cJSON_Delete(report);
         if(!msg) {
             pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
             return;
         }
         pu_queue_push(to_proxy, msg, strlen(msg)+1);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: Error startup report creation. Nothing was sent.", __FUNCTION__);
     }
 }
 static void send_wd() {
@@ -121,9 +124,8 @@ static void send_ACK_to_Proxy(int command_number) {
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
 }
 static int send_answers_to_ws() {
-/*
     char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char** changes_report = ag_db_get_changes_report(AG_DB_CAM);
+    cJSON* changes_report = ag_db_get_changes_report();
     if(changes_report) {
         if(send_answers_to_ws(changes_report)) {
             ag_erase_changes_report(AG_DB_CAM);

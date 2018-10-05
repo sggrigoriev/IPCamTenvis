@@ -31,6 +31,8 @@
 
 int ag_db_load_cam_properties();
 void ag_db_unload_cam_properties();
+/*TODO! */
+int ag_save_cam_properties();
 
 typedef enum {
     AG_DB_ANY,      /* All types */
@@ -50,8 +52,6 @@ cJSON* ag_db_get_changes_report();
  * Create JSON report same format as above for all properties has to be reported at startup phase
  */
 cJSON* ag_db_get_startup_report();
-/* Clear changes flag */
-void ag_erase_changes_report();
 
 /* Work with property's flags */
 /* property's flag value set to 1 */

@@ -25,6 +25,8 @@
 
 #include <stddef.h>
 
+#include "cJSON.h"
+
 #include "ao_cmd_data.h"
 
 /*******************************************************************************
@@ -76,14 +78,17 @@ const char* ao_ws_error(int rc);
 
 const char* ao_ws_alert_message(t_ac_cam_events event, time_t start_date, char* buf, size_t size);
 /*
- * {"params":[{"name":"<param_name>","value":"<param_value>"},...]}
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * The result should be:
+ * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
  */
-const char* ao_ws_params(char** report, char* buf, size_t size);
+const char* ao_ws_params(cJSON* report, const char* session_id, char* buf, size_t size);
 /*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
  * Return NULL if the message is too long
  */
-const char* ao_cloud_measures(char** report, const char* deviceID, char* buf, size_t size);
+const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, size_t size);
 
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

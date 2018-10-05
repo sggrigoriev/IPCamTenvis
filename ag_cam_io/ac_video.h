@@ -51,4 +51,6 @@ void ac_clear_stream_error();
 /* return 1 if stlen() > 0 */
 int ac_is_stream_error();
 int ac_send_stream_error();
+
+const char* ac_get_session_id(char* buf, unsigned long size);
 #endif /* IPCAMTENVIS_AC_VIDEO_H */

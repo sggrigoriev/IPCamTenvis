@@ -24,8 +24,10 @@
 
 #include "pu_logger.h"
 
+#include "ag_settings.h"
 #include "ao_cmd_data.h"
 #include "ao_cmd_cloud.h"
+#include "ac_video.h"
 
 #define AO_WS_PING_RC  10
 #define AO_WS_THREAD_ERROR -23
@@ -247,6 +249,68 @@ const char* ao_ws_error(int rc) {
     return (ret)?ret:"Unrecognized RC from Web Socket";
 
 
+}
+
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * The result should be:
+ * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
+ */
+const char* ao_ws_params(cJSON* report, const char* session_id, char* buf, size_t size) {
+    char* ret;
+    cJSON* obj = cJSON_CreateObject();
+    cJSON_AddItemToObject(obj, "sessionId", cJSON_CreateString(ac_get_session_id(buf, size)));
+    cJSON_AddItemReferenceToObject(obj, "params", report);
+
+    char* msg = cJSON_PrintUnformatted(obj);
+    if(!msg || (strlen(msg)>(LIB_HTTP_MAX_MSG_SIZE-1))) {
+        buf[0] = '\0';
+        ret = NULL;
+    }
+    else {
+        strcpy(buf, msg);
+        free(msg);
+        ret = buf;
+    }
+    free(obj);
+    return ret;
+}
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
+ * Return NULL if the message is too long
+ */
+const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, size_t size) {
+    cJSON* obj = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
+    cJSON_AddItemToObject(obj, "seq", cJSON_CreateString("153"));
+    cJSON_AddItemToObject(obj, "alerts", cJSON_CreateArray());
+    cJSON_AddItemToObject(obj, "responses", cJSON_CreateArray());
+
+    cJSON* measures = cJSON_CreateArray();
+    cJSON* mes_item = cJSON_CreateObject();
+    cJSON_AddItemToArray(measures, mes_item);
+
+    cJSON_AddItemReferenceToObject(mes_item, "params", report); /* NB! will be freed externally! */
+    cJSON_AddItemToObject(mes_item, "deviceId", cJSON_CreateString(ag_getProxyID()));
+
+    cJSON_AddItemToObject(obj, "measures", measures);
+
+    char* msg = cJSON_PrintUnformatted(obj);
+
+    const char* ret;
+    if(!msg || (strlen(msg)>(LIB_HTTP_MAX_MSG_SIZE-1))) {
+        buf[0] = '\0';
+        ret = NULL;
+    }
+    else {
+        strcpy(buf, msg);
+        free(msg);
+        ret = buf;
+    }
+    free(obj);
+    return ret;
 }
 
 

@@ -19,6 +19,7 @@
  Created by gsg on 25/02/18.
 */
 
+#include <string.h>
 #include "ao_cmd_data.h"
 #include "ao_cmd_cloud.h"
 #include "pu_logger.h"
@@ -210,6 +211,11 @@ int ac_send_stream_confirmation() {
 int ac_send_active_viwers_request() {
     char buf[512];
     return at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
+}
+const char* ac_get_session_id(char* buf, unsigned long size) {
+    strncpy(buf, video_conn.auth, size-1);
+    buf[size-1] = '\0';
+    return buf;
 }
 
 
