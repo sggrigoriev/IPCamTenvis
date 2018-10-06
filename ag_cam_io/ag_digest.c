@@ -29,12 +29,12 @@
 
 static const EVP_MD *md;
 
-static char* un;
-static char* p;
-static char* r;
-static char* n;
-static char* m;
-static char* u;
+static char* un=NULL;
+static char* p=NULL;
+static char* r=NULL;
+static char* n=NULL;
+static char* m=NULL;
+static char* u=NULL;
 
 static const char* AI(char* buf, size_t size, const char* p1, const char* p2, const char* p3) {
 /*

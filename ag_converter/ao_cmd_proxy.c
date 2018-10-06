@@ -49,6 +49,61 @@ static const char* F_PARAM_VALUE = "value";
 static const char* F_VALUE_START = "1";
 static const char* F_VALUE_STOP = "0";
 
+/*
+ * Returns 1 if the object got {"status":"ACK",...
+ */
+int ao_proxy_ack_required(msg_obj_t* obj) {
+    cJSON* item = cJSON_GetObjectItem(obj, "status");
+    if(!item) return 0;
+    return(!strcmp("ACK", item->valuestring));
+}
+/*
+ * Return "commandId" value from "commands" array Ith item.
+ */
+int ao_proxy_get_cmd_no(msg_obj_t* command) {
+    cJSON* item = cJSON_GetObjectItem(command, "commandId");
+    if(!item) return 0;
+    return item->valueint;
+}
+/*
+ * Returns "parameters":[] array
+ */
+msg_obj_t* ao_proxy_get_cloud_params_array(msg_obj_t* command) {
+    return cJSON_GetObjectItem(command, "parameters");
+}
+/*
+ * Returns param name or value from parameters array Ith item
+ * {"name":"<par_name>","value":"<par_value>"}
+ */
+const char* ao_proxy_get_cloud_param_name(msg_obj_t* param) {
+    cJSON* par = cJSON_GetObjectItem(param, "name");
+    if(!par) return NULL;
+    return par->valuestring;
+}
+const char* ao_proxy_get_cloud_param_value(msg_obj_t* param) {
+    cJSON* par = cJSON_GetObjectItem(param, "value");
+    if(!par) return NULL;
+    return par->valuestring;
+}
+/*
+ * Returns "params":[] array
+ */
+msg_obj_t* ao_proxy_get_ws_params_array(msg_obj_t* msg) {
+    return cJSON_GetObjectItem(msg, "params");
+}
+/*
+ * Returns "name" or "setValue" from params Ith element
+ */
+const char* ao_proxy_get_ws_param_name(msg_obj_t* param) {
+    cJSON* par = cJSON_GetObjectItem(param, "name");
+    if(!par) return NULL;
+    return par->valuestring;
+}
+const char* ao_proxy_get_ws_param_value(msg_obj_t* param) {
+    cJSON* par = cJSON_GetObjectItem(param, "setValue");
+    if(!par) return NULL;
+    return par->valuestring;
+}
 
 
 /* {gw_gatewayDeviceId":[{"paramsMap":{"deviceId":"<proxy_device_id>"}}]} */

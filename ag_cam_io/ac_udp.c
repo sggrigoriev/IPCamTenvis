@@ -156,7 +156,7 @@ void ac_udp_close_connection(int sock) {
 }
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
-t_ac_udp_read_result ac_udp_read(int sock, unsigned char* buf, size_t size, int to) {
+t_ac_udp_read_result ac_udp_read(int sock, char* buf, size_t size, int to) {
 
     t_ac_udp_read_result rc={-1, 0};
 
@@ -182,7 +182,7 @@ t_ac_udp_read_result ac_udp_read(int sock, unsigned char* buf, size_t size, int 
 
     return rc;
 }
-int ac_udp_write(int sock, const unsigned char* buf, size_t size) {
+int ac_udp_write(int sock, const char* buf, size_t size) {
     struct timespec t = {0,10000}, rem;
     long rc = 0;
 

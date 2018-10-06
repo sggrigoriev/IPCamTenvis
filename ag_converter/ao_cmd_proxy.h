@@ -37,12 +37,20 @@ int ao_proxy_get_cmd_no(msg_obj_t* command);
 /*
  * Returns "parameters" array
  */
-msg_obj_t* ao_proxy_get_cloud_params_array(const msg_obj_t* command);
+msg_obj_t* ao_proxy_get_cloud_params_array(msg_obj_t* command);
+/*
+ * Returns param name or value from parameters array Ith item
+ */
 const char* ao_proxy_get_cloud_param_name(msg_obj_t* param);
 const char* ao_proxy_get_cloud_param_value(msg_obj_t* param);
 
-
-msg_obj_t* ao_proxy_get_ws_params_array(const msg_obj_t* msg);
+/*
+ * Returns "params":[] object
+ */
+msg_obj_t* ao_proxy_get_ws_params_array(msg_obj_t* msg);
+/*
+ * Returns "name" or "setValue" from params Ith element
+ */
 const char* ao_proxy_get_ws_param_name(msg_obj_t* param);
 const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
 

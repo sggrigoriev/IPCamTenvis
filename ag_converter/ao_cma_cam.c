@@ -21,12 +21,18 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "cJSON.h"
 #include "pu_logger.h"
 
 #include "au_string.h"
 #include "ag_settings.h"
 
 #include "ao_cma_cam.h"
+
+/* Alert thread constants */
+#define ALERT_NAME   "alertName"
+#define ALERT_START  "startDate"
+#define ALERT_END    "endDate"
 
 /* Cam's commands names */
 #define CMD_SD_NAME     "sounddet"
@@ -49,25 +55,52 @@
 #define PAR_SD_SENSITIVITY PAR_SENSITIVITY_NAME "5"
 
 
+
 /*
  * Notify Agent about the event
  * if start_date or end_date is 0 fields are ignored
  * {"alertName" : "AC_CAM_STOP_MD", "startDate" : 1537627300, "endDate" : 1537627488}
  */
 const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size) {
-    const char* alert = "{\"alertName\" : \"%s\"}";
-    const char* alert_start = "{\"alertName\" : \"%s\", \"startDate\" : %lu}";
-    const char* alert_stop = "{\"alertName\" : \"%s\", \"startDate\" : %lu, \"endDate\" : %lu}";
+    const char* alert = "{\""ALERT_NAME"\" : \"%s\"}";
+    const char* alert_start = "{\""ALERT_NAME"\" : \"%s\", \""ALERT_START"\" : %lu}";
+    const char* alert_stop = "{\""ALERT_NAME"\" : \"%s\", \""ALERT_START"\" : %lu, \""ALERT_END"\" : %lu}";
 
     if(!start_date)
-        snprintf(buf, size-1, alert, ac_cam_evens2string(event));
+        snprintf(buf, size-1, alert, ac_cam_event2string(event));
     else if(!end_date)
-        snprintf(buf, size-1, alert_start, ac_cam_evens2string(event), start_date);
+        snprintf(buf, size-1, alert_start, ac_cam_event2string(event), start_date);
     else
-        snprintf(buf, size-1, alert_stop, ac_cam_evens2string(event), start_date, end_date);
+        snprintf(buf, size-1, alert_stop, ac_cam_event2string(event), start_date, end_date);
 
     buf[size] = '\0';
     return buf;
+}
+/*
+ * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
+ * {"alertName" : "<name>[, "startDate" : <time_t>[, "endDate" : time_t]]}
+ */
+t_ao_cam_alert ao_cam_decode_alert(const char* in) {
+    t_ao_cam_alert ret;
+    ret.command_type = AO_ALRT_CAM;
+    ret.cam_event = AC_CAM_EVENT_UNDEF;
+    ret.start_date = 0;
+    ret.end_date = 0;
+
+    cJSON* obj = cJSON_Parse(in);
+    if(!obj) return ret;
+
+    cJSON* alrt_name = cJSON_GetObjectItem(obj, ALERT_NAME);
+    if(alrt_name) ret.cam_event = ac_cam_string2event(alrt_name->valuestring);
+
+    cJSON* start_date = cJSON_GetObjectItem(obj, ALERT_END);
+    if(start_date) ret.start_date = start_date->valueint;
+
+    cJSON* end_date = cJSON_GetObjectItem(obj, ALERT_START);
+    if(end_date) ret.end_date = end_date->valueint;
+
+    cJSON_Delete(obj);
+    return ret;
 }
 
 /************************************************************

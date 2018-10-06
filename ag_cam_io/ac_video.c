@@ -212,10 +212,31 @@ int ac_send_active_viwers_request() {
     char buf[512];
     return at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
 }
+
+static char stream_error[256];
+
+void ac_set_stream_error(const char* err) {
+    strncpy(stream_error, err, sizeof(stream_error)-1);
+    stream_error[sizeof(stream_error)-1] = '\0';
+}
+void ac_clear_stream_error() {
+    stream_error[0] = '\0';
+}
+/* return 1 if stlen() > 0 */
+int ac_is_stream_error() {
+    return strlen(stream_error) > 0;
+}
+int ac_send_stream_error() {
+    char buf[512];
+    return at_ws_send(ao_stream_error_report(stream_error, video_conn.auth, buf, sizeof(buf)));
+}
+
 const char* ac_get_session_id(char* buf, unsigned long size) {
     strncpy(buf, video_conn.auth, size-1);
     buf[size-1] = '\0';
     return buf;
 }
+
+
 
 

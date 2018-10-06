@@ -250,13 +250,26 @@ const char* ao_ws_error(int rc) {
 
 
 }
-
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * The result should be:
  * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
  */
-const char* ao_ws_params(cJSON* report, const char* session_id, char* buf, size_t size) {
+/*
+ * return {"sessionId":"<sess_id>", "params":[{"name":"streamError","value":"<err_msg>"}]}
+ */
+const char* ao_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size) {
+    const char* msg = "{\"sessionId\":\"%s\", \"params\":[{\"name\":\"streamError\",\"value\":\"%s\"}]}";
+    snprintf(buf, size-1, msg, sessId, err_msg);
+    buf[size-1] = '\0';
+    return buf;
+}
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * The result should be:
+ * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
+ */
+const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
     char* ret;
     cJSON* obj = cJSON_CreateObject();
     cJSON_AddItemToObject(obj, "sessionId", cJSON_CreateString(ac_get_session_id(buf, size)));
@@ -272,7 +285,7 @@ const char* ao_ws_params(cJSON* report, const char* session_id, char* buf, size_
         free(msg);
         ret = buf;
     }
-    free(obj);
+    cJSON_Delete(obj);
     return ret;
 }
 /*
@@ -309,7 +322,7 @@ const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, si
         free(msg);
         ret = buf;
     }
-    free(obj);
+    cJSON_Delete(obj);
     return ret;
 }
 

@@ -193,7 +193,7 @@ static void* thread_function(void* params) {
                 pu_log(LL_ERROR, "%s: Unrecognized event %d. Ignored", AT_THREAD_NAME, ret);
                 break;
         }
-        pu_log(LL_DEBUG, "%s: %s event arrived", __FUNCTION__, ac_cam_evens2string(ret));
+        pu_log(LL_DEBUG, "%s: %s event arrived", __FUNCTION__, ac_cam_event2string(ret));
 
         pu_queue_push(to_agent, out_buf, strlen(out_buf) + 1);
         pu_log(LL_DEBUG, "%s: %s was sent to the Agent", AT_THREAD_NAME, out_buf);

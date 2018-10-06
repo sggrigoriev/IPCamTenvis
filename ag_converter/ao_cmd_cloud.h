@@ -82,7 +82,11 @@ const char* ao_ws_alert_message(t_ac_cam_events event, time_t start_date, char* 
  * The result should be:
  * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
  */
-const char* ao_ws_params(cJSON* report, const char* session_id, char* buf, size_t size);
+/*
+ * return {"sessionId":"<sess_id>", "params":[{"name":"streamError","value":"<err_msg>"}]}
+ */
+const char* ao_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size);
+const char* ao_ws_params(cJSON* report, char* buf, size_t size);
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}

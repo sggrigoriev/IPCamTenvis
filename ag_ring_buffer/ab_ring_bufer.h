@@ -29,7 +29,7 @@
 
 #include <stddef.h>
 
-typedef unsigned char t_ab_byte;
+typedef char t_ab_byte;
 typedef struct {
     size_t ls_size;
     int first;              /* 1 for RTP, 0 for RTCP stream */

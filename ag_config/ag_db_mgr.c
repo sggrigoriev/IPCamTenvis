@@ -73,7 +73,7 @@ Cam properties list
  * Returned memory should be freed!
  * NB! input NULL checked!
  */
-typedef char*(*i2c)(int value, char* buf, size_t size)
+typedef char*(*i2c)(int value, char* buf, size_t size);
 typedef int (*in_t)(const char* in_value);
 typedef int (*out_t)(int in_value);
 
@@ -223,7 +223,6 @@ static int find_param(const char* name) {
  */
 static void replace_int_param_value(int idx, int value) {
     IMDB[idx].value = value;
-    IMDB[idx].change_flag = 1;
     if(IMDB[idx].in_changes_report) IMDB[idx].changed = 1;
     if(IMDB[idx].persistent) IMDB[idx].updated = 1;
 }
@@ -242,13 +241,14 @@ static int create_imdb() {
 /*02*/  IMDB[i].value = SCHEME[i].default_value;
 /*03*/  /*change_flag = 0 */
 /*04*/  IMDB[i].in_startup_report = SCHEME[i].in_startup_report;
-/*05*/  IMDB[i].in_changes_report = SCHEME[i].in_changes_report;
-/*06*/  /* updated = 0 */
-/*07*/  IMDB[i].persistent = SCHEME[i].persistent;
-/*08*/  /* default_value not needed and not used */
-/*09*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
-/*10*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
-/*11*/  IMDB[i].cam_method = SCHEME[i].cam_method;
+/*05*/  /* changed = 0 */
+/*06*/  IMDB[i].in_changes_report = SCHEME[i].in_changes_report;
+/*07*/  /* updated = 0 */
+/*08*/  IMDB[i].persistent = SCHEME[i].persistent;
+/*09*/  /* default_value not needed and not used */
+/*10*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
+/*11*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
+/*12*/  IMDB[i].cam_method = SCHEME[i].cam_method;
     }
     return 1;
 on_error:
@@ -371,7 +371,7 @@ void ag_db_unload_cam_properties() {
 };
 /* Save persistent data to disk */
 int ag_save_cam_properties() {
-//TODO!!!
+//TODO!!! updated flag set t 0!
     return 0;
 }
 
@@ -393,7 +393,10 @@ cJSON* ag_db_get_changes_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
-        if(IMDB[i].in_changes_report && IMDB[i].change_flag) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
+        if(IMDB[i].in_changes_report && IMDB[i].changed) {
+            add_reported_property(rep, IMDB[i].name, IMDB[i].value);
+            IMDB[i].changed = 0;
+        }
     }
 on_error:
     FREE(rep);
@@ -451,6 +454,7 @@ int ag_db_store_property(const char* property_name, const char* property_value) 
         replace_param_value(pos, property_value);
         ret = 1;
     }
+    IMDB[pos].change_flag = 1;
     return ret;
 }
 int ag_db_get_int_property(const char* property_name) {

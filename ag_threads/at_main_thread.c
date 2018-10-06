@@ -68,7 +68,7 @@ static volatile int main_finish;        /* stop flag for main thread */
 /*****************************************************************************************
     Local functions deinition
 */
-static void send_camera_properties_to_agent() {
+static void send_startup_report() {
     cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -123,19 +123,6 @@ static void send_ACK_to_Proxy(int command_number) {
     ao_answer_to_command(buf, sizeof(buf), command_number, 0);
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
 }
-static int send_answers_to_ws() {
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    cJSON* changes_report = ag_db_get_changes_report();
-    if(changes_report) {
-        if(send_answers_to_ws(changes_report)) {
-            ag_erase_changes_report(AG_DB_CAM);
-        }
-        free(changes_report);
-    }
-    return send_to_ws(ao_ws_params(report, buf, sizeof(buf)));
-*/
-???
-}
 static int send_to_ws(const char* msg) {
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
@@ -144,6 +131,19 @@ static int send_to_ws(const char* msg) {
     }
     return 1;
 }
+static int send_answers_to_ws() {
+    int ret = 0;
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    cJSON* changes_report = ag_db_get_changes_report();
+    if(changes_report) {
+        if(ao_ws_params(changes_report, buf, sizeof(buf))) {
+            ret = send_to_ws(buf);
+        }
+        cJSON_Delete(changes_report);
+    }
+    return ret;
+}
+
 
 static void run_agent_actions() {
     if(ag_db_get_flag(AG_DB_STATE_AGENT_ON)) { /* AGENT is ON */
@@ -155,7 +155,7 @@ static void run_agent_actions() {
     else {  /* AGENT is off */
         pu_log(LL_DEBUG, "%s: Agent: Disconnected. WS connect requested", __FUNCTION__);
         ag_db_set_flag_on(AG_DB_STATE_AGENT_ON);   /* Set agent status to on */
-        send_camera_properties_to_agent();
+        send_startup_report();
         ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);  /* Ask WS connect */
     }
     ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* Clear Agent's connect command */
@@ -372,26 +372,26 @@ static void process_message(char* msg) {
         }
             break;
         case 3: {   /* WS case */
-            msg_obj_t* params = ao_proxy_get_ws_params_array(obj_msg);
-/* First, lets store change on viewersCount and  pingInterval (if any). */
-
-            msg_obj_t* result_code = cJSON_GetObjectItem(params, "resultCode");
+            msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
             if(result_code && (result_code->valueint == 10)) {      /* Ping received - Pong should be sent */
                 ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST);
             }
-
-            msg_obj_t* viewers_count = cJSON_GetObjectItem(params, AG_DB_STATE_VIEWERS_COUNT);
+/* First, lets store change on viewersCount and  pingInterval (if any). */
+            msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
             if(viewers_count) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valuestring);
 
-            msg_obj_t* ping_interval = cJSON_GetObjectItem(params, AG_DB_STATE_PING_INTERVAL);
-            if(viewers_count) ag_db_store_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valuestring);
+            msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
+            if(ping_interval) ag_db_store_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valuestring);
 
-            size_t i;
-            for(i = 0; i < pr_get_array_size(params); i++) {
-                msg_obj_t* param = pr_get_arr_item(params, i);
-                const char* param_name = ao_proxy_get_ws_param_name(param);
-                const char* param_value = ao_proxy_get_ws_param_value(param);
-                ag_db_store_property(param_name, param_value);
+            msg_obj_t* params = ao_proxy_get_ws_params_array(obj_msg);
+            if(params) {
+                size_t i;
+                for (i = 0; i < pr_get_array_size(params); i++) {
+                    msg_obj_t *param = pr_get_arr_item(params, i);
+                    const char *param_name = ao_proxy_get_ws_param_name(param);
+                    const char *param_value = ao_proxy_get_ws_param_value(param);
+                    ag_db_store_property(param_name, param_value);
+                }
             }
         }
         default:

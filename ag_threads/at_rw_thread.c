@@ -48,10 +48,10 @@ static int is_rt_mode;
 static t_rtsp_media_pairs rd_socks = {{-1,-1}, {-1,-1}};
 static t_rtsp_media_pairs wr_socks = {{-1,-1}, {-1,-1}};
 
-static t_ab_byte* v_rtp_buf;
-static t_ab_byte* v_rtcp_buf;
-static t_ab_byte* a_rtp_buf;
-static t_ab_byte* a_rtcp_buf;
+static char* v_rtp_buf;
+static char* v_rtcp_buf;
+static char* a_rtp_buf;
+static char* a_rtcp_buf;
 static size_t media_buf_size;
 
 static pthread_t v_rtp_id;
@@ -74,7 +74,7 @@ static pthread_attr_t rdwr_attr;
 static pthread_t hb_id;
 static pthread_attr_t hb_attr;
 
-static t_ab_byte* rdwr_buf;
+static char* rdwr_buf;
 
 static t_at_rtsp_session* the_session;
 
@@ -136,7 +136,7 @@ static void* hart_beat(void* params) {
     pthread_exit(NULL);
 }
 
-static void thread_proc(const char* name, int read_sock, int write_sock, t_ab_byte* buf, pu_queue_t* q) {
+static void thread_proc(const char* name, int read_sock, int write_sock, char* buf, pu_queue_t* q) {
     pu_log(LL_INFO, "%s start", name);
 #ifdef RW_CYCLES
     int step = RW_CYCLES;

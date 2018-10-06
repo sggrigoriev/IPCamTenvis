@@ -128,7 +128,8 @@ typedef enum {
     AC_CAM_EVENTS_SIZE
 } t_ac_cam_events;
 
-const char* ac_cam_evens2string(t_ac_cam_events e);
+const char* ac_cam_event2string(t_ac_cam_events e);
+t_ac_cam_events ac_cam_string2event(const char* string);
 
 
 /* AO_ALRT_CAM */

@@ -105,35 +105,6 @@ char* add_files_list(const char* dir_name, time_t start, time_t end, const char*
 }
 /***************************************************************************************************************/
 
-/* 
- * Some initial cam activites...
- * Set MD as
- * "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,6&$rect1=&rect2=&rect3=&chn=0" -- w/o any TS
- * Set SD as
- * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
- */
-int ac_cam_init() {
-    const char* MD_INIT_PARAMS = "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,5&chn=0";
-    const char* SD_INIT_PARAMS = "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0";
-    char* md_uri = NULL;
-    char* sd_uri = NULL;
-    int ret = 0;
-    if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
-    if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
-
-    if(sd_uri = ao_make_cam_uri(AO_CAM_CMD_SD, AO_CAM_WRITE), !sd_uri) goto on_error;
-    if(!send_command(sd_uri, SD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error SD initiation", __FUNCTION__);
-
-    ret = 1;
-on_error:
-    if(md_uri) free(md_uri);
-    if(sd_uri) free(sd_uri);
-    return ret;
-}
-void ac_cam_deinit() {
-
-}
-
 /*
  * Create the JSON array with full file names& path for alert "filesList":["name1",..."nameN"]
  * If no files found - return empty string
@@ -149,7 +120,7 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
     if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_MD_FILE_POSTFIX;
     else if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_SD_FILE_POSTFIX;
     else {
-        pu_log(LL_ERROR, "%s: Wrong event %s only %s or %s expected", __FUNCTION__, ac_cam_evens2string(data.cam_event), ac_cam_evens2string(AC_CAM_STOP_MD), ac_cam_evens2string(AC_CAM_STOP_SD));
+        pu_log(LL_ERROR, "%s: Wrong event %s only %s or %s expected", __FUNCTION__, ac_cam_event2string(data.cam_event), ac_cam_event2string(AC_CAM_STOP_MD), ac_cam_event2string(AC_CAM_STOP_SD));
         buf[0] = '\0';
         return buf;
     }
@@ -271,6 +242,35 @@ on_error:
     if(write_uri) free(write_uri);
     if(lst) free(lst);
     return ret;
+}
+
+/*
+ * Some initial cam activites...
+ * Set MD as
+ * "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,6&$rect1=&rect2=&rect3=&chn=0" -- w/o any TS
+ * Set SD as
+ * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
+ */
+int ac_cam_init() {
+    const char* MD_INIT_PARAMS = "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,5&chn=0";
+    const char* SD_INIT_PARAMS = "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0";
+    char* md_uri = NULL;
+    char* sd_uri = NULL;
+    int ret = 0;
+    if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
+    if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
+
+    if(sd_uri = ao_make_cam_uri(AO_CAM_CMD_SD, AO_CAM_WRITE), !sd_uri) goto on_error;
+    if(!send_command(sd_uri, SD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error SD initiation", __FUNCTION__);
+
+    ret = 1;
+    on_error:
+    if(md_uri) free(md_uri);
+    if(sd_uri) free(sd_uri);
+    return ret;
+}
+void ac_cam_deinit() {
+
 }
 /*
  * Make picture and store it by full_path

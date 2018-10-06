@@ -27,26 +27,10 @@
 
 #include "ao_cmd_data.h"
 
-
-/*
- * Converts JSON to camera request
- * Returns resulting string or NULL if error
- * NB! returned memory should be freed after use!
- */
-char* ao_cam_encode(const char* in);
-
-/*
- * Converts camera request to JSON
- * Returns resulting string or NULL if error
- * NB! returned memory should be freed after use!
- */
-char* ao_cam_decode(const char* in);
-
 /*
  * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
  */
 t_ao_cam_alert ao_cam_decode_alert(const char* in);
-
 /*
  * Notify Agent about the event
  * if start_date or end_date is 0 fields are ignored

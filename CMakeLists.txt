@@ -168,7 +168,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     target_link_libraries(jq ${REQUIRED_LIBRARIES})
 
     add_executable(Tenvis ${SOURCE_FILES})
-    target_link_libraries(Tenvis libipcam.a ${REQUIRED_LIBRARIES})
+    target_link_libraries(Tenvis ${PROXY_LIBS_PATH}/libipcam.a ${REQUIRED_LIBRARIES})
 
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
