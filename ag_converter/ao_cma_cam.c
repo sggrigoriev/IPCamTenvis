@@ -281,7 +281,6 @@ static void store_int(int cmd, par_t par_id, const char* buf) {
             pu_log(LL_ERROR, "%s: cmd_id %d and para_id %d from %s not found. Value not stored", __FUNCTION__, cmd, par_id, buf);
             break;
     }
-    return;
 }
 static char* make_md_params() {
     char buf[256]={0};

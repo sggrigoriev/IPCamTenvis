@@ -210,11 +210,12 @@ static char* get_current_params(const char* url_cmd) {
         pu_log(LL_ERROR, "%s: Cam returns empty answer on %s request", __FUNCTION__, url_cmd);
         goto on_error;
     }
-    ret = ptr;
-    ret[sz-1] = '\0';   /* to be sure about NULL-termination */
+    ret = calloc(1, sz+1);
+    memcpy(ret, ptr, sz);
+    ret[sz] = '\0';   /* to be sure about NULL-termination */
 on_error:
     fclose(fp);
-    if(!ret && ptr) free(ptr);
+    free(ptr);
     close_curl_session(crl);
     return ret;
 }
