@@ -68,7 +68,7 @@ static const char* PAR_ARRAY[EP_SIZE] = {
 };
 
 typedef struct {
-    int x0, x1, x2, x3, sensetivity;
+    int x0, x1, x2, x3, sensitivity;
 } rect_t;
 
 typedef struct {
@@ -152,12 +152,13 @@ static const char* get_next_param(char* buf, size_t size, const char* ptr) {
     buf[0] = '\0';
     while(!isalpha(ptr[pos.first]) && (ptr[pos.first] != '\r') && (ptr[pos.first] != '\n') && (ptr[pos.first] != '\0')) pos.first++;
     if(!isalpha(ptr[pos.first])) return NULL;
-    pos.first_after = au_findFirstOutOfSet(ptr+pos.first, "\r\n");
+    pos.first_after = au_findSubstr(ptr+pos.first, "\r\n", AU_CASE);
     if(pos.first_after < 0) return NULL;
+    else pos.first_after += pos.first;      /* We start search from pos_first */
 
     memcpy(buf, ptr+pos.first, (size_t)(pos.first_after-pos.first));
     buf[pos.first_after-pos.first] = '\0';
-    return (strlen(buf))?ptr+(pos.first_after-pos.first):NULL;
+    return (strlen(buf))?ptr+pos.first_after+2:NULL;    /* +2 skip s\r\n */
 }
 
 static par_t str2par_name(const char* buf) {
@@ -174,7 +175,7 @@ static void store_rect(int cmd_id,  par_t par_id, const char* buf) {
     rect_t *value;
     rect_t v = {0};
     char b[20];
-    if(sscanf(buf, "%s%i,%i,%i,%i%i", b, &v.x0,&v.x1,&v.x2,&v.x3,&v.sensetivity)!= 6) {
+    if(sscanf(buf, "%s%i,%i,%i,%i,%i", b, &v.x0,&v.x1,&v.x2,&v.x3,&v.sensitivity)!= 6) {
         pu_log(LL_ERROR, "%s: Error scanning of %s. Value nit saved", __FUNCTION__, buf);
         return;
     }
@@ -290,10 +291,10 @@ static char* make_md_params() {
             "%s=%d&%s=%d"
             "&%s=%s&%s=&%s=&%s="
             "&%s=%d"
-            "&%s=%s&%s=%s=&%s="
+            "&%s=%s&%s=&%s=&%s="
             "&%s=%d";
     const char* rect_fmt="%d,%d,%d,%d, %d";
-    if(MD_PARAMS.rect[0]) snprintf(rect_buf0, sizeof(rect_buf0)-1, rect_fmt, MD_PARAMS.rect[0]->x0,MD_PARAMS.rect[0]->x1,MD_PARAMS.rect[0]->x2,MD_PARAMS.rect[0]->x3,MD_PARAMS.rect[0]->sensetivity);
+    if(MD_PARAMS.rect[0]) snprintf(rect_buf0, sizeof(rect_buf0)-1, rect_fmt, MD_PARAMS.rect[0]->x0,MD_PARAMS.rect[0]->x1,MD_PARAMS.rect[0]->x2,MD_PARAMS.rect[0]->x3,MD_PARAMS.rect[0]->sensitivity);
     if(MD_PARAMS.ts[0]) strncpy(ts0_buf, MD_PARAMS.ts[0], sizeof(ts0_buf)-1);
     snprintf(buf, sizeof(buf)-1, md_fmt,
         PAR_ARRAY[EP_RECCH], MD_PARAMS.recch,PAR_ARRAY[EP_TAPECH], MD_PARAMS.tapech,
@@ -311,7 +312,7 @@ static char* make_sd_params() {
             "%s=%d&%s=%d"
             "&%s=%s&%s=&%s=&%s="
             "&%s=%d"
-            "&%s=%d%s=%d";
+            "&%s=%d&%s=%d";
     if(SD_PARAMS.ts[0]) strncpy(ts0_buf, SD_PARAMS.ts[0], sizeof(ts0_buf)-1);
     snprintf(buf, sizeof(buf)-1, sd_fmt,
              PAR_ARRAY[EP_TAPECH],SD_PARAMS.tapech, PAR_ARRAY[EP_RECCH],SD_PARAMS.recch,
@@ -348,6 +349,51 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
         return NULL;
     }
     return ret;
+}
+/*
+ * Save to local store param from dB
+ */
+void ao_save_parameter(int cmd_id, user_par_t par_id, int par_value) {
+    switch(par_id) {
+        case AO_CAM_PAR_MD_SENS:
+            if(MD_PARAMS.rect[0]) MD_PARAMS.rect[0]->sensitivity = par_value;
+            else {
+                pu_log(LL_WARNING, "%s: default rect0 for MD doesn't set! Set default values!", __FUNCTION__);
+                rect_t rect = {0,0,999,999, par_value};
+                MD_PARAMS.rect[0] = calloc(1, sizeof(rect_t));
+                memcpy(MD_PARAMS.rect[0], &rect, sizeof(rect_t));
+            }
+            break;
+        case AO_CAM_PAR_MD_ON:
+            if(par_value) {
+                if(!MD_PARAMS.ts[0]) {  /* Add ts0 */
+                    MD_PARAMS.ts[0] = strdup(PAR_MDSD_ON);
+                }
+            }
+            else if(MD_PARAMS.ts[0]) {  /* Remove ts0 */
+                free(MD_PARAMS.ts[0]);
+                MD_PARAMS.ts[0] = NULL;
+            }
+            break;
+        case AO_CAM_PAR_SD_SENS:
+            SD_PARAMS.sensitivity = par_value;
+            break;
+        case AO_CAM_PAR_SD_ON:
+            if(par_value) {
+                if(!SD_PARAMS.ts[0]) {  /* Add ts0 */
+                    SD_PARAMS.ts[0] = strdup(PAR_MDSD_ON);
+                }
+            }
+            else if(SD_PARAMS.ts[0]) {  /* Remove ts0 */
+                free(SD_PARAMS.ts[0]);
+                SD_PARAMS.ts[0] = NULL;
+            }
+            break;
+
+        default:
+            pu_log(LL_ERROR, "%s: Unrecognized user parameter type %d. Not saved", __FUNCTION__, par_id);
+            break;
+    }
 }
 /*
  * extract params from lst and save it in local store
@@ -393,17 +439,13 @@ int ao_get_param_value(int cmd_id, user_par_t par_id) {
     int ret = 0;
     switch (par_id) {
         case AO_CAM_PAR_MD_SENS:
-            return (MD_PARAMS.rect[0])?MD_PARAMS.rect[0]->sensetivity:0;
+            return (MD_PARAMS.rect[0])?MD_PARAMS.rect[0]->sensitivity:0;
         case AO_CAM_PAR_MD_ON:
             return (MD_PARAMS.ts[0] != NULL);
-        case AO_CAM_PAR_MD_OFF:
-            return (MD_PARAMS.ts[0] == NULL);
         case AO_CAM_PAR_SD_SENS:
             return SD_PARAMS.sensitivity;
         case AO_CAM_PAR_SD_ON:
             return (SD_PARAMS.ts[0] != NULL);
-        case AO_CAM_PAR_SD_OFF:
-            return (SD_PARAMS.ts[0] == NULL);
         default:
             pu_log(LL_ERROR, "%s: Unknown user parameter type %d. 0 returned", __FUNCTION__, par_id);
             break;

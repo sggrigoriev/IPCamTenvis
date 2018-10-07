@@ -46,8 +46,8 @@ const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t e
 
 typedef enum {
     AO_CAM_PAR_UNDEF,
-    AO_CAM_PAR_MD_SENS, AO_CAM_PAR_MD_ON, AO_CAM_PAR_MD_OFF,
-    AO_CAM_PAR_SD_SENS, AO_CAM_PAR_SD_ON, AO_CAM_PAR_SD_OFF,
+    AO_CAM_PAR_MD_SENS, AO_CAM_PAR_MD_ON,
+    AO_CAM_PAR_SD_SENS, AO_CAM_PAR_SD_ON,
     AO_CAM_PAR_SIZE
 } user_par_t;
 
@@ -65,7 +65,10 @@ typedef enum {EP_UNDEFINED,
  * NB-2! char* lis parameter frees inside!
  */
 char* ao_make_cam_uri(int cmd_id, int read_pars);
-
+/*
+ * Save to local store param from dB
+ */
+void ao_save_parameter(int cmd_id, user_par_t par_id, int par_value);
 /*
  * extract params from lst and save it in local store
  */

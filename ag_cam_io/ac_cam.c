@@ -232,6 +232,8 @@ static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
     pu_log(LL_DEBUG, "%s: Current params for %d = %s", __FUNCTION__, cmd_id, lst);
     ao_save_params(cmd_id, lst);
     free(lst);
+/* Update local store by our parameter */
+    ao_save_parameter(cmd_id, par_id, par_value);
 
 /*Prepare new list */
     if(lst = ao_make_params(cmd_id), !lst) goto on_error;
@@ -263,7 +265,7 @@ on_error:
  * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
  */
 int ac_cam_init() {
-    const char* MD_INIT_PARAMS = "?recch=0&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
+    const char* MD_INIT_PARAMS = "recch=1&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
     const char* SD_INIT_PARAMS = "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
 
     char* md_uri = NULL;
@@ -319,10 +321,10 @@ on_error:
     return ret;
 }
 int ac_set_md(int on) {
-    return update_one_parameter(AO_CAM_CMD_MD, (on)?AO_CAM_PAR_MD_ON:AO_CAM_PAR_MD_OFF, on);
+    return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, on);
 }
 int ac_set_sd(int on) {
-    return update_one_parameter(AO_CAM_CMD_SD, (on)?AO_CAM_PAR_SD_ON:AO_CAM_PAR_SD_OFF, on);
+    return update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_ON, on);
 }
 
 /*
