@@ -39,7 +39,7 @@
 #define CMD_MD_NAME     "cfgalertmd"
 #define CMD_SNAP_NAME   "snapshot?&strm=0&q=0"
 
-#define PAR_READ    "?list"
+#define PAR_READ    "?list=1"
 /* Cam's parameters names */
 #define PAR_SD_ENABLE_NAME      "enable"
 #define PAR_SENSITIVITY_NAME    "sensitivity"
@@ -47,13 +47,49 @@
 #define REC_CH_NAME             "recch"
 #define DEAL_MODE_NAME          "dealmode"
 #define TS0_NAME                "ts0"
+#define TS1_NAME                "ts1"
+#define TS2_NAME                "ts2"
+#define TS3_NAME                "ts3"
 #define CH_NAME                 "chn"
 #define RECT0_NAME              "rect0"
 
-#define PAR_MDSD_ON   "ts0 + 0; 00:00:00-23:59:59"
-#define PAR_MD_RECT0 "rect0 0, 0, 999, 999, 5"
-#define PAR_SD_SENSITIVITY PAR_SENSITIVITY_NAME "5"
+#define PAR_MDSD_ON         "ts0=+ 0; 00:00:00-23:59:59"
+#define PAR_MDSD_OFF        "ts0="
+#define PAR_MD_RECT0        "rect0=0,0,999,999, 5"
+#define PAR_SD_SENSITIVITY  PAR_SENSITIVITY_NAME "=5"
 
+static const char* PAR_ARRAY[EP_SIZE] = {
+    "???",
+    "recch", "tapech",
+    "ts0", "ts1", "ts2", "ts3",
+    "dealmode", "enable", "sensitivity",
+    "rect0", "rect1", "rect2", "rect3",
+    "chn"
+};
+
+typedef struct {
+    int x0, x1, x2, x3, sensetivity;
+} rect_t;
+
+typedef struct {
+    int recch;
+    int tapech;
+    char* ts[4];
+    int dealmode;
+    rect_t* rect[4];    /* Null in rect[i] means 'rectI=' */
+    int chn;
+} md_par_t;
+typedef struct {
+    int tapech;
+    int recch;
+    int dealmode;
+    char* ts[4];        /* NULL in ts[i] means 'tsI=' */
+    int enable;
+    int sensitivity;
+} sd_par_t;
+
+static md_par_t MD_PARAMS = {0};
+static sd_par_t SD_PARAMS = {0};
 
 
 /*
@@ -109,86 +145,183 @@ t_ao_cam_alert ao_cam_decode_alert(const char* in) {
 typedef struct {
     int first, first_after;
 } pos_t;
-/* first -> name[0] last ->\n- */
-static pos_t find_par(const char* par_name, const char* lst) {
-    pos_t ret = {-1,-1};
-    if(ret.first = au_findSubstr(lst, par_name, AU_CASE), ret.first < 0) return ret;
-    if(ret.first_after = au_findSubstr(lst+ret.first, "\n", AU_CASE), ret.first_after < 0) {
-        pu_log(LL_ERROR, "%s: Cam format error: %s is not rerminated by CRLF in %s!", __FUNCTION__, par_name, lst);
-        ret.first = -1;
-    }
-    return ret;
-}
-/* find the lase number parameter */
-static pos_t find_in_rect(int par_idx, pos_t pos, const char* lst) {
-    pos_t ret = {-1,-1};
-    if(par_idx != AO_CAM_PAR_MD_SENS) return ret;
-    ret.first_after = pos.first_after;
-    for(ret.first = ret.first_after-1; (ret.first > pos.first) && isdigit(lst[ret.first]); ret.first--);
-    ret.first++;
-    return ret;
-}
 
-/* to take first ptr == lst. Return NULL if no more params or pointer to the next one */
-static char* get_next_param(char* buf, size_t size, char* ptr) {
+/* to take first ptr == lst. Return ptr points to the next position after name value*/
+static const char* get_next_param(char* buf, size_t size, const char* ptr) {
     pos_t pos={0,0};
     buf[0] = '\0';
-    while(!isalpha(ptr[pos.first]) && (ptr[pos.first] != '\n') && (ptr[pos.first] != '\0')) pos.first++;
+    while(!isalpha(ptr[pos.first]) && (ptr[pos.first] != '\r') && (ptr[pos.first] != '\n') && (ptr[pos.first] != '\0')) pos.first++;
     if(!isalpha(ptr[pos.first])) return NULL;
-    pos.first_after = pos.first;
-    while(isalpha(ptr[pos.first_after++]));
+    pos.first_after = au_findFirstOutOfSet(ptr+pos.first, "\r\n");
+    if(pos.first_after < 0) return NULL;
+
     memcpy(buf, ptr+pos.first, (size_t)(pos.first_after-pos.first));
-    buf[pos.first_after] = '\0';
+    buf[pos.first_after-pos.first] = '\0';
     return (strlen(buf))?ptr+(pos.first_after-pos.first):NULL;
 }
-/* get int from list in pos coordinates*/
-static int get_int_value(pos_t pos, const char* lst) {
-    int ret;
-    if(sscanf(lst+pos.first, "%d", &ret) != 1) return 0;
-    return ret;
-}
-/* find start-stop of number in lst[pos] and replace it to val */
-static char* replace_value(pos_t pos, int val, char* lst) {
-    char* ret = NULL;
-    char buf[256]={0};
-    while(!isdigit(lst[pos.first]) && lst[pos.first] != '\0') pos.first++;
-    if(!isdigit(lst[pos.first])) return NULL;
-    strncpy(buf, lst, (size_t)(pos.first));
-    sprintf(buf+pos.first, "%d%s", val, lst+pos.first_after);
-    if(ret = calloc(strlen(buf)+1, 1), !ret) {
-        pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
-        return NULL;
-    }
-    free(lst);
-    return ret;
-}
-/* Just append string par_val to lst */
-static char* append_param(const char* par_val, char* lst) {
-    char* ret = calloc(strlen(lst)+strlen(par_val)+2, 1); /* +1 for params delimeters */
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Not enough memory.", __FUNCTION__);
-        return NULL;
-    }
-    strcpy(ret, lst);
-    strcat(ret-1, par_val); /* end list got \n\n at the end. Skip the first \n */
-    strcat(ret, "\n");
-    free(lst);
-    return ret;
-}
-/* remove smth in pos boundary */
-static char* remove_param(pos_t pos, char* lst) {
-    char* ret = calloc(strlen(lst)+1, 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Not enogh memory.", __FUNCTION__);
-        return NULL;
-    }
-    strncpy(ret, lst, (size_t)(pos.first));
-    ret[pos.first] = '\0';
-    strcat(ret+pos.first, lst+pos.first_after+1);  /* Just skip \n after parameter */
-    free(lst);
-    return ret;
-}
 
+static par_t str2par_name(const char* buf) {
+    par_t i;
+    for(i = EP_UNDEFINED+1; i < EP_SIZE; i++) {
+        if(!strncmp(PAR_ARRAY[i], buf, strlen(PAR_ARRAY[i]))) return i;
+    }
+    return EP_UNDEFINED;
+}
+static void store_rect(int cmd_id,  par_t par_id, const char* buf) {
+    if(cmd_id != AO_CAM_CMD_MD) {
+        pu_log(LL_ERROR, "%s: Wrong command id %d. %d only allowed. Value in %s not saved", __FUNCTION__, cmd_id, AO_CAM_CMD_MD, buf);
+    }
+    rect_t *value;
+    rect_t v = {0};
+    char b[20];
+    if(sscanf(buf, "%s%i,%i,%i,%i%i", b, &v.x0,&v.x1,&v.x2,&v.x3,&v.sensetivity)!= 6) {
+        pu_log(LL_ERROR, "%s: Error scanning of %s. Value nit saved", __FUNCTION__, buf);
+        return;
+    }
+    value = calloc(1, sizeof(rect_t));
+    if(!value) {
+        pu_log(LL_ERROR, "%s Not enough memory", __FUNCTION__);
+        return;
+    }
+    *value = v;
+
+    int i;
+    switch (par_id) {
+        case EP_RECT0:
+            i = 0;
+            break;
+        case EP_RECT1:
+            i = 1;
+            break;
+        case EP_RECT2:
+            i = 2;
+            break;
+        case EP_RECT3:
+            i = 3;
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Wrong parameter id %d. RECT0-RECT3 expected. Value in %s not saved", __FUNCTION__, par_id, buf);
+            free(value);
+            return;
+    }
+    if(MD_PARAMS.rect[i]) free(MD_PARAMS.rect[i]);
+    MD_PARAMS.rect[i] = value;
+}
+static void store_str(int cmd, par_t par_id, const char* buf) {
+    if((cmd != AO_CAM_CMD_MD) && (cmd != AO_CAM_CMD_SD)){
+        pu_log(LL_ERROR, "%s: Wrong command id %d. %d or %d only allowed. Value in %s not saved", __FUNCTION__, cmd, AO_CAM_CMD_MD, AO_CAM_CMD_SD, buf);
+    }
+    char* value = NULL;
+    int pos = au_findSubstr(buf, " ", AU_CASE);
+
+    if(pos >= 0) {
+        char val[128] = {0};
+        if (sscanf(buf, "%s", val) == 1) value = strdup(val);
+    }
+    int i;
+    switch (par_id) {
+        case EP_TS0:
+            i = 0;
+            break;
+        case EP_TS1:
+            i = 1;
+            break;
+        case EP_TS2:
+            i = 2;
+            break;
+        case EP_TS3:
+            i = 3;
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Wrong parameter id %d. TS0-TS3 expected. Value in %s not saved", __FUNCTION__, par_id, buf);
+            if(value) free(value);
+            return;
+    }
+    if(cmd == AO_CAM_CMD_MD) {
+        if (MD_PARAMS.ts[i]) free(MD_PARAMS.ts[i]);
+        MD_PARAMS.ts[i] = value;
+    }
+    else if(cmd == AO_CAM_CMD_SD) {
+        if (SD_PARAMS.ts[i]) free(SD_PARAMS.ts[i]);
+        SD_PARAMS.ts[i] = value;
+    }
+}
+static void store_int(int cmd, par_t par_id, const char* buf) {
+    char name[128];
+    int val = 0;    /* in case we got just name w/o value at all */
+    int ret = sscanf(buf, "%s%i", name, &val);
+    if(ret < 2) {
+        pu_log(LL_WARNING, "%s: No value found in %s. 0 stored", __FUNCTION__, buf);
+    }
+//TODO! owful code :-(
+    switch(par_id) {
+        case EP_RECCH:
+            if(cmd == AO_CAM_CMD_MD) MD_PARAMS.recch = val;
+            else if(cmd == AO_CAM_CMD_SD) SD_PARAMS.recch = val;
+            break;
+        case EP_TAPECH:
+            if(cmd == AO_CAM_CMD_MD) MD_PARAMS.tapech = val;
+            else if(cmd == AO_CAM_CMD_SD) SD_PARAMS.tapech = val;
+            break;
+        case EP_DEALMODE:
+            if(cmd == AO_CAM_CMD_MD) MD_PARAMS.dealmode = val;
+            else if(cmd == AO_CAM_CMD_SD) SD_PARAMS.dealmode = val;
+            break;
+        case EP_ENABLE:
+            if(cmd == AO_CAM_CMD_SD) SD_PARAMS.enable = val;
+            break;
+        case EP_SESETIVITY:
+            if(cmd == AO_CAM_CMD_SD) SD_PARAMS.sensitivity = val;
+            break;
+        case EP_CHN:
+            if(cmd == AO_CAM_CMD_MD) MD_PARAMS.chn = val;
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: cmd_id %d and para_id %d from %s not found. Value not stored", __FUNCTION__, cmd, par_id, buf);
+            break;
+    }
+    return;
+}
+static char* make_md_params() {
+    char buf[256]={0};
+    char rect_buf0[20]={0};
+    char ts0_buf[20]={0};
+    const char* md_fmt=
+            "%s=%d&%s=%d"
+            "&%s=%s&%s=&%s=&%s="
+            "&%s=%d"
+            "&%s=%s&%s=%s=&%s="
+            "&%s=%d";
+    const char* rect_fmt="%d,%d,%d,%d, %d";
+    if(MD_PARAMS.rect[0]) snprintf(rect_buf0, sizeof(rect_buf0)-1, rect_fmt, MD_PARAMS.rect[0]->x0,MD_PARAMS.rect[0]->x1,MD_PARAMS.rect[0]->x2,MD_PARAMS.rect[0]->x3,MD_PARAMS.rect[0]->sensetivity);
+    if(MD_PARAMS.ts[0]) strncpy(ts0_buf, MD_PARAMS.ts[0], sizeof(ts0_buf)-1);
+    snprintf(buf, sizeof(buf)-1, md_fmt,
+        PAR_ARRAY[EP_RECCH], MD_PARAMS.recch,PAR_ARRAY[EP_TAPECH], MD_PARAMS.tapech,
+        PAR_ARRAY[EP_TS0], ts0_buf, PAR_ARRAY[EP_TS1], PAR_ARRAY[EP_TS2], PAR_ARRAY[EP_TS3],
+        PAR_ARRAY[EP_DEALMODE], MD_PARAMS.dealmode,
+        PAR_ARRAY[EP_RECT0], rect_buf0, PAR_ARRAY[EP_RECT1], PAR_ARRAY[EP_RECT2], PAR_ARRAY[EP_RECT3],
+        PAR_ARRAY[EP_CHN], MD_PARAMS.chn
+    );
+    return strdup(buf);
+}
+static char* make_sd_params() {
+    char buf[256]={0};
+    char ts0_buf[20]={0};
+    const char* sd_fmt=
+            "%s=%d&%s=%d"
+            "&%s=%s&%s=&%s=&%s="
+            "&%s=%d"
+            "&%s=%d%s=%d";
+    if(SD_PARAMS.ts[0]) strncpy(ts0_buf, SD_PARAMS.ts[0], sizeof(ts0_buf)-1);
+    snprintf(buf, sizeof(buf)-1, sd_fmt,
+             PAR_ARRAY[EP_TAPECH],SD_PARAMS.tapech, PAR_ARRAY[EP_RECCH],SD_PARAMS.recch,
+             PAR_ARRAY[EP_TS0],ts0_buf, PAR_ARRAY[EP_TS1], PAR_ARRAY[EP_TS2], PAR_ARRAY[EP_TS3],
+             PAR_ARRAY[EP_DEALMODE],SD_PARAMS.dealmode,
+             PAR_ARRAY[EP_ENABLE],SD_PARAMS.enable, PAR_ARRAY[EP_SESETIVITY],SD_PARAMS.sensitivity
+    );
+    return strdup(buf);
+}
+/****************************************************************************/
 char* ao_make_cam_uri(int cmd_id, int read_pars) {
     char buf[128]={0};
     char* name;
@@ -201,7 +334,7 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
             name = (read_pars)?CMD_MD_NAME PAR_READ:CMD_MD_NAME;
             break;
         case AO_CAM_CMD_SD:
-            name = (read_pars)?CMD_SD_NAME PAR_READ:CMD_MD_NAME;
+            name = (read_pars)?CMD_SD_NAME PAR_READ:CMD_SD_NAME;
             break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized cmd_id = %d", __FUNCTION__, cmd_id);
@@ -216,100 +349,65 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
     }
     return ret;
 }
-/* [-]name value\n...\n\n list */
-char* ao_update_params_list(int cmd_id, int par_id, int par_value, char* lst) {
-    pos_t pos;
-
-    switch (par_id) {
-        case AO_CAM_PAR_MD_SENS:
-            pos = find_par(RECT0_NAME, lst);
-            if(pos.first < 0) {
-                lst = append_param(PAR_MD_RECT0, lst);
-                pos = find_par(RECT0_NAME, lst);
-            }
-            pos = find_in_rect(AO_CAM_PAR_MD_SENS, pos, lst);
-            if(pos.first < 0) {
-                pu_log(LL_ERROR, "%s: Param_id %d not found for command_id %d in %s", __FUNCTION__, AO_CAM_PAR_MD_SENS, cmd_id, lst);
-                return NULL;
-            }
-            return replace_value(pos, par_value, lst);
-        case AO_CAM_PAR_MD_ON:
-        case AO_CAM_PAR_SD_ON:
-            pos = find_par(TS0_NAME, lst);
-            if(pos.first > 0) {
-                lst = remove_param(pos, lst);
-            }
-            return append_param(PAR_MDSD_ON, lst);
-        case AO_CAM_PAR_MD_OFF:
-        case AO_CAM_PAR_SD_OFF:
-            pos = find_par(TS0_NAME, lst);
-            if(pos.first > 0) {
-                lst = remove_param(pos, lst);
-            }
-            return lst;
-        case AO_CAM_PAR_SD_SENS:
-            pos = find_par(PAR_SENSITIVITY_NAME, lst);
-            if(pos.first < 0) {
-                lst = append_param(PAR_SD_SENSITIVITY, lst);
-                pos = find_par(PAR_SENSITIVITY_NAME, lst);
-            }
-            return replace_value(pos, par_value, lst);
-        default:
-            pu_log(LL_ERROR, "%s: Unrecognizeable parameter id %d for command %d", __FUNCTION__, cmd_id, par_id);
-            return NULL;
-    };
-    return NULL; /* On some case... */
+/*
+ * extract params from lst and save it in local store
+ * lst format: name value\r\n...name value\r\n\r\n
+ */
+void ao_save_params(int cmd_id, const char* lst) {
+    char buf[128];
+    const char* ptr = lst;
+    while(ptr = get_next_param(buf, sizeof(buf), ptr), strlen(buf) != 0) {
+        int par_id = str2par_name(buf);
+        if(par_id == EP_UNDEFINED) {
+            pu_log(LL_ERROR, "%s: parameter %s undefined. Value ignored.", __FUNCTION__, buf);
+            continue;
+        }
+        if((par_id == EP_RECT0)|| (par_id == EP_RECT1)||
+            (par_id == EP_RECT2)||(par_id == EP_RECT3)) store_rect(cmd_id, par_id, buf);
+        else if((par_id == EP_TS0)|| (par_id == EP_TS1)||(par_id == EP_TS2) ||
+            (par_id == EP_TS3)||(par_id == EP_TS3)) store_str(cmd_id, par_id, buf);
+        else store_int(cmd_id, par_id, buf);
+    }
 }
 /*
- * Transform name value\n...\n\n to
- * name=value&...
+ * create params list from local store and return ub lst
+ * NB! lst sould be freed after use!
  */
-char* ao_make_params_from_list(int cmd_id, char* lst) {
-    char* ret = calloc(strlen(lst), 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Not enough memory.", __FUNCTION__);
-        return NULL;
+char* ao_make_params(int cmd_id) {
+    switch (cmd_id) {
+        case AO_CAM_CMD_MD:
+            return make_md_params();
+        case AO_CAM_CMD_SD:
+            return make_sd_params();
+        default:
+            pu_log(LL_ERROR, "%s: Command id %d not served.", __FUNCTION__, cmd_id);
+            break;
     }
-    char* ptr = lst;
-    char buf[128];
-    while(ptr=get_next_param(buf, sizeof(buf)-1, ptr), !ptr) {
-        if(ptr != lst) strcat(ret, "&");
-        int space = au_findSubstr(buf, " ", AU_CASE);
-        if(space < 0) {
-            pu_log(LL_ERROR, "%s:no space in parameter %s", __FUNCTION__, buf);
-            return NULL;
-        }
-        buf[space] = '=';
-        strcat(ret, buf);
+    return NULL;
+}
+
+/*
+ * Get cmd's parameter
+ */
+int ao_get_param_value(int cmd_id, user_par_t par_id) {
+    int ret = 0;
+    switch (par_id) {
+        case AO_CAM_PAR_MD_SENS:
+            return (MD_PARAMS.rect[0])?MD_PARAMS.rect[0]->sensetivity:0;
+        case AO_CAM_PAR_MD_ON:
+            return (MD_PARAMS.ts[0] != NULL);
+        case AO_CAM_PAR_MD_OFF:
+            return (MD_PARAMS.ts[0] == NULL);
+        case AO_CAM_PAR_SD_SENS:
+            return SD_PARAMS.sensitivity;
+        case AO_CAM_PAR_SD_ON:
+            return (SD_PARAMS.ts[0] != NULL);
+        case AO_CAM_PAR_SD_OFF:
+            return (SD_PARAMS.ts[0] == NULL);
+        default:
+            pu_log(LL_ERROR, "%s: Unknown user parameter type %d. 0 returned", __FUNCTION__, par_id);
+            break;
     }
-    free(lst);
     return ret;
 }
-int ao_get_param_value_from_list(int cmd_id, int par_id, const char* lst) {
-    pos_t pos;
-    switch(par_id) {
-        case AO_CAM_PAR_MD_SENS:
-            pos = find_par(RECT0_NAME, lst);
-            if(pos.first < 0) {
-                return 0;
-            }
-            pos = find_in_rect(AO_CAM_PAR_MD_SENS, pos, lst);
-            if(pos.first < 0) {
-                return 0;
-            }
-            return get_int_value(pos, lst);
-        case AO_CAM_PAR_MD_ON:
-        case AO_CAM_PAR_SD_ON:
-        case AO_CAM_PAR_MD_OFF:
-        case AO_CAM_PAR_SD_OFF:
-            pos = find_par(TS0_NAME, lst);
-            return pos.first > 0;
-        case AO_CAM_PAR_SD_SENS:
-            pos = find_par(PAR_SENSITIVITY_NAME, lst);
-            if(pos.first < 0) return 0;
-            return get_int_value(pos, lst);
-        default:
-            pu_log(LL_ERROR, "%s: Unrecognizeable parameter id %d for command %d", __FUNCTION__, cmd_id, par_id);
-            return 0;
-    }
-}
+

@@ -205,6 +205,11 @@ static char* get_current_params(const char* url_cmd) {
     res = curl_easy_perform(crl);
     if (ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
 
+    fflush(fp);
+    if(!ptr) {
+        pu_log(LL_ERROR, "%s: Cam returns empty answer on %s request", __FUNCTION__, url_cmd);
+        goto on_error;
+    }
     ret = ptr;
     ret[sz-1] = '\0';   /* to be sure about NULL-termination */
 on_error:
@@ -216,7 +221,7 @@ on_error:
 /*
  * Read params, set par_id to par_value, set updated params, read, extract par_id and return it's new value
  */
-static int update_one_parameter(int cmd_id, int par_id, int par_value) {
+static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
     int ret = 0;
     char* lst=0;
     char* read_uri=0;
@@ -225,17 +230,23 @@ static int update_one_parameter(int cmd_id, int par_id, int par_value) {
     if(read_uri = ao_make_cam_uri(cmd_id, AO_CAM_READ), !read_uri) goto on_error;
     if(lst = get_current_params(read_uri), !lst) goto on_error;
     pu_log(LL_DEBUG, "%s: Current params for %d = %s", __FUNCTION__, cmd_id, lst);
+    ao_save_params(cmd_id, lst);
+    free(lst);
+
 /*Prepare new list */
-    if(lst = ao_update_params_list(cmd_id, par_id, par_value, lst), !lst) goto on_error;
-    if(lst = ao_make_params_from_list(cmd_id, lst), !lst) goto on_error;
+    if(lst = ao_make_params(cmd_id), !lst) goto on_error;
     pu_log(LL_DEBUG, "%s: Update list for %d = %s", __FUNCTION__, cmd_id, lst);
 /*Write updated params list */
     if(write_uri = ao_make_cam_uri(cmd_id, AO_CAM_WRITE), !write_uri) goto on_error;
     if(!send_command(write_uri, lst)) goto on_error;
+    free(lst);
 /* Re-read cam params. */
     if(lst = get_current_params(read_uri), !lst) goto on_error;
-    ret = ao_get_param_value_from_list(cmd_id, par_id, lst);
     pu_log(LL_DEBUG, "%s: New params for %d = %s", __FUNCTION__, cmd_id, lst);
+
+    ao_save_params(cmd_id, lst);
+    free(lst); lst = NULL;
+    ret = ao_get_param_value(cmd_id, par_id);
 
 on_error:
     if(read_uri) free(read_uri);
@@ -252,8 +263,9 @@ on_error:
  * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
  */
 int ac_cam_init() {
-    const char* MD_INIT_PARAMS = "recch=1&tapech=1&dealmode=0x20000001&rect0=0,0,999,999,5&chn=0";
-    const char* SD_INIT_PARAMS = "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0";
+    const char* MD_INIT_PARAMS = "?recch=0&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
+    const char* SD_INIT_PARAMS = "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
+
     char* md_uri = NULL;
     char* sd_uri = NULL;
     int ret = 0;

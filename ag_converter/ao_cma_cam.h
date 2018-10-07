@@ -44,22 +44,40 @@ const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t e
 #define AO_CAM_CMD_MD       2
 #define AO_CAM_CMD_SD       3
 
-#define AO_CAM_PAR_MD_SENS  1
-#define AO_CAM_PAR_MD_ON    2
-#define AO_CAM_PAR_MD_OFF   3
-#define AO_CAM_PAR_SD_SENS  4
-#define AO_CAM_PAR_SD_ON    5
-#define AO_CAM_PAR_SD_OFF   6
+typedef enum {
+    AO_CAM_PAR_UNDEF,
+    AO_CAM_PAR_MD_SENS, AO_CAM_PAR_MD_ON, AO_CAM_PAR_MD_OFF,
+    AO_CAM_PAR_SD_SENS, AO_CAM_PAR_SD_ON, AO_CAM_PAR_SD_OFF,
+    AO_CAM_PAR_SIZE
+} user_par_t;
 
+typedef enum {EP_UNDEFINED,
+    EP_RECCH, EP_TAPECH,
+    EP_TS0, EP_TS1, EP_TS2, EP_TS3,
+    EP_DEALMODE, EP_ENABLE, EP_SESETIVITY,
+    EP_RECT0, EP_RECT1, EP_RECT2, EP_RECT3,
+    EP_CHN,
+    EP_SIZE
+} par_t;
 
 /*
  * NB-1! returned memory should be freed after use
  * NB-2! char* lis parameter frees inside!
  */
 char* ao_make_cam_uri(int cmd_id, int read_pars);
-char* ao_update_params_list(int cmd_id, int par_id, int par_value, char* lst);
-char* ao_make_params_from_list(int cmd_id, char* lst);
-int ao_get_param_value_from_list(int cmd_id, int par_id, const char* lst);
 
+/*
+ * extract params from lst and save it in local store
+ */
+void ao_save_params(int cmd_id, const char* lst);
+/*
+ * create params list from local store and return ub lst
+ * NB! lst sould be freed after use!
+ */
+char* ao_make_params(int cmd_id);
+/*
+ * Get cmd's parameter
+ */
+int ao_get_param_value(int cmd_id, user_par_t par_id);
 
 #endif /* IPCAMTENVIS_AO_CMA_CAM_H */

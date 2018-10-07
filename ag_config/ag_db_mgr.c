@@ -343,12 +343,8 @@ int ag_db_load_cam_properties() {
         return 0;
     }
     pu_log(LL_ERROR, "%s: IMdB created OK", __FUNCTION__);
-    if(!load_persistent_data()) {
-        pu_log(LL_ERROR, "%s: Error load persistent data", __FUNCTION__);
-        ag_db_unload_cam_properties();
-        return 0;
-    }
-    pu_log(LL_DEBUG, "%s: Persistent data loaded OK", __FUNCTION__);
+    if(load_persistent_data()) pu_log(LL_DEBUG, "%s: Persistent data loaded OK", __FUNCTION__);
+
     if(!sync_camera_data()) {
         pu_log(LL_ERROR, "%s: Error load camera data", __FUNCTION__);
         ag_db_unload_cam_properties();
@@ -409,7 +405,7 @@ cJSON* ag_db_get_startup_report() {
         if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
     }
 on_error:
-    FREE(rep);
+    if(rep) cJSON_Delete(rep);
     return NULL;
 }
 void ag_erase_changes_report() {

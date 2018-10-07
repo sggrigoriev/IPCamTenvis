@@ -345,6 +345,7 @@ static void process_message(char* msg) {
     int protocol_number = get_protocol_number(obj_msg);
     if(!protocol_number) {
         pu_log(LL_ERROR, "%s: protocol for %s unrecognized. Message ignored.", __FUNCTION__, msg);
+        cJSON_Delete(obj_msg);
         return;
     }
     switch (protocol_number) {
@@ -502,7 +503,7 @@ static int main_thread_startup() {
         pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
         return 0;
     }
-
+    pu_log(LL_INFO, "%s: Camera initiaied", __FUNCTION__);
     if(!ag_db_load_cam_properties()) {
         pu_log(LL_ERROR, "%s: Error load camera properties", __FUNCTION__);
         return 0;
