@@ -69,6 +69,7 @@ static volatile int main_finish;        /* stop flag for main thread */
     Local functions deinition
 */
 static void send_startup_report() {
+    pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
     cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -542,13 +543,13 @@ static int main_thread_startup() {
         return 0;
     }
     pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
-/*
+
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
         return 0;
     }
     pu_log(LL_INFO, "%s: started", "CAM_ALERT_READED");
-*/
+
     return 1;
 }
 static void main_thread_shutdown() {

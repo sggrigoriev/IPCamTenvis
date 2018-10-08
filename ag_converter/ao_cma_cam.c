@@ -53,7 +53,7 @@
 #define CH_NAME                 "chn"
 #define RECT0_NAME              "rect0"
 
-#define PAR_MDSD_ON         "ts0=+ 0; 00:00:00-23:59:59"
+#define PAR_MDSD_ON         "+ 0; 00:00:00-23:59:59"
 #define PAR_MDSD_OFF        "ts0="
 #define PAR_MD_RECT0        "rect0=0,0,999,999, 5"
 #define PAR_SD_SENSITIVITY  PAR_SENSITIVITY_NAME "=5"
@@ -284,8 +284,8 @@ static void store_int(int cmd, par_t par_id, const char* buf) {
 }
 static char* make_md_params() {
     char buf[256]={0};
-    char rect_buf0[20]={0};
-    char ts0_buf[20]={0};
+    char rect_buf0[30]={0};
+    char ts0_buf[30]={0};
     const char* md_fmt=
             "%s=%d&%s=%d"
             "&%s=%s&%s=&%s=&%s="
@@ -306,7 +306,7 @@ static char* make_md_params() {
 }
 static char* make_sd_params() {
     char buf[256]={0};
-    char ts0_buf[20]={0};
+    char ts0_buf[30]={0};
     const char* sd_fmt=
             "%s=%d&%s=%d"
             "&%s=%s&%s=&%s=&%s="
@@ -321,7 +321,11 @@ static char* make_sd_params() {
     );
     return strdup(buf);
 }
+
+
 /****************************************************************************/
+
+
 char* ao_make_cam_uri(int cmd_id, int read_pars) {
     char buf[128]={0};
     char* name;

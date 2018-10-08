@@ -21,6 +21,7 @@
 */
 #include <string.h>
 #include <limits.h>
+#include <pthread.h>
 
 #include "pu_logger.h"
 
@@ -331,6 +332,8 @@ static int sync_camera_data() {
     }
     return 1;
 }
+/****************************************************************************************************/
+static pthread_mutex_t local_mutex = PTHREAD_MUTEX_INITIALIZER;
 /*
  * 1. Create IMDB based on SCHEME, update all values by defaults
  * 2. Load persistent data (if any), update values & cam values
@@ -388,12 +391,15 @@ static void add_reported_property(cJSON* report, const char* name, int value) {
 cJSON* ag_db_get_changes_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
-    for(i = 0; i < NELEMS(SCHEME); i++) {
-        if(IMDB[i].in_changes_report && IMDB[i].changed) {
-            add_reported_property(rep, IMDB[i].name, IMDB[i].value);
-            IMDB[i].changed = 0;
+    pthread_mutex_lock(&local_mutex);
+        for(i = 0; i < NELEMS(SCHEME); i++) {
+            if(IMDB[i].in_changes_report && IMDB[i].changed) {
+                add_reported_property(rep, IMDB[i].name, IMDB[i].value);
+                IMDB[i].changed = 0;
+            }
         }
-    }
+    pthread_mutex_unlock(&local_mutex);
+    if(cJSON_GetArraySize(rep)) return rep;
 on_error:
     FREE(rep);
     return NULL;
@@ -401,18 +407,20 @@ on_error:
 cJSON* ag_db_get_startup_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
-    for(i = 0; i < NELEMS(SCHEME); i++) {
-        if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
-    }
+    pthread_mutex_lock(&local_mutex);
+        for(i = 0; i < NELEMS(SCHEME); i++) {
+            if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
+        }
+        char* msg = cJSON_PrintUnformatted(rep);
+        if(msg) {
+            pu_log(LL_DEBUG, "%s: report: %s", __FUNCTION__, msg);
+            free(msg);
+        }
+    pthread_mutex_unlock(&local_mutex);
+    if(cJSON_GetArraySize(rep)) return rep;
 on_error:
     if(rep) cJSON_Delete(rep);
     return NULL;
-}
-void ag_erase_changes_report() {
-    int i;
-    for(i = 0; i < NELEMS(SCHEME); i++) {
-        if(IMDB[i].in_changes_report && IMDB[i].change_flag) IMDB[i].change_flag = 0;
-    }
 }
 
 
@@ -424,19 +432,27 @@ static void set_flag(const char* property_name, int value) {
 /* Work with property's flags */
 /* property's flag value set to 1 */
 void ag_db_set_flag_on(const char* property_name) {
-    set_flag(property_name, 1);
+    pthread_mutex_lock(&local_mutex);
+        set_flag(property_name, 1);
+    pthread_mutex_unlock(&local_mutex);
 }
 /* property's flag value set to 0 */
 void ag_db_set_flag_off(const char* property_name) {
-    set_flag(property_name, 0);
+    pthread_mutex_lock(&local_mutex);
+        set_flag(property_name, 0);
+    pthread_mutex_unlock(&local_mutex);
 }
 /*
  * return property's flag value
  */
 int ag_db_get_flag(const char* property_name) {
-    int pos = find_param(property_name);
-    if(pos < 0) return 0;
-    return IMDB[pos].change_flag;
+    int ret = 0;
+    pthread_mutex_lock(&local_mutex);
+        int pos = find_param(property_name);
+        if(pos >= 0) ret = IMDB[pos].change_flag;
+    pthread_mutex_unlock(&local_mutex);
+
+    return ret;
 }
 /*
  * Return 0 if no change; return 1 if proprrty changed
@@ -444,13 +460,16 @@ int ag_db_get_flag(const char* property_name) {
  */
 int ag_db_store_property(const char* property_name, const char* property_value) {
     int ret=0;
-    int pos = find_param(property_name);
-    if(pos < 0) return 0;
-    if(!equal(property_value, IMDB[pos].value)) {
-        replace_param_value(pos, property_value);
-        ret = 1;
-    }
-    IMDB[pos].change_flag = 1;
+    pthread_mutex_lock(&local_mutex);
+        int pos = find_param(property_name);
+        if(pos < 0)
+            ret = 0;
+        else if(!equal(property_value, IMDB[pos].value)) {
+            replace_param_value(pos, property_value);
+            ret = 1;
+        }
+        IMDB[pos].change_flag = 1;
+    pthread_mutex_unlock(&local_mutex);
     return ret;
 }
 int ag_db_store_int_property(const char* property_name, int property_value) {
@@ -459,10 +478,16 @@ int ag_db_store_int_property(const char* property_name, int property_value) {
     return ag_db_store_property(property_name, buf);
 }
 int ag_db_get_int_property(const char* property_name) {
-    int pos = find_param(property_name);
-    if(pos < 0) return 0;
+    int ret = 0;
+    pthread_mutex_lock(&local_mutex);
+        int pos = find_param(property_name);
+        if(pos < 0)
+            ret = 0;
+        else
+            ret = IMDB[pos].value;
+    pthread_mutex_unlock(&local_mutex);
 
-    return IMDB[pos].value;
+    return ret;
 }
 /*
  * Cloud-Cam parameters set: set on cam, re-read and store into DB
@@ -471,12 +496,14 @@ int ag_db_get_int_property(const char* property_name) {
  */
 int ag_db_update_changed_cam_parameters() {
     int i;
-    for(i = 0; i < NELEMS(SCHEME); i++) {
-        if(IMDB[i].change_flag) {
-            IMDB[i].change_flag = 0;
-            sync_camera_param(i);
+    pthread_mutex_lock(&local_mutex);
+        for(i = 0; i < NELEMS(SCHEME); i++) {
+            if(IMDB[i].change_flag) {
+                IMDB[i].change_flag = 0;
+                sync_camera_param(i);
+            }
         }
-    }
+    pthread_mutex_unlock(&local_mutex);
     return 1;
 }
 

@@ -278,7 +278,7 @@ const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
         ret = NULL;
     }
     else {
-        strcpy(buf, msg);
+        strncpy(buf, msg, size-1);
         free(msg);
         ret = buf;
     }

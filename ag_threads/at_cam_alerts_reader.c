@@ -87,7 +87,7 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
                 lib_timer_update(&alarm_to_md);
             }
             else {
-                is_io = 1;
+                is_md = 1;
                 lib_timer_init(&alarm_to_md, alert_to_sec);
                 return AC_CAM_START_MD;
             }
@@ -97,21 +97,21 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
                 lib_timer_update(&alarm_to_sd);
             }
             else {
-                is_io = 1;
+                is_sd = 1;
                 lib_timer_init(&alarm_to_sd, alert_to_sec);
                 return AC_CAM_START_SD;
             }
             break;
         case EMM_TIMEOUT:   /* This is our own timeout - time to check alarm clocks */
-            if(lib_timer_alarm(alarm_to_md)) {
+            if(lib_timer_alarm(alarm_to_md) && (is_md)) {
                 is_md = 0;
                 return AC_CAM_STOP_MD;
             }
-            if(lib_timer_alarm(alarm_to_sd)) {
+            if(lib_timer_alarm(alarm_to_sd) && (is_sd)) {
                 is_sd = 0;
                 return AC_CAM_STOP_SD;
             }
-            if(lib_timer_alarm(alarm_to_io)) {
+            if(lib_timer_alarm(alarm_to_io) && (is_io)) {
                 is_io = 0;
                 return AC_CAM_STOP_IO;
             }
@@ -123,23 +123,23 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
             break;
 /* Startup */
         case EMM_LOGIN:
-            pu_log(LL_INFO, "%s: Login to Event Monitor Ok.", AT_THREAD_NAME);
+            pu_log(LL_INFO, "%s: Login to Event Monitor Ok.", __FUNCTION__);
             break;
         case EMM_CONN_START:
-            pu_log(LL_INFO, "%s: Start connection to Event Monitor Ok.", AT_THREAD_NAME);
+            pu_log(LL_INFO, "%s: Start connection to Event Monitor Ok.", __FUNCTION__);
             break;
         case EMM_CONN_FINISH:
-            pu_log(LL_INFO, "%s: Connected to Event Monitor Ok.", AT_THREAD_NAME);
+            pu_log(LL_INFO, "%s: Connected to Event Monitor Ok.", __FUNCTION__);
             break;
 /* Error cases */
         case EMM_AB_EVENT:
-            pu_log(LL_WARNING, "%s: Abnormal event came from Camera! Ignored.", AT_THREAD_NAME);
+            pu_log(LL_WARNING, "%s: Abnormal event came from Camera! Ignored.", __FUNCTION__);
             break;
         case EMM_READ_ERROR:
-            pu_log(LL_WARNING, "%s: Read error event came from Events Monitor! Ignored.", AT_THREAD_NAME);
+            pu_log(LL_WARNING, "%s: Read error event came from Events Monitor! Ignored.", __FUNCTION__);
             break;
         case EMM_NO_RESPOND:
-            pu_log(LL_WARNING, "%s: No Respond event came from Camera! Ignored.", AT_THREAD_NAME);
+            pu_log(LL_WARNING, "%s: No Respond event came from Camera! Ignored.", __FUNCTION__);
             break;
         case EMM_SELECT_ERR:
             pu_log(LL_ERROR, "%s: Select pipe error in EentsMonitor: %d %s. Restart.", __FUNCTION__, errno, strerror(errno));
@@ -193,7 +193,7 @@ static void* thread_function(void* params) {
                 pu_log(LL_ERROR, "%s: Unrecognized event %d. Ignored", AT_THREAD_NAME, ret);
                 break;
         }
-        pu_log(LL_DEBUG, "%s: %s event arrived", __FUNCTION__, ac_cam_event2string(ret));
+        pu_log(LL_DEBUG, "%s: %s event arrived", AT_THREAD_NAME, ac_cam_event2string(ret));
 
         pu_queue_push(to_agent, out_buf, strlen(out_buf) + 1);
         pu_log(LL_DEBUG, "%s: %s was sent to the Agent", AT_THREAD_NAME, out_buf);
