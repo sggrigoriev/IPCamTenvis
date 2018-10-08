@@ -29,10 +29,7 @@
 #include "ao_cmd_cloud.h"
 #include "ac_video.h"
 
-#define AO_WS_PING_RC  10
-#define AO_WS_THREAD_ERROR -23
-#define AO_RW_THREAD_ERROR -24
-#define AO_WS_TO_ERROR -25
+
 
 static const char* CLOUD_RC = "resultCode";
 static const char* CLOUD_PARAMS_ARR = "params";

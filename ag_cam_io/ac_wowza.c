@@ -251,7 +251,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
         goto on_error;
     }
     if(resp.type_data.response.code != GST_RTSP_STS_OK) {
-        pu_log(LL_ERROR, "%s: bad answer: %s", gst_rtsp_status_as_text(resp.type_data.response.code));
+        pu_log(LL_ERROR, "%s: bad answer: %s", __FUNCTION__, gst_rtsp_status_as_text(resp.type_data.response.code));
         goto on_error;
     }
 

@@ -91,5 +91,6 @@ const char* ag_get_cam_properties(const char* property_name); /* Return JSON wit
 int ag_isMsgSendOnAlert(t_ac_cam_events alert_type);
 int ag_isFileSendOnAlert(t_ac_cam_events alert_type);
 
+extern char         proxy_auth_token[];
 
 #endif /* IPCAMTENVIS_AG_SETTINGS_H */

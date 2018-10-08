@@ -68,6 +68,7 @@ int ag_db_get_flag(const char* property_name);
  * !Set the property's flag ON in any case!.
  */
 int ag_db_store_property(const char* property_name, const char* property_value);
+int ag_db_store_int_property(const char* property_name, int property_value);
 
 int ag_db_get_int_property(const char* property_name);
 /* Cloud-Cam parameter set: set on cam, re-read and store into DB

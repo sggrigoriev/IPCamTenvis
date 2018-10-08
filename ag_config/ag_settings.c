@@ -109,7 +109,7 @@ static unsigned int interleaved_mode;
 static unsigned int streaming_buffer_size;
 
 static char         proxy_id[LIB_HTTP_DEVICE_ID_SIZE] = {0};
-static char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
+char         proxy_auth_token[LIB_HTTP_AUTHENTICATION_STRING_SIZE] = {0};
 static char         main_url[LIB_HTTP_MAX_URL_SIZE] = {0};
 
 static int          is_ssl;

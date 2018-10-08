@@ -29,6 +29,12 @@
 
 #include "ao_cmd_data.h"
 
+
+#define AO_WS_PING_RC  10
+#define AO_WS_THREAD_ERROR -23
+#define AO_RW_THREAD_ERROR -24
+#define AO_WS_TO_ERROR -25
+
 /*******************************************************************************
  * Decode cloud/Proxy JSON message into internal structure (ao_cmd_data.h)
  * @param cloud_message - zero-terminated JSON string

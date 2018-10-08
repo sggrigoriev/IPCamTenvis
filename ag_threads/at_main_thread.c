@@ -132,7 +132,7 @@ static int send_to_ws(const char* msg) {
     return 1;
 }
 static int send_answers_to_ws() {
-    int ret = 0;
+    int ret = 1;
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     cJSON* changes_report = ag_db_get_changes_report();
     if(changes_report) {
@@ -146,104 +146,131 @@ static int send_answers_to_ws() {
 
 
 static void run_agent_actions() {
-    if(ag_db_get_flag(AG_DB_STATE_AGENT_ON)) { /* AGENT is ON */
-        if (ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT)) {  /* Reconnect case */
-            pu_log(LL_DEBUG, "%s: Agent: Connection info changed. WS reconnect requested", __FUNCTION__);
+    int variant = ag_db_get_int_property(AG_DB_STATE_AGENT_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT);
+    switch(variant) {
+        case 0:     /* state: disconnected, no command for connection */
+            break;
+        case 1:     /* state: disconnected, got command for connect */
+            pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
+            send_startup_report();
+            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* request WS connect */
+            ag_db_store_property(AG_DB_STATE_AGENT_ON, "1");        /* set Agent as connected */
+            ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
+            break;
+        case 10:     /* state: connected, no command */
+            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {   /* Process Agent actions */
+                send_wd();
+                ag_db_set_flag_off(AG_DB_CMD_SEND_WD_AGENT);
+                pu_log(LL_INFO, "%s: Watchdog sent to WUD", __FUNCTION__);
+            }
+            break;
+        case 11:     /* state: connected, got command for connect: reconnection! */
+            pu_log(LL_INFO, "%s: Got connection info. Reconnect case", __FUNCTION__);
             ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);  /* Ask for WS (re)connect */
-        }
-     }
-    else {  /* AGENT is off */
-        pu_log(LL_DEBUG, "%s: Agent: Disconnected. WS connect requested", __FUNCTION__);
-        ag_db_set_flag_on(AG_DB_STATE_AGENT_ON);   /* Set agent status to on */
-        send_startup_report();
-        ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);  /* Ask WS connect */
-    }
-    ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* Clear Agent's connect command */
-
-    if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {
-        send_wd();
-        ag_db_set_flag_off(AG_DB_CMD_SEND_WD_AGENT);
+            ag_db_store_property(AG_DB_STATE_AGENT_ON, "1");        /* set Agent as connected */
+            ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
     }
 }
 static void run_ws_actions() {
-    if(ag_db_get_flag(AG_DB_STATE_WS_ON)) { /* WS is ON */
-        if(ac_is_stream_error()) {       /* sent stream error to WS */
-            ac_send_stream_error();
-            ac_clear_stream_error();
-         }
-        if(ag_db_get_flag(AG_DB_CMD_CONNECT_WS)) {  /* Reconnect case */
-            pu_log(LL_DEBUG, "%s WS: WS is ON. Reconnect requested", __FUNCTION__);
-            ac_disconnect_video();
-            ag_db_set_flag_off(AG_DB_STATE_WS_ON);
-            ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW); /* In case we got live streaming */
-
-            if (!ac_connect_video()) {
-                pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive.", __FUNCTION__);
-            } else {
-                ag_db_set_flag_on(AG_DB_STATE_WS_ON);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
-            }
-        }
-    }
-    else {  /* WS is off */
-        if(ag_db_get_flag(AG_DB_CMD_CONNECT_WS)) {    /* Connect WS */
+    int variant = ag_db_get_int_property(AG_DB_STATE_WS_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_WS);
+    switch(variant) {
+        case 0: /* Disconnected, no command */
+            break;
+        case 1: /* Disconnected, got connect command */
             pu_log(LL_DEBUG, "%s: WS is OFF. Connect requested", __FUNCTION__);
             if(!ac_connect_video()) {
                 pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive.", __FUNCTION__);
             }
             else {
-                ag_db_set_flag_on(AG_DB_STATE_WS_ON);
+                ag_db_store_property(AG_DB_STATE_WS_ON, "1");
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
+
+                if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, "1"); /* To warm-up streaming */
             }
-        }
-    }
-/* Check if viewers count request happens */
-    if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS) && ag_db_get_flag(AG_DB_STATE_WS_ON)) {
-        ac_send_active_viwers_request();                    /* NB! The ws ability to send doesn't checked here! */
-        ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
-    }
-/* Check for ping from WS */
-    if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {
-        send_to_ws(ao_answer_to_ws_ping());
-        ag_db_set_flag_off(AG_DB_CMD_PONG_REQUEST);
+            break;
+        case 10: /* Connected, no command */
+            if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
+                ac_send_stream_error();
+                ac_clear_stream_error();
+                ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
+                pu_log(LL_INFO, "%s: Stream error message sent to WS, Stream disconnect requested", __FUNCTION__);
+            }
+            else {
+                if((ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS) || ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) && !ag_db_get_int_property(AG_DB_STATE_RW_ON)) { /* User wana show! */
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
+                    pu_log(LL_INFO, "%s: Got streamStatus = 1 or active viwers > 0. Stream start requested", __FUNCTION__);
+                }
+                else if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) && !ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
+                    ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
+                    pu_log(LL_INFO, "%s: No active viewers so far. Stream stop requested", __FUNCTION__);
+                }
+            }
+            if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
+                ac_send_active_viwers_request();
+                ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
+                pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
+            }
+            if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {        /* Send pong to WS if requested */
+                send_to_ws(ao_answer_to_ws_ping());
+                ag_db_set_flag_off(AG_DB_CMD_PONG_REQUEST);
+                pu_log(LL_INFO, "%s: Pong answer sent to ws", __FUNCTION__);
+            }
+            break;
+        case 11: /* Connected, got command for connect: Reconnect case. NB! WS & RW stop; WS start again, but RW NOT! */
+            pu_log(LL_DEBUG, "%s WS: WS is ON. Reconnect requested", __FUNCTION__);
+            ac_disconnect_video();
+            ag_db_store_property(AG_DB_STATE_WS_ON, "0");
+            ag_db_store_property(AG_DB_STATE_RW_ON, "0"); /* We stop already streaming thread in ac_disconnect_video*/
+
+            if (!ac_connect_video()) {
+                pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
+            } else {
+                ag_db_store_property(AG_DB_STATE_WS_ON, "1");
+                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
+                if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) > 0) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
+                    pu_log(LL_INFO, "%s: Got streamStatus = 1 and active viwers > 0. Stream start requested", __FUNCTION__);
+                }
+            }
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
     }
 }
 static void run_streaming_actions() {
-    if(ag_db_get_flag(AG_DB_STATE_RW_ON)) {     /* Streaming works */
-        if (ag_db_get_flag(AG_DB_CMD_CONNECT_RW)) {  /* reconnect request */
-            pu_log(LL_DEBUG, "%s: Streaming is ON. Restart requested", __FUNCTION__);
-            ac_stop_video();
-            ag_db_set_flag_off(AG_DB_STATE_RW_ON);
+    int variant = ag_db_get_int_property(AG_DB_STATE_RW_ON)*100+ag_db_get_flag(AG_DB_CMD_CONNECT_RW)*10+ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW);
+    switch(variant) {
+        case 0: /* Not connected, no commands */
+        case 1: /* Not connected, got disconnect command */
+        case 11: /* Got connect & disconnect commands */
+        case 110: /* Connected, got connect command */
+        case 111: /* Connected, got connect & dosconnect commands */
+            break;
+        case 10: /* Disconnected, Got command to connect */
+            pu_log(LL_INFO, "%s: No streaming. Got stream start request", __FUNCTION__);
             if (!ac_start_video()) {
                 pu_log(LL_ERROR, "%s: Error RW start. RW inactive", __FUNCTION__);
             } else {
-                ag_db_set_flag_on(AG_DB_STATE_RW_ON);
+                ag_db_store_property(AG_DB_STATE_RW_ON, "1");
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
             }
-        }
-        if (ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW) || (ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) == 0)) {/* Stop streaming request */
-            pu_log(LL_DEBUG, "%s: Streaming is ON. Active viwers amount is %d. Stop requested", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
+            break;
+        case 100: /* Connected, no commands: Place for some routine actions during the streaming if any */
+            break;
+        case 101: /* Connected, got disconnect command */
+            pu_log(LL_INFO, "%s: Streaming. Got Stop Stream request", __FUNCTION__);
             ac_stop_video();
-            ag_db_set_flag_off(AG_DB_STATE_RW_ON);
             ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
-        }
-    }
-    else {  /* Streaming is off */
-        if(ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS) || (ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) > 0)) {
-            ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-            if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, "1");
-        }
-        if (ag_db_get_flag(AG_DB_CMD_CONNECT_RW)) {
-            pu_log(LL_DEBUG, "%s: Streaming is OFF. Start requested", __FUNCTION__);
-            if (!ac_start_video()) {
-                pu_log(LL_ERROR, "%s: Error RW start. RW inactive", __FUNCTION__);
-            }
-            else {
-                ag_db_set_flag_on(AG_DB_STATE_RW_ON);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
-                ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS); /* Start video sends answers about streaming */
-            }
-        }
+            ag_db_store_property(AG_DB_STATE_RW_ON, "0");
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
     }
 }
 static void run_cam_actions() {
@@ -293,7 +320,7 @@ static int get_protocol_number(msg_obj_t* obj) {
     if(!obj) return 0;
     if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return 1;
     if(cJSON_GetObjectItem(obj, "commands") != NULL) return 2;
-    if((cJSON_GetObjectItem(obj, "params")!=NULL) || (cJSON_GetObjectItem(obj, "viewersCount")!=NULL)) return 3;
+    if((cJSON_GetObjectItem(obj, "pingInterval")!=NULL)||(cJSON_GetObjectItem(obj, "params")!=NULL)||(cJSON_GetObjectItem(obj, "viewersCount")!=NULL)) return 3;
     return 0;
 }
 /*
@@ -374,15 +401,22 @@ static void process_message(char* msg) {
             break;
         case 3: {   /* WS case */
             msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
-            if(result_code && (result_code->valueint == 10)) {      /* Ping received - Pong should be sent */
-                ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST);
+            if(result_code) {
+                if(result_code->valueint == AO_WS_PING_RC) {
+                    ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST); /* Ping received - Pong should be sent */
+                }
+                else if((result_code->valueint == AO_WS_THREAD_ERROR)||(result_code->valueint == AO_WS_TO_ERROR)) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS); /* WS thread error - reconnect required */
+                }
             }
+
 /* First, lets store change on viewersCount and  pingInterval (if any). */
             msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
-            if(viewers_count) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valuestring);
+            if(viewers_count)
+                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
 
             msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
-            if(ping_interval) ag_db_store_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valuestring);
+            if(ping_interval) ag_db_store_int_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valueint);
 
             msg_obj_t* params = ao_proxy_get_ws_params_array(obj_msg);
             if(params) {
@@ -395,8 +429,9 @@ static void process_message(char* msg) {
                 }
             }
         }
+            break;
         default:
-            pu_log(LL_ERROR, "%s: Unrecognized protocol # %d Message %s ignored.", __FUNCTION__, protocol_number, msg);
+            pu_log(LL_ERROR, "%s: Protocol # %d: unrecognized  message %s. Ignored.", __FUNCTION__, protocol_number, msg);
             break;
     }
     pr_erase_msg(obj_msg);
@@ -419,8 +454,6 @@ static void process_rw_message(char* msg) {
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
     ac_set_stream_error(err_message);
-
-    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask RW for (re) connect */
 }
 
 static void restart_events_monitor() {
@@ -604,7 +637,7 @@ void at_main_thread() {
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
         /*2. Ask viwer about active viewers - in case of WEB viewer timeout */
-        if(lib_timer_alarm(ws_clock) && (ag_db_get_flag(AG_DB_STATE_WS_ON))) {
+        if(lib_timer_alarm(ws_clock) && (ag_db_get_int_property(AG_DB_STATE_WS_ON))) {
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
             lib_timer_init(&ws_clock, ag_db_get_int_property(AG_DB_STATE_PING_INTERVAL));
         }

@@ -127,7 +127,7 @@ typedef struct {
 static const ag_db_record_t SCHEME[] = {
 /*  1                       2   3   4   5   6   7   8   9   10                   11                  12  */
 /*  name                    val chf str chd chr upd prs dfv clcam               camcl               camm */
-{AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  4,  NULL,               NULL,               NULL},
+{AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 
@@ -440,7 +440,7 @@ int ag_db_get_flag(const char* property_name) {
 }
 /*
  * Return 0 if no change; return 1 if proprrty changed
- * !Set the property's flag ON in any case!.
+ * !Set the property's flag ON anyway.
  */
 int ag_db_store_property(const char* property_name, const char* property_value) {
     int ret=0;
@@ -452,6 +452,11 @@ int ag_db_store_property(const char* property_name, const char* property_value) 
     }
     IMDB[pos].change_flag = 1;
     return ret;
+}
+int ag_db_store_int_property(const char* property_name, int property_value) {
+    char buf[20]={0};
+    snprintf(buf, sizeof(buf)-1, "%d", property_value);
+    return ag_db_store_property(property_name, buf);
 }
 int ag_db_get_int_property(const char* property_name) {
     int pos = find_param(property_name);
