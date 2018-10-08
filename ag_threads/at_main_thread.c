@@ -195,7 +195,10 @@ static void run_ws_actions() {
             break;
         case 10: /* Connected, no command */
             if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
-                ac_send_stream_error();
+                if(!ac_send_stream_error()) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
+                    pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
+                }
                 ac_clear_stream_error();
                 ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
                 pu_log(LL_INFO, "%s: Stream error message sent to WS, Stream disconnect requested", __FUNCTION__);
@@ -205,15 +208,23 @@ static void run_ws_actions() {
                     ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
                     pu_log(LL_INFO, "%s: Got streamStatus = 1 or active viwers > 0. Stream start requested", __FUNCTION__);
                 }
-                else if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) && !ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
+/*
+                else if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) && ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
+
                     ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
                     pu_log(LL_INFO, "%s: No active viewers so far. Stream stop requested", __FUNCTION__);
                 }
+*/
             }
             if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
-                ac_send_active_viwers_request();
-                ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
-                pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
+                if(!ac_send_active_viwers_request()) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
+                    pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
+                }
+                else {
+                    ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
+                    pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
+                }
             }
             if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {        /* Send pong to WS if requested */
                 send_to_ws(ao_answer_to_ws_ping());
@@ -246,11 +257,8 @@ static void run_ws_actions() {
 static void run_streaming_actions() {
     int variant = ag_db_get_int_property(AG_DB_STATE_RW_ON)*100+ag_db_get_flag(AG_DB_CMD_CONNECT_RW)*10+ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW);
     switch(variant) {
-        case 0: /* Not connected, no commands */
-        case 1: /* Not connected, got disconnect command */
-        case 11: /* Got connect & disconnect commands */
-        case 110: /* Connected, got connect command */
-        case 111: /* Connected, got connect & dosconnect commands */
+        case 0:     /* all is off */
+        case 1:     /* disconnect request came to disconnected cam */
             break;
         case 10: /* Disconnected, Got command to connect */
             pu_log(LL_INFO, "%s: No streaming. Got stream start request", __FUNCTION__);
@@ -466,7 +474,7 @@ static void restart_events_monitor() {
 }
 static void process_alert(char* msg) {
     t_ao_cam_alert data = ao_cam_decode_alert(msg);
-    pu_log(LL_DEBUG, "%s: Camera alert %d came");
+    pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:

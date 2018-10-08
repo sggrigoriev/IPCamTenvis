@@ -154,8 +154,10 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
     return AC_CAM_EVENT_UNDEF;
 }
 static void* thread_function(void* params) {
-    stop = 0;
     pu_log(LL_INFO, "%s starts", AT_THREAD_NAME);
+
+    stop = 0;
+    to_agent = aq_get_gueue(AQ_FromCam);
 
     time_t md_start=0, sd_start=0, io_start=0;
 
@@ -213,7 +215,6 @@ int at_start_cam_alerts_reader() {
         pu_log(LL_ERROR, "%s: Eror Cam's Events Monitor setup", AT_THREAD_NAME);
         return 0;
     }
-
     if(pthread_attr_init(&attr)) return 0;
     if(pthread_create(&id, &attr, &thread_function, NULL)) return 0;
 
