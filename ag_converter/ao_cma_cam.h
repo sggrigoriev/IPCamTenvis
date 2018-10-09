@@ -43,6 +43,7 @@ const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t e
 #define AO_CAM_CMD_SNAPSHOT 1
 #define AO_CAM_CMD_MD       2
 #define AO_CAM_CMD_SD       3
+#define AO_CAM_CMD_TIME     4
 
 typedef enum {
     AO_CAM_PAR_UNDEF,

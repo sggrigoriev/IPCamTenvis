@@ -26,6 +26,20 @@
 #include "ao_cmd_data.h"
 
 /*
+ * AC_CAM_STOP_MD -> 'V'
+ * AC_CAM_STOP_SD -> 'S'
+ * AC_CAM_MADE_SNAPSHOT -> 'P'
+ * Anything else -> '?
+ */
+char get_event2file_type(t_ac_cam_events e);
+/*
+ * Create the JSON array with full file names& path for alert
+ */
+const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
+
+/************************************************************************/
+
+/*
  * Make initial something for the Camera
  * Set correct string for SD & MD - everything is ready but ts0 just as "ts0="
  */
@@ -34,13 +48,6 @@ int ac_cam_init();
  * Opposite...
  */
 void ac_cam_deinit();
-
-
-/*
- * Create the JSON array with full file names& path for alert
- */
-const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
-
 /*
  * Make pictire and store it by full_path
  * Return 0 if error

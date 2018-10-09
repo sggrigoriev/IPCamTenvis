@@ -37,6 +37,7 @@
 /* Cam's commands names */
 #define CMD_SD_NAME     "sounddet"
 #define CMD_MD_NAME     "cfgalertmd"
+#define CMD_TIME_NAME   "timecfg"
 #define CMD_SNAP_NAME   "snapshot?&strm=0&q=0"
 
 #define PAR_READ    "?list=1"
@@ -339,6 +340,9 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
             break;
         case AO_CAM_CMD_SD:
             name = (read_pars)?CMD_SD_NAME PAR_READ:CMD_SD_NAME;
+            break;
+        case AO_CAM_CMD_TIME:
+            name = (read_pars)?CMD_TIME_NAME PAR_READ:CMD_TIME_NAME;
             break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized cmd_id = %d", __FUNCTION__, cmd_id);

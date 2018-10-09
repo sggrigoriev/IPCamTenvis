@@ -68,9 +68,12 @@
 #define DEFAULT_CLOUD_PING_TO   300
 
 #define DEFAULT_DT_FILES_PATH   "/mnt/rd/0"
-#define DEFAULT_DT_FILES_PREFIX "0-"
+#define DEFAULT_DT_FILES_PREFIX "0-"            /*NB!!! ag_cam_io/ac_cam functions strictly relates on PREFIX & POSTFIX length!!! */
 #define DEFAULT_MD_FILE_POSTFIX "M"
 #define DEFAULT_SD_FILE_POSTFIX "S"
+#define DEFAULT_MSD_FILE_EXT    "mp4"
+#define DEFAULT_SNAP_FILE_POSTFIX "P"
+#define DEFAULT_SNAP_FILE_EXT    "jpg"
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
 

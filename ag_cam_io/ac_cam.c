@@ -29,13 +29,14 @@
 #include "cJSON.h"
 #include "pu_logger.h"
 
+#include "ag_defaults.h"
 #include "ag_settings.h"
 #include "ao_cma_cam.h"
 #include "ac_http.h"
 #include "ag_db_mgr.h"
 #include "ac_cam.h"
 
-const char* make_dir_from_time(const char* path, time_t timestamp, char* buf, size_t size) {
+static const char* make_dir_from_date(const char* path, time_t timestamp, char* buf, size_t size) {
     struct tm t;
     char name[11] = {0};
 
@@ -50,52 +51,83 @@ const char* make_dir_from_time(const char* path, time_t timestamp, char* buf, si
  * Return 1 if the file name is preffix%%%%%%postfix...
  */
 static int is_right_name(const char* name, const char*prefix, const char* postfix) {
-    if(strlen(name)<(strlen(prefix)+strlen(postfix)+6)) return 0;
-    if(strncmp(name, prefix, strlen(prefix)) != 0) return 0;
-    if(strncmp(name+strlen(prefix)+6, postfix, strlen(postfix)) != 0) return 0;
+    char pr[10]={0}, nm[10]={0}, ps[10]={0};
+    int rc = sscanf(name, "%2s%6s%[^.]", pr, nm, ps);
+    if(rc != 3) {
+        pu_log(LL_ERROR, "%s: Error name scan: %d %s\n", errno, strerror(errno));
+        return 0;
+    }
+    pu_log(LL_DEBUG, "%s: File name is %s, parsed name is =%s=%s=%s=", __FUNCTION__, name, pr,nm, ps);
+    if(strcmp(pr, prefix) != 0) {
+        pu_log(LL_DEBUG, "%s: %s!=%s. Pitty", __FUNCTION__, pr, prefix);
+        return 0;
+    }
+    if(strcmp(ps, postfix) != 0) {
+        pu_log(LL_DEBUG, "%s: %s!=%s. Pitty", __FUNCTION__, ps, postfix);
+        return 0;
+    }
+
     return 1;
 }
 /*
  * convert hrs, mins, seconds from struct tm to the number hhmmss
  */
-static unsigned long tm2dig(struct tm t) {
-    return (unsigned long)t.tm_sec+(unsigned long)t.tm_min*100+(unsigned long)t.tm_hour*10000;
+static unsigned long tm2dig(int h, int m, int s) {
+    return (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
 }
 /*
  * return 1 if str conferted as hhmmss to long is between start and end
  */
-static int is_between(unsigned long start, const char* str, unsigned long end) {
+static unsigned long strHHMMSS_to_dig(const char* str) {
     int h, m, s;
 
     int i = sscanf(str, "%2i%2i%2i", &h, &m, &s);
     if(i != 3) {
-        printf("Error name scan: %d %s\n", errno, strerror(errno));
+        pu_log(LL_ERROR, "%s: Error name scan: %d %s\n", errno, strerror(errno));
         return 0;
     }
-    unsigned long md = (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
-
-    return ((start <= md) && (md < end));
+    return (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
 }
-/* concatinate [name, name, ... name] */
-char* add_files_list(const char* dir_name, time_t start, time_t end, const char* postfix, char* buf, size_t size) {
+/*
+ * Return 1 if name is between start & stop and got rignt postfix (S) or (M) or (P) for stapshot
+ */
+static int got_name(const char* name, time_t start, time_t end, const char* postfix) {
+    struct tm tm_s, tm_e;
+    gmtime_r(&start, &tm_s);
+    gmtime_r(&end, &tm_e);
+    unsigned long start_time = tm2dig(tm_s.tm_hour, tm_s.tm_min, tm_s.tm_sec);
+    unsigned long end_time = tm2dig(tm_e.tm_hour, tm_e.tm_min, tm_e.tm_sec);
+    unsigned long event_time = strHHMMSS_to_dig(name+strlen(DEFAULT_DT_FILES_PREFIX));
+
+    pu_log(LL_DEBUG, "%s: start_time = %lu, event_time = %lu, end_time = %lu", __FUNCTION__, start_time, end_time, event_time);
+
+    return ((start_time <= event_time) && (event_time <= end_time) && is_right_name(name, DEFAULT_DT_FILES_PREFIX, postfix));
+}
+/*
+ * concatinate [name, name, ... name]
+*/
+static char* add_files_list(const char* dir_name, time_t start, time_t end, const char* postfix, char* buf, size_t size) {
+    pu_log(LL_DEBUG, "%s: Open dir %s", __FUNCTION__, dir_name);
     DIR *dir = opendir(dir_name);
     buf[0] = '\0';
-    if (dir == NULL)        /* Not a directory or doesn't exist */
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, dir_name);
         return buf;
+    }
     else {
         struct dirent* dir_ent;
         int first = 0;
         while((dir_ent = readdir(dir)), dir_ent != NULL) {
-            struct tm tm_s, tm_e;
-            gmtime_r(&start, &tm_s);
-            gmtime_r(&end, &tm_e);
-            if(is_right_name(dir_ent->d_name, DEFAULT_DT_FILES_PREFIX, postfix) && is_between(tm2dig(tm_s), dir_ent->d_name+strlen(DEFAULT_DT_FILES_PREFIX), tm2dig(tm_e))) {
+             if(got_name(dir_ent->d_name, start, end, postfix)) {
                 if(!first) {
                     first = 1;
                     strncat(buf, "[", size - strlen(buf)-1);
                 }
                 strncat(buf, dir_ent->d_name, size - strlen(buf)-1);
                 strncat(buf, ", ", size - strlen(buf)-1);
+            }
+            else {
+                pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
             }
         }
         if(strlen(buf)) buf[strlen(buf)-2] = ']';  /* Replace last ',' to ']'*/
@@ -104,7 +136,31 @@ char* add_files_list(const char* dir_name, time_t start, time_t end, const char*
     return buf;
 }
 /***************************************************************************************************************/
-
+/*
+ * AC_CAM_STOP_MD -> 'V'
+ * AC_CAM_STOP_SD -> 'S'
+ * AC_CAM_MADE_SNAPSHOT -> 'P'
+ * Anything else -> '?
+ */
+char get_event2file_type(t_ac_cam_events e) {
+    char ret;
+    switch(e) {
+        case AC_CAM_STOP_MD:
+            ret = 'V';
+            break;
+        case AC_CAM_STOP_SD:
+            ret = 'S';
+            break;
+        case AC_CAM_MADE_SNAPSHOT:
+            ret = 'P';
+            break;
+        default:
+            ret = '?';
+            pu_log(LL_ERROR, "%s: Wrong event type %d only %d, %d or %d allowed", __FUNCTION__, e, AC_CAM_STOP_MD, AC_CAM_STOP_SD, AC_CAM_MADE_SNAPSHOT);
+            break;
+    }
+    return ret;
+}
 /*
  * Create the JSON array with full file names& path for alert "filesList":["name1",..."nameN"]
  * If no files found - return empty string
@@ -116,9 +172,9 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
     char dir[256] = {0};
     const char* postfix;
 
-    make_dir_from_time(DEFAULT_DT_FILES_PATH, data.start_date, dir, sizeof(dir));
+    make_dir_from_date(DEFAULT_DT_FILES_PATH, data.start_date, dir, sizeof(dir));
     if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_MD_FILE_POSTFIX;
-    else if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_SD_FILE_POSTFIX;
+    else if(data.cam_event == AC_CAM_STOP_SD) postfix = DEFAULT_SD_FILE_POSTFIX;
     else {
         pu_log(LL_ERROR, "%s: Wrong event %s only %s or %s expected", __FUNCTION__, ac_cam_event2string(data.cam_event), ac_cam_event2string(AC_CAM_STOP_MD), ac_cam_event2string(AC_CAM_STOP_SD));
         buf[0] = '\0';
@@ -266,11 +322,15 @@ on_error:
  * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
  */
 int ac_cam_init() {
+    const char* TIME_1st_PARAM = "time=";
+    const char* TIME_FORMAT = "%Y%m%d%H%M%S";
+    const char* TIME_REST_PARAMS = "&ntpen=1&tz=GMT&location=GMT&ck_dst=0&ntpserver=time.nist.gov";
     const char* MD_INIT_PARAMS = "recch=1&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
     const char* SD_INIT_PARAMS = "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
 
     char* md_uri = NULL;
     char* sd_uri = NULL;
+    char* time_uri = NULL;
     int ret = 0;
     if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
     if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
@@ -278,10 +338,25 @@ int ac_cam_init() {
     if(sd_uri = ao_make_cam_uri(AO_CAM_CMD_SD, AO_CAM_WRITE), !sd_uri) goto on_error;
     if(!send_command(sd_uri, SD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error SD initiation", __FUNCTION__);
 
+    struct tm t;
+    char dat[15] = {0};
+    char buf[256]={0};
+    time_t timestamp = time(NULL);
+    gmtime_r(&timestamp, &t);
+    strftime(dat, sizeof(dat), TIME_FORMAT, &t);
+    snprintf(buf, sizeof(buf)-1, "%s%s%s", TIME_1st_PARAM, dat, TIME_REST_PARAMS);
+
+    if(time_uri = ao_make_cam_uri(AO_CAM_CMD_TIME, AO_CAM_WRITE), !time_uri) goto on_error;
+    if(!send_command(time_uri, buf)) pu_log(LL_ERROR, "%s: Error Camera time setup", __FUNCTION__);
+
+    pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
+    pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
+    pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
     ret = 1;
     on_error:
     if(md_uri) free(md_uri);
     if(sd_uri) free(sd_uri);
+    if(time_uri) free(time_uri);
     return ret;
 }
 void ac_cam_deinit() {

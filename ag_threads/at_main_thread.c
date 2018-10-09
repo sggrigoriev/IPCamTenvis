@@ -104,7 +104,7 @@ static void send_snapshot(const char* full_path) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
     snprintf(flist, sizeof(flist), fmt, full_path);
-    pr_make_send_files4WUD(buf, sizeof(buf), flist, ag_getProxyID());
+    pr_make_send_files4WUD(buf, sizeof(buf), get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist, ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf) + 1);
 }
 static void send_send_file(t_ao_cam_alert data) {
@@ -112,7 +112,7 @@ static void send_send_file(t_ao_cam_alert data) {
     char f_list[LIB_HTTP_MAX_MSG_SIZE];
 
     if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
-        pr_make_send_files4WUD(buf, sizeof(buf), f_list, ag_getProxyID());
+        pr_make_send_files4WUD(buf, sizeof(buf), get_event2file_type(data.cam_event), f_list, ag_getProxyID());
         pu_queue_push(to_wud, buf, strlen(buf) + 1);
     }
     else {
