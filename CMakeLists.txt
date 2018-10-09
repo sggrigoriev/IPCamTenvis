@@ -90,6 +90,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     set(SYSROOT_PATH $ENV{SYSROOT})
     set(COMPILER_PREFIX arm-hisiv500-linux-uclibcgnueabi-)
     set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
+    set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}g++)
 #    set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
     set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
 #    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
@@ -104,7 +105,8 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             pthread
             nopoll
             ssl
-            crypto)
+            crypto
+            stdc++)
 
 
     include_directories(
@@ -172,11 +174,12 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
+            add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
             target_link_libraries(jq m)
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
-            ${SYSROOT_PATH}/usr/lib/libcam.a
+            ${SYSROOT_PATH}/usr/lib/libipcam.a
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
@@ -209,7 +212,11 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             ${SYSROOT_PATH}/usr/lib/libcurl.a
             ${SYSROOT_PATH}/usr/lib/libdl.so.0
 
+
             )
+            set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
+            set_property(TARGET jq PROPERTY C_STANDARD 90)
+            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
 endif()
 
 set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
