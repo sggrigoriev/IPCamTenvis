@@ -110,11 +110,11 @@ static int MS_cam_2_cloud(int cam_value) {
 typedef struct {
 /*01*/  char* name;             /*Cloud or own name */
 /*02*/  int value;            /* Could not be used if flag only. For OWN flags(commands) */
-/*03*/  int change_flag;          /* If there is own logic for param - it will work if change_flag == 1 */
+/*03*/  int change_flag;          /* Changed by store_property(), by update_cam_aparams() for camera parameters only, by own logic using set_flag_on/off */
 
 /*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
-/*05*/  int changed;            /* 1 if value changed adn in_changes_report == 1. Set to 0 after ag_db_get_startup_report() call */
-/*06*/  int in_changes_report;  /* 1: Sould be taken for changes report to WS if "change_flag == 1*/
+/*05*/  int changed;            /* 1 if value changed and included in changes report. Set to 0 in ag_db_get_startup_report() call */
+/*06*/  int in_changes_report;  /* 1: Should be taken for changes report to WS if "change_flag == 1*/
 
 /*07*/  int updated;            /* 1 if updated and persistent == 1 Set to 0 after ag_save_cam_properties() call */
 /*08*/  int persistent;         /* 1 if has to be stored on disk */
@@ -125,6 +125,9 @@ typedef struct {
 /*11*/  out_t cam_cloud_converter;  /* Converts cam_value to value Could be NULL */
 /*12*/  out_t cam_method;           /* Function to take param from camera and return back after re-read(see ac_cam.h) */
 } ag_db_record_t;
+
+#define AG_FIRST_CAM_PAR_IDX 10 /* AG_DB_STATE_VIEWERS_COUNT */
+
 static const ag_db_record_t SCHEME[] = {
 /*  1                       2   3   4   5   6   7   8   9   10                   11                  12  */
 /*  name                    val chf str chd chr upd prs dfv clcam               camcl               camm */
@@ -140,7 +143,7 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_RW_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-
+/* Cam-related properties start from here */
 {AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
 {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -172,13 +175,6 @@ static int char2int(const char* str) {
     sscanf(str, "%d", &ret);
     return ret;
 }
-/*
- * return 1 if v1 == v2
- */
-static int equal(const char* in, int own) {
-    return char2int(in) == own;
-}
-
 /*
  * Return string {"params_array":[{"name":"<name>", "value":"<value>"}, ...]} or NULL
  */
@@ -387,6 +383,7 @@ static void add_reported_property(cJSON* report, const char* name, int value) {
 }
 /*
  * return cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * NB! Clear change_flag!
 */
 cJSON* ag_db_get_changes_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
@@ -458,24 +455,24 @@ int ag_db_get_flag(const char* property_name) {
  * Return 0 if no change; return 1 if proprrty changed
  * !Set the property's flag ON anyway.
  */
-int ag_db_store_property(const char* property_name, const char* property_value) {
-    int ret=0;
+int ag_db_store_int_property(const char* property_name, int property_value) {
+    int ret = 0;
     pthread_mutex_lock(&local_mutex);
-        int pos = find_param(property_name);
-        if(pos < 0)
-            ret = 0;
-        else if(!equal(property_value, IMDB[pos].value)) {
-            replace_param_value(pos, property_value);
-            ret = 1;
-        }
-        IMDB[pos].change_flag = 1;
+    int pos = find_param(property_name);
+    if(pos < 0)
+        ret = 0;
+    else if(property_value != IMDB[pos].value) {
+        replace_int_param_value(pos, property_value);
+        ret = 1;
+    }
+    IMDB[pos].change_flag = 1;
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }
-int ag_db_store_int_property(const char* property_name, int property_value) {
-    char buf[20]={0};
-    snprintf(buf, sizeof(buf)-1, "%d", property_value);
-    return ag_db_store_property(property_name, buf);
+int ag_db_store_property(const char* property_name, const char* property_value) {
+    int val = char2int(property_value);
+    return ag_db_store_int_property(property_name, val);
+
 }
 int ag_db_get_int_property(const char* property_name) {
     int ret = 0;
@@ -497,10 +494,10 @@ int ag_db_get_int_property(const char* property_name) {
 int ag_db_update_changed_cam_parameters() {
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = 0; i < NELEMS(SCHEME); i++) {
+        for(i = AG_FIRST_CAM_PAR_IDX; i < NELEMS(SCHEME); i++) {
             if(IMDB[i].change_flag) {
-                IMDB[i].change_flag = 0;
                 sync_camera_param(i);
+                IMDB[i].change_flag = 0;    /* Flag could be cleared - these are camera parameters only! */
             }
         }
     pthread_mutex_unlock(&local_mutex);

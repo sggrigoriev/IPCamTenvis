@@ -76,6 +76,7 @@
 #define DEFAULT_SNAP_FILE_EXT    "jpg"
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
+#define DEFAULT_AV_ASK_TO_SEC   5*60
 
 #define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
 #define DEFAULT_SNAP_PATH   "./the_snapshot.jpg"

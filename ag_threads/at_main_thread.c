@@ -155,11 +155,11 @@ static void run_agent_actions() {
             pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
             send_startup_report();
             ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* request WS connect */
-            ag_db_store_property(AG_DB_STATE_AGENT_ON, "1");        /* set Agent as connected */
+            ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);        /* set Agent as connected */
             ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
             break;
-        case 10:     /* state: connected, no command */
-            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {   /* Process Agent actions */
+        case 10:     /* state: connected, no command -> Process Agent actions */
+            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {
                 send_wd();
                 ag_db_set_flag_off(AG_DB_CMD_SEND_WD_AGENT);
                 pu_log(LL_INFO, "%s: Watchdog sent to WUD", __FUNCTION__);
@@ -167,8 +167,8 @@ static void run_agent_actions() {
             break;
         case 11:     /* state: connected, got command for connect: reconnection! */
             pu_log(LL_INFO, "%s: Got connection info. Reconnect case", __FUNCTION__);
-            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);  /* Ask for WS (re)connect */
-            ag_db_store_property(AG_DB_STATE_AGENT_ON, "1");        /* set Agent as connected */
+            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* Ask for WS (re)connect */
+            ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);  /* set Agent as connected */
             ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
             break;
         default:
@@ -184,47 +184,41 @@ static void run_ws_actions() {
         case 1: /* Disconnected, got connect command */
             pu_log(LL_DEBUG, "%s: WS is OFF. Connect requested", __FUNCTION__);
             if(!ac_connect_video()) {
+                if(ag_db_get_int_property(AG_DB_STATE_RW_ON)) /* Stop streaming if it is */
+                    ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
                 pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive.", __FUNCTION__);
             }
             else {
-                ag_db_store_property(AG_DB_STATE_WS_ON, "1");
+                ag_db_store_int_property(AG_DB_STATE_WS_ON, 1);
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
-
-                if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) ag_db_store_property(AG_DB_STATE_VIEWERS_COUNT, "1"); /* To warm-up streaming */
+                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1); /* To warm-up streaming unconditionally*/
+                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
             }
             break;
-        case 10: /* Connected, no command */
+        case 10: /* Connected, no command -> execute own actions if any */
             if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
+                pu_log(LL_DEBUG, "%s: Got streaming error!", __FUNCTION__);
                 if(!ac_send_stream_error()) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* Sending error means WS is not in good shape */
                     pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
                 }
-                ac_clear_stream_error();
-                ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
-                pu_log(LL_INFO, "%s: Stream error message sent to WS, Stream disconnect requested", __FUNCTION__);
-            }
-            else {
-                if((ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS) || ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) && !ag_db_get_int_property(AG_DB_STATE_RW_ON)) { /* User wana show! */
+                else {
                     ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-                    pu_log(LL_INFO, "%s: Got streamStatus = 1 or active viwers > 0. Stream start requested", __FUNCTION__);
+                    pu_log(LL_INFO, "%s: Stream error message sent to WS, Stream reconnect requested", __FUNCTION__);
                 }
-/*
-                else if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) && ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
-
-                    ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
-                    pu_log(LL_INFO, "%s: No active viewers so far. Stream stop requested", __FUNCTION__);
-                }
-*/
+                ac_clear_stream_error();
+                break;
             }
             if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
                 if(!ac_send_active_viwers_request()) {
                     ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
                     pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
+                    break;
                 }
                 else {
-                    ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
                     pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
                 }
+                ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
             }
             if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {        /* Send pong to WS if requested */
                 send_to_ws(ao_answer_to_ws_ping());
@@ -234,19 +228,18 @@ static void run_ws_actions() {
             break;
         case 11: /* Connected, got command for connect: Reconnect case. NB! WS & RW stop; WS start again, but RW NOT! */
             pu_log(LL_DEBUG, "%s WS: WS is ON. Reconnect requested", __FUNCTION__);
+            ac_stop_video();
             ac_disconnect_video();
-            ag_db_store_property(AG_DB_STATE_WS_ON, "0");
-            ag_db_store_property(AG_DB_STATE_RW_ON, "0"); /* We stop already streaming thread in ac_disconnect_video*/
+            ag_db_store_int_property(AG_DB_STATE_WS_ON, 0);
+            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0); /* We stop already streaming thread in ac_stop_video*/
 
             if (!ac_connect_video()) {
                 pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
-            } else {
-                ag_db_store_property(AG_DB_STATE_WS_ON, "1");
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
-                if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT) > 0) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-                    pu_log(LL_INFO, "%s: Got streamStatus = 1 and active viwers > 0. Stream start requested", __FUNCTION__);
-                }
+            }
+            else {
+                ag_db_store_int_property(AG_DB_STATE_WS_ON, 1);
+                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);           /* Clear command as executed */
+                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);            /* Start streaming anyway here */
             }
             break;
         default:
@@ -258,24 +251,58 @@ static void run_streaming_actions() {
     int variant = ag_db_get_int_property(AG_DB_STATE_RW_ON)*100+ag_db_get_flag(AG_DB_CMD_CONNECT_RW)*10+ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW);
     switch(variant) {
         case 0:     /* all is off */
-        case 1:     /* disconnect request came to disconnected cam */
+            if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS)) {
+                pu_log(LL_INFO, "%s: Got streamStatis set to 1", __FUNCTION__);
+                if (!ac_start_video()) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
+                    pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
+                } 
+                else {
+                    ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
+                    ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS);
+                    ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1); /* On case WS is late */
+                }
+            }
+            break;
+        case 1:     /* cam disconnected, no conn request, got disconnect request */
+            ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
+            pu_log(LL_WARNING, "%s: Disconnect command for disconnected streamer. No action", __FUNCTION__);
             break;
         case 10: /* Disconnected, Got command to connect */
             pu_log(LL_INFO, "%s: No streaming. Got stream start request", __FUNCTION__);
             if (!ac_start_video()) {
-                pu_log(LL_ERROR, "%s: Error RW start. RW inactive", __FUNCTION__);
+                ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
+                pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
             } else {
-                ag_db_store_property(AG_DB_STATE_RW_ON, "1");
+                ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
                 ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
             }
             break;
         case 100: /* Connected, no commands: Place for some routine actions during the streaming if any */
+            if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) {
+                ac_stop_video();
+                ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
+                pu_log(LL_INFO, "%s: No active viewers found. Stop stream.", __FUNCTION__);
+            }
             break;
         case 101: /* Connected, got disconnect command */
             pu_log(LL_INFO, "%s: Streaming. Got Stop Stream request", __FUNCTION__);
             ac_stop_video();
             ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
-            ag_db_store_property(AG_DB_STATE_RW_ON, "0");
+            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
+            break;
+        case 110: /* Connected, got connect request -> reconnect! */
+            pu_log(LL_INFO, "%s: Streaming. Got Restart Stream request", __FUNCTION__);
+            ac_stop_video();
+            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
+            if(!ac_start_video()) {
+                pu_log(LL_ERROR, "%s: Can't start streaming during reconnect", __FUNCTION__);
+            }
+            else {
+                ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
+                ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
+                pu_log(LL_INFO, "%s: Streaming restarted Ok", __FUNCTION__);
+            }
             break;
         default:
             pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
@@ -288,6 +315,10 @@ static void run_cam_actions() {
 /* Change Audio sensitivity */
 /* Change Video sensitivity */
     ag_db_update_changed_cam_parameters();
+
+    if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
+        send_answers_to_ws();       /* Send changes report & clear change_flag */
+    }
 }
 static void run_snapshot_actions() {
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
@@ -315,8 +346,7 @@ static void run_actions() {
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
     run_snapshot_actions();     /* make a photo */
-    run_cam_actions();          /* MD/SD on-off */
-    send_answers_to_ws();       /* Send changes report */
+    run_cam_actions();          /* MD/SD on-off; update cam's channges, senr report, clear change flag */
 }
 
 /*
@@ -556,7 +586,7 @@ static int main_thread_startup() {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
         return 0;
     }
-    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READED");
+    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READER", __FUNCTION__);
 
     return 1;
 }
@@ -586,14 +616,17 @@ void at_main_thread() {
         pu_log(LL_ERROR, "%s: Initialization failed. Abort", AT_THREAD_NAME);
         main_finish = 1;
     }
+    pu_log(LL_INFO, "%s: Main thread startup Finished OK", AT_THREAD_NAME);
 
     lib_timer_clock_t wd_clock = {0};           /* timer for watchdog sending */
     lib_timer_init(&wd_clock, ag_getAgentWDTO());   /* Initiating the timer for watchdog sendings */
 
-    lib_timer_clock_t ws_clock = {0};   /* timer for WEB viewer check */
-    lib_timer_init(&ws_clock, ag_db_get_int_property(AG_DB_STATE_PING_INTERVAL));
+    lib_timer_clock_t va_clock = {0};   /* timer for viewers amount check */
+    lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
 
     unsigned int events_timeout = 1; /* Wait 1 second */
+
+    pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
     while(!main_finish) {
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
@@ -629,7 +662,7 @@ void at_main_thread() {
                 }
                 break;
             case AQ_Timeout:
-//                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
+/*                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME); */
                 break;
             case AQ_STOP:
                 main_finish = 1;
@@ -645,10 +678,10 @@ void at_main_thread() {
             ag_db_set_flag_on(AG_DB_CMD_SEND_WD_AGENT);
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
         }
-        /*2. Ask viwer about active viewers - in case of WEB viewer timeout */
-        if(lib_timer_alarm(ws_clock) && (ag_db_get_int_property(AG_DB_STATE_WS_ON))) {
+        /*2. Ask viewer about active viewers */
+        if(lib_timer_alarm(va_clock)) {
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
-            lib_timer_init(&ws_clock, ag_db_get_int_property(AG_DB_STATE_PING_INTERVAL));
+            lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
         }
 /* Interpret changes made in properties */
         run_actions();

@@ -20,10 +20,12 @@
 */
 
 #include <string.h>
-#include "ao_cmd_data.h"
-#include "ao_cmd_cloud.h"
+#include <pthread.h>
+
 #include "pu_logger.h"
 
+#include "ao_cmd_data.h"
+#include "ao_cmd_cloud.h"
 #include "au_string.h"
 #include "ao_cmd_data.h"
 #include "ag_settings.h"
@@ -176,7 +178,7 @@ int ac_start_video() {
     if(!ac_rtsp_start_streaming()) return 0;                                        //Start streaming thread(s)
 
     if(!ac_send_stream_confirmation()) {                                            //Send to WS streaming start confirmation
-        pu_log(LL_ERROR, "%s: Stream confirmation send to WS failed");
+        pu_log(LL_ERROR, "%s: Stream confirmation send to WS failed", __FUNCTION__);
         goto on_error;
     }
 
@@ -213,18 +215,27 @@ int ac_send_active_viwers_request() {
     return at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
 }
 
-static char stream_error[256];
+static pthread_mutex_t local_mutex = PTHREAD_MUTEX_INITIALIZER;
+static char stream_error[256]={0};
 
 void ac_set_stream_error(const char* err) {
-    strncpy(stream_error, err, sizeof(stream_error)-1);
-    stream_error[sizeof(stream_error)-1] = '\0';
+    pthread_mutex_lock(&local_mutex);
+        strncpy(stream_error, err, sizeof(stream_error)-1);
+        stream_error[sizeof(stream_error)-1] = '\0';
+    pthread_mutex_unlock(&local_mutex);
 }
 void ac_clear_stream_error() {
-    stream_error[0] = '\0';
+    pthread_mutex_lock(&local_mutex);
+        stream_error[0] = '\0';
+    pthread_mutex_unlock(&local_mutex);
 }
 /* return 1 if stlen() > 0 */
 int ac_is_stream_error() {
-    return strlen(stream_error) > 0;
+    int ret;
+    pthread_mutex_lock(&local_mutex);
+        ret = strlen(stream_error) > 0;
+    pthread_mutex_unlock(&local_mutex);
+    return ret;
 }
 int ac_send_stream_error() {
     char buf[512];

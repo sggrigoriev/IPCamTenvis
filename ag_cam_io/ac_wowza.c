@@ -66,6 +66,22 @@ static void clear_session(t_gst_session* gs) {
         free(gs);
     }
 }
+/*
+ * Mage for Chandani's experiments.
+ * Replaces url to url+addition
+ */
+static char* append_url(char *url, const char* addition) {
+    if((!url) || (!addition)) return url;
+    char buf[LIB_HTTP_MAX_URL_SIZE] = {0};
+    snprintf(buf, sizeof(buf)-1, "%s%s", url, addition);
+    char *ret = strdup(buf);
+    if(!ret) {
+        pu_log(LL_ERROR, "%s: Not enough memory!", __FUNCTION__);
+        return url;
+    }
+    free(url);
+    return ret;
+}
 
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
     pu_log(LL_DEBUG, "%s start", __FUNCTION__);
@@ -178,6 +194,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     pu_log(LL_DEBUG, "%s: New body for announnce =\n%s", __FUNCTION__, new_description);
 
     if(!ac_rtsp_set_setup_urls(new_description, sess, AT_RTSP_CONCAT)) goto on_error;
+    sess->audio_url = append_url(sess->audio_url, "?transcode=true");
     if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
     if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
 // Header
@@ -185,7 +202,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CSEQ, num); AC_GST_ANAL(rc);
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_USER_AGENT, AC_RTSP_CLIENT_NAME); AC_GST_ANAL(rc);
 
-    snprintf(num, sizeof(num)-1, "%lu", strlen(new_description));
+    snprintf(num, sizeof(num)-1, "%u", strlen(new_description));
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CONTENT_LENGTH, num); AC_GST_ANAL(rc);
 
 // Body

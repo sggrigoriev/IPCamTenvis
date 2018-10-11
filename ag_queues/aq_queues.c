@@ -25,8 +25,8 @@
 /***************************************************************************
  * Local data
  */
-static pu_queue_t* qu_arr[AQ_MAX_QUEUE-AQ_MIN_QUEUE+1];     /* Proxy queues pool */
-static pthread_mutex_t  own_mutex;                          /* Pool concurrent use protection */
+static pu_queue_t* qu_arr[AQ_MAX_QUEUE-AQ_MIN_QUEUE+1];         /* Proxy queues pool */
+static pthread_mutex_t  own_mutex=PTHREAD_MUTEX_INITIALIZER;    /* Pool concurrent use protection */
 
 /******************************************************************************
  * Public functions implementation
@@ -64,10 +64,3 @@ pu_queue_t* aq_get_gueue(int que_number) {
     return ret;
 }
 
-queue_events_t ag_get_non_empty_queue() {
-    queue_events_t i;
-    for(i = AQ_MIN_QUEUE; i <= AQ_MAX_QUEUE;  i++) {
-        if(!pu_queue_empty(aq_get_gueue(i))) return i;
-    }
-    return AQ_Timeout;
-}

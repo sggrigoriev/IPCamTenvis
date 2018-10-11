@@ -45,6 +45,4 @@ void aq_erase_queues();
  */
 pu_queue_t* aq_get_gueue(int que_number);
 
-queue_events_t ag_get_non_empty_queue();
-
 #endif /* IPCAMTENVIS_AQ_QUEUES_H */

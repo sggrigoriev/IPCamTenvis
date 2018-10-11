@@ -147,13 +147,10 @@ const char* ao_stream_approve(char* buf, size_t size, const char* session_id) {
 }
 
 /*
- * Returns {"sessionId":"<sessionID>", "params":[], "requestViewers":true, "pingType":2}
+ * Returns {"sessionId":"<sessionID>", "params":[], "pingType":2}
  */
 const char* ao_connection_request(char* buf, size_t size, const char* session_id) {
-    const char* part1 = "{\"sessionId\":\"";
-    const char* part2 = "\", \"params\":[], \"requestViewers\":true, \"pingType\":2}";
-
-    snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
+    snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"params\":[], \"pingType\":2}", session_id);
     return buf;
 }
 /*
@@ -161,10 +158,7 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
  */
 
 const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id) {
-    const char* part1 = "{\"sessionId\":\"";
-    const char* part2 = "\", \"requestViewers\":true}";
-
-    snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
+    snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"requestViewers\":true}", session_id);
     return buf;
 }
 /*
