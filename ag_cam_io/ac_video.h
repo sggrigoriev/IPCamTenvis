@@ -22,6 +22,8 @@
 #ifndef IPCAMTENVIS_AC_VIDEO_H
 #define IPCAMTENVIS_AC_VIDEO_H
 
+#include <unistd.h>
+
 /*
  * 1. Get streaming & WS connection parameters
  * 2. Make initial Cam setuo
@@ -43,14 +45,13 @@ int ac_start_video();
 
 void ac_stop_video();
 
-int ac_send_stream_initiation();
-int ac_send_stream_confirmation();
-int ac_send_active_viwers_request();
+/*
+ * Thread-protected functions
+ */
 void ac_set_stream_error(const char* err);
 void ac_clear_stream_error();
-/* return 1 if stlen() > 0 */
+const char* ac_get_stream_error(char* buf, size_t size);
 int ac_is_stream_error();
-int ac_send_stream_error();
 
-const char* ac_get_session_id(char* buf, unsigned long size);
+const char* ac_get_session_id(char* buf, size_t size);
 #endif /* IPCAMTENVIS_AC_VIDEO_H */

@@ -73,7 +73,7 @@ static void send_startup_report() {
     cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
-        const char* msg = ao_cloud_measures(report, ag_getProxyID(), buf, sizeof(buf)-1);
+        const char* msg = ao_cloud_measures(report, buf, sizeof(buf));
         cJSON_Delete(report);
         if(!msg) {
             pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
@@ -132,6 +132,26 @@ static int send_to_ws(const char* msg) {
     }
     return 1;
 }
+static void send_stream_errror() {
+    char buf[512] = {0};
+    char err[128] = {0};
+    char sess[128] = {0};
+
+    send_to_ws(
+            ao_stream_error_report(ac_get_stream_error(err, sizeof(err)-1),
+            ac_get_session_id(sess, sizeof(sess)-1),
+            buf, sizeof(buf)-1)
+            );
+    ac_clear_stream_error();
+}
+static void send_active_viewers_reqiest(){
+    char sess[128] = {0};
+    char buf[256] = {0};
+    send_to_ws(
+            ao_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
+            );
+}
+
 static int send_answers_to_ws() {
     int ret = 1;
     char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -144,7 +164,6 @@ static int send_answers_to_ws() {
     }
     return ret;
 }
-
 
 static void run_agent_actions() {
     int variant = ag_db_get_int_property(AG_DB_STATE_AGENT_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT);
@@ -198,26 +217,12 @@ static void run_ws_actions() {
         case 10: /* Connected, no command -> execute own actions if any */
             if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
                 pu_log(LL_DEBUG, "%s: Got streaming error!", __FUNCTION__);
-                if(!ac_send_stream_error()) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* Sending error means WS is not in good shape */
-                    pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
-                }
-                else {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-                    pu_log(LL_INFO, "%s: Stream error message sent to WS, Stream reconnect requested", __FUNCTION__);
-                }
-                ac_clear_stream_error();
+                send_stream_errror();
                 break;
             }
             if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
-                if(!ac_send_active_viwers_request()) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
-                    pu_log(LL_ERROR, "%s: WS reconnect required", __FUNCTION__);
-                    break;
-                }
-                else {
-                    pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
-                }
+                send_active_viewers_reqiest();
+                pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
                 ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
             }
             if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {        /* Send pong to WS if requested */
@@ -348,7 +353,6 @@ static void run_actions() {
     run_snapshot_actions();     /* make a photo */
     run_cam_actions();          /* MD/SD on-off; update cam's channges, senr report, clear change flag */
 }
-
 /*
  * 0 - ERROR
  * 1 - own (proxy)  "gw_cloudConnection"

@@ -27,6 +27,7 @@
 
 #include "ag_defaults.h"
 #include "ac_cam.h"
+#include "agent_release_version.h"
 
 #include "ag_db_mgr.h"
 
@@ -381,6 +382,17 @@ static void add_reported_property(cJSON* report, const char* name, int value) {
     cJSON_AddItemToObject(obj, "value", par_value);
     cJSON_AddItemToArray(report, obj);
 }
+static void add_version(cJSON* report) {
+    cJSON* obj = cJSON_CreateObject();
+    cJSON* par_name = cJSON_CreateString("version");
+    char buf[128]={0};
+    snprintf(buf, sizeof(buf)-1, AGENT_FIRMWARE_VERSION);
+    cJSON* par_value = cJSON_CreateString(buf);
+
+    cJSON_AddItemToObject(obj, "name", par_name);
+    cJSON_AddItemToObject(obj, "value", par_value);
+    cJSON_AddItemToArray(report, obj);
+}
 /*
  * return cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * NB! Clear change_flag!
@@ -408,6 +420,7 @@ cJSON* ag_db_get_startup_report() {
         for(i = 0; i < NELEMS(SCHEME); i++) {
             if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
         }
+        add_version(rep);
         char* msg = cJSON_PrintUnformatted(rep);
         if(msg) {
             pu_log(LL_DEBUG, "%s: report: %s", __FUNCTION__, msg);

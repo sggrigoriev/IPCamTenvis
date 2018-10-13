@@ -44,9 +44,12 @@
 
 /* Local variables */
 
-static t_ao_conn video_conn = {0};
+static t_ao_conn video_conn = {{0},0,{0}};
 
-/* Get video params params from cloud: 3 steps from https://presence.atlassian.net/wiki/spaces/EM/pages/164823041/Setup+IP+Camera+connection */
+/*
+ * Get video params params from cloud: 3 steps f
+ * rom https://presence.atlassian.net/wiki/spaces/EM/pages/164823041/Setup+IP+Camera+connection
+*/
 static int get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
     if(!ac_cloud_get_params(video->url, sizeof(video->url), &video->port, video->auth, sizeof(video->auth), ws->url, sizeof(ws->url), &ws->port, ws->auth, sizeof(ws->auth))) {
         return 0;
@@ -59,6 +62,15 @@ static int get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
 /*
  * Run RTSP exchange and video streaming at the end (and audio - later)
  */
+
+static int ac_send_stream_initiation() {
+    char buf[512];
+    return at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
+}
+static ac_send_stream_confirmation() {
+    char buf[128];
+    return at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth));
+}
 
 t_at_rtsp_session* CAM_SESSION;
 t_at_rtsp_session* PLAYER_SESSION;
@@ -122,7 +134,7 @@ static int process_play() {
 * 3. Send streaming initiation request
 */
 int ac_connect_video() {
-    t_ao_conn ws_conn = {0};
+    t_ao_conn ws_conn = {{0},0,{0}};
 
     if(!get_vs_conn_params(&video_conn, &ws_conn)) {
         pu_log(LL_ERROR, "%s: error video stream parameters retrieve", __FUNCTION__);
@@ -202,18 +214,6 @@ void ac_stop_video() {
 /*****************************************
  * To WebSocket messages
  */
-int ac_send_stream_initiation() {
-    char buf[512];
-    return at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
-}
-int ac_send_stream_confirmation() {
-    char buf[128];
-     return at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth));
-}
-int ac_send_active_viwers_request() {
-    char buf[512];
-    return at_ws_send(ao_active_viwers_request(buf, sizeof(buf), video_conn.auth));
-}
 
 static pthread_mutex_t local_mutex = PTHREAD_MUTEX_INITIALIZER;
 static char stream_error[256]={0};
@@ -229,6 +229,13 @@ void ac_clear_stream_error() {
         stream_error[0] = '\0';
     pthread_mutex_unlock(&local_mutex);
 }
+const char* ac_get_stream_error(char* buf, size_t size) {
+    pthread_mutex_lock(&local_mutex);
+    strncpy(buf, stream_error, size-1);
+    buf[size-1] = '\0';
+    pthread_mutex_unlock(&local_mutex);
+    return buf;
+}
 /* return 1 if stlen() > 0 */
 int ac_is_stream_error() {
     int ret;
@@ -237,12 +244,8 @@ int ac_is_stream_error() {
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }
-int ac_send_stream_error() {
-    char buf[512];
-    return at_ws_send(ao_stream_error_report(stream_error, video_conn.auth, buf, sizeof(buf)));
-}
 
-const char* ac_get_session_id(char* buf, unsigned long size) {
+const char* ac_get_session_id(char* buf, size_t size) {
     strncpy(buf, video_conn.auth, size-1);
     buf[size-1] = '\0';
     return buf;

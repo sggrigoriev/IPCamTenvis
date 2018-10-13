@@ -115,7 +115,6 @@ static void* hart_beat(void* params) {
                 sleep(3600);
             }
             else {
-                pu_log(LL_DEBUG, "%s: Bytes red = %d", __FUNCTION__, bytes_accepted);
                 bytes_accepted = 0;
             }
 
@@ -125,7 +124,7 @@ static void* hart_beat(void* params) {
                 sleep(3600);
             }
             else {
-                pu_log(LL_DEBUG, "%s: Bytes written = %d", __FUNCTION__, bytes_passed);
+                pu_log(LL_DEBUG, "%s: Bytes transferred = %d", __FUNCTION__, bytes_passed);
                 bytes_passed = 0;
             }
 

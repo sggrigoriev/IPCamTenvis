@@ -159,17 +159,14 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
 
 const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id) {
     snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"requestViewers\":true}", session_id);
+    buf[size-1] = '\0';
     return buf;
 }
 /*
- * {"responses": [{"commandId": <command_id> "result": <rc>}]}
+ * {"responses": [{"commandId": <command_id>, "result": <rc>}]}
  */
 const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc) {
-    const char* part1 = "{\"responses\": [{\"commandId\": ";
-    const char* part2 = " \"result\": ";
-    const char* part3 = "}]}";
-
-    snprintf(buf, size-1, "%s%d%s%d%s", part1, command_id, part2, rc, part3);
+    snprintf(buf, size-1, "{\"responses\": [{\"commandId\": %d, \"result\": %d}]}",command_id, rc);
     buf[size-1] = '\0';
     return buf;
 }
@@ -284,7 +281,7 @@ const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
  * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
  * Return NULL if the message is too long
  */
-const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, size_t size) {
+const char* ao_cloud_measures(cJSON* report, char* buf, size_t size) {
     cJSON* obj = cJSON_CreateObject();
 
     cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
@@ -304,7 +301,7 @@ const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, si
     char* msg = cJSON_PrintUnformatted(obj);
 
     const char* ret;
-    if(!msg || (strlen(msg)>(LIB_HTTP_MAX_MSG_SIZE-1))) {
+    if(!msg || (strlen(msg)>(size-1))) {
         buf[0] = '\0';
         ret = NULL;
     }
@@ -316,5 +313,14 @@ const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, si
     cJSON_Delete(obj);
     return ret;
 }
+/*
+ * {"sessionId":"2o7hh2VlxWkdWK9WyizBbhmv0", "requestViewers":true}
+ */
+const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t size) {
+    snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"requestViewers\":true}", sessionID);
+    buf[size-1] = '\0';
+    return buf;
+}
+
 
 

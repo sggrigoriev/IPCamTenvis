@@ -98,7 +98,11 @@ const char* ao_ws_params(cJSON* report, char* buf, size_t size);
  * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
  * Return NULL if the message is too long
  */
-const char* ao_cloud_measures(cJSON* report, const char* deviceID, char* buf, size_t size);
+const char* ao_cloud_measures(cJSON* report, char* buf, size_t size);
+/*
+ * {"sessionId":"2o7hh2VlxWkdWK9WyizBbhmv0", "requestViewers":true}
+ */
+const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t size);
 
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

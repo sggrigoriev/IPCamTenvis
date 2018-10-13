@@ -223,9 +223,3 @@ int at_ws_send(const char* msg) {
     return ret;
 }
 
-unsigned int at_ws_get_active_viewers_amount() {
-    return viewers_counter;
-}
-void at_ws_set_active_viewers_amount(unsigned int amount) {
-    viewers_counter = amount;
-}
