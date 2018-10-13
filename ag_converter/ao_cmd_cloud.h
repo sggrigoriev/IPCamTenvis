@@ -70,24 +70,9 @@ const char* ao_answer_to_ws_ping();
  */
 const char* ao_ws_error_answer(char* buf, size_t size);
 /*
- * Returns {"resultCode":<AO_WS_TO_ERROR>}
- */
-const char* ao_ws_to_error_answer(char* buf, size_t size);
-/* Returns {"resultCode":<AO_RW_THREAD_ERROR>}
- *
+ * Returns {"resultCode":<AO_RW_THREAD_ERROR>}
  */
 const char* ao_rw_error_answer(char* buf, size_t size);
-/*
- * Decode cloud RC
- */
-const char* ao_ws_error(int rc);
-
-const char* ao_ws_alert_message(t_ac_cam_events event, time_t start_date, char* buf, size_t size);
-/*
- * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
- * The result should be:
- * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
- */
 /*
  * return {"sessionId":"<sess_id>", "params":[{"name":"streamError","value":"<err_msg>"}]}
  */

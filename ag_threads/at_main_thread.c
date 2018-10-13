@@ -68,6 +68,9 @@ static volatile int main_finish;        /* stop flag for main thread */
 /*****************************************************************************************
     Local functions deinition
 */
+/*
+ * To Proxy & WUD
+ */
 static void send_startup_report() {
     pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
     cJSON* report = ag_db_get_startup_report();
@@ -98,6 +101,12 @@ static void send_reboot() {
     pr_make_reboot_command(buf, sizeof(buf), ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf) + 1);
 }
+static void send_ACK_to_Proxy(int command_number) {
+    char buf[128];
+    ao_answer_to_command(buf, sizeof(buf), command_number, 0);
+    pu_queue_push(to_proxy, buf, strlen(buf) + 1);
+}
+
 static void send_snapshot(const char* full_path) {
     const char* fmt = "\"filesList\": [%s]";
     char flist[256+strlen(fmt)+1];
@@ -119,11 +128,10 @@ static void send_send_file(t_ao_cam_alert data) {
         pu_log(LL_WARNING, "%s: no alarm files where found - no data set to WUD", AT_THREAD_NAME);
     }
 }
-static void send_ACK_to_Proxy(int command_number) {
-    char buf[128];
-    ao_answer_to_command(buf, sizeof(buf), command_number, 0);
-    pu_queue_push(to_proxy, buf, strlen(buf) + 1);
-}
+
+/*
+ * To WS
+ */
 static int send_to_ws(const char* msg) {
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
@@ -132,6 +140,7 @@ static int send_to_ws(const char* msg) {
     }
     return 1;
 }
+
 static void send_stream_errror() {
     char buf[512] = {0};
     char err[128] = {0};
@@ -151,7 +160,6 @@ static void send_active_viewers_reqiest(){
             ao_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
             );
 }
-
 static int send_answers_to_ws() {
     int ret = 1;
     char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -164,7 +172,11 @@ static int send_answers_to_ws() {
     }
     return ret;
 }
-
+/*
+ * Agent actions: agent->WS->streaming
+ * snapshot
+ * cam parameters change + change report 2 WS
+ */
 static void run_agent_actions() {
     int variant = ag_db_get_int_property(AG_DB_STATE_AGENT_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT);
     switch(variant) {
@@ -512,22 +524,22 @@ static void process_alert(char* msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            ag_db_store_property(AG_DB_STATE_MD_ON, "1");
-            ag_db_store_property(AG_DB_STATE_RECORDING, "1");
+            ag_db_store_int_property(AG_DB_STATE_MD_ON, 1);
+            ag_db_store_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_START_SD:
-            ag_db_store_property(AG_DB_STATE_SD_ON, "1");
-            ag_db_store_property(AG_DB_STATE_RECORDING, "1");
+            ag_db_store_int_property(AG_DB_STATE_SD_ON, 1);
+            ag_db_store_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_STOP_MD:
-            ag_db_store_property(AG_DB_STATE_MD_ON, "0");
-            ag_db_store_property(AG_DB_STATE_RECORDING, "0");
+            ag_db_store_int_property(AG_DB_STATE_MD_ON, 0);
+            ag_db_store_int_property(AG_DB_STATE_RECORDING, 0);
 
             send_send_file(data);
             break;
         case AC_CAM_STOP_SD:
-            ag_db_store_property(AG_DB_STATE_SD_ON, "0");
-            ag_db_store_property(AG_DB_STATE_RECORDING, "0");
+            ag_db_store_int_property(AG_DB_STATE_SD_ON, 0);
+            ag_db_store_int_property(AG_DB_STATE_RECORDING, 0);
 
             send_send_file(data);
             break;

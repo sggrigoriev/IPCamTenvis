@@ -85,6 +85,15 @@ static int get_count_section(cJSON* obj) {
     return ret;
 }
 /*
+ * Returns {"resultCode":<err>}
+ */
+static char* error_answer(char* buf, size_t size, int err) {
+    snprintf(buf, size-1, "{\"resultCode\": %d}", err);
+    buf[size-1] = '\0';
+    return buf;
+}
+
+/*
  * {"resultCode":0,"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}],"viewers":[{"id":"24","status":1}], "viewersCount":0}
  */
 t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
@@ -154,15 +163,6 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
     return buf;
 }
 /*
- * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU", "requestViewers":true}
- */
-
-const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id) {
-    snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"requestViewers\":true}", session_id);
-    buf[size-1] = '\0';
-    return buf;
-}
-/*
  * {"responses": [{"commandId": <command_id>, "result": <rc>}]}
  */
 const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc) {
@@ -170,34 +170,6 @@ const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc)
     buf[size-1] = '\0';
     return buf;
 }
-/*
- * Returns "{}"
- */
-const char* ao_answer_to_ws_ping() {
-    const char* part1 = "{}";
-    return part1;
-}
-/*
- * Returns {"resultCode":<own_error>}
- */
-static char* own_error_answer(char* buf, size_t size, int err) {
-    const char* part1 = "{\"resultCode\": ";
-    const char* part2 = "}";
-
-    snprintf(buf, size-1, "%s%d%s", part1, err, part2);
-    buf[size-1] = '\0';
-    return buf;
-}
-const char* ao_ws_error_answer(char* buf, size_t size) {
-    return own_error_answer(buf, size, AO_WS_THREAD_ERROR);
-}
-const char* ao_ws_to_error_answer(char* buf, size_t size) {
-    return own_error_answer(buf, size, AO_WS_TO_ERROR);
-}
-const char* ao_rw_error_answer(char* buf, size_t size) {
-    return own_error_answer(buf, size, AO_RW_THREAD_ERROR);
-}
-
 /*******************************************************************************************************
  * Cloud Web Socket RC handling
 */
@@ -225,19 +197,6 @@ static const t_ao_ws_diagnostics ws_diagnostics[AO_WS_DIAGNOSTICS_AMOUNT] = {
         {AO_WS_PING_RC, "ping"},
         {30, "service is temporary unavailable"}
 };
-
-static const char* find_text(int rc) {
-    int i;
-    for(i = 0; i < AO_WS_DIAGNOSTICS_AMOUNT; i++) if(ws_diagnostics[i].rc == rc) return ws_diagnostics[i].diagnostics;
-    return NULL;
-}
-
-const char* ao_ws_error(int rc) {
-    const char* ret = find_text(rc);
-    return (ret)?ret:"Unrecognized RC from Web Socket";
-
-
-}
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * The result should be:
@@ -321,6 +280,24 @@ const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t s
     buf[size-1] = '\0';
     return buf;
 }
-
+/*
+ * Returns "{}"
+ */
+const char* ao_answer_to_ws_ping() {
+    const char* part1 = "{}";
+    return part1;
+}
+/*
+ * Creates error answer for WS thread
+ */
+const char* ao_ws_error_answer(char* buf, size_t size) {
+    return error_answer(buf, size, AO_WS_THREAD_ERROR);
+}
+/*
+ * Creates error answer from streaming thread
+ */
+const char* ao_rw_error_answer(char* buf, size_t size) {
+    return error_answer(buf, size, AO_RW_THREAD_ERROR);
+}
 
 
