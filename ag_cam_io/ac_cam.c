@@ -123,14 +123,17 @@ static char* add_files_list(const char* dir_name, time_t start, time_t end, cons
                     first = 1;
                     strncat(buf, "[", size - strlen(buf)-1);
                 }
+                strncat(buf, "\"", size - strlen(buf)-1);
                 strncat(buf, dir_ent->d_name, size - strlen(buf)-1);
-                strncat(buf, ", ", size - strlen(buf)-1);
+                 strncat(buf, "\"", size - strlen(buf)-1);
+                strncat(buf, ",", size - strlen(buf)-1);
             }
             else {
                 pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
             }
         }
-        if(strlen(buf)) buf[strlen(buf)-2] = ']';  /* Replace last ',' to ']'*/
+        if(strlen(buf)) buf[strlen(buf)-1] = ']';  /* Replace last ',' to ']'*/
+        buf[size-1] = '\0';
         closedir(dir);
     }
     return buf;
@@ -180,7 +183,7 @@ const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
         buf[0] = '\0';
         return buf;
     }
-    strncpy(buf, "filesList: ", size-1);
+    strncpy(buf, "\"filesList\": ", size-1);
     size_t len = strlen(buf);
     add_files_list(dir, data.start_date, data.end_date, postfix, buf, size);
     if(strlen(buf) <= len) {

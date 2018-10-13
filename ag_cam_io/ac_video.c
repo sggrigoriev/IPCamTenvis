@@ -67,7 +67,7 @@ static int ac_send_stream_initiation() {
     char buf[512];
     return at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
 }
-static ac_send_stream_confirmation() {
+static int ac_send_stream_confirmation() {
     char buf[128];
     return at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth));
 }
