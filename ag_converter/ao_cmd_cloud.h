@@ -35,7 +35,24 @@
 #define AO_RW_THREAD_ERROR -24
 #define AO_WS_TO_ERROR -25
 
-/*******************************************************************************
+/*
+ * Returns [{"commandId": <command_id> "result": <rc>}]
+ */
+cJSON* ao_cloud_responses(int command_id, int rc);
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * [{"params":[<report>], "deviceId":"<deviceID>"}]
+ * Return NULL if the message is too long
+ */
+cJSON* ao_cloud_measures(cJSON* report, const char* deviceID);
+/*
+ * creates the message:
+ * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
+ * if JSON is NULL - add empty array
+ */
+const char* ao_cloud_msg(const char* deviceID, const char* seq_number, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size);
+
+/********************************************************************************
  * Decode cloud/Proxy JSON message into internal structure (ao_cmd_data.h)
  * @param cloud_message - zero-terminated JSON string
  * @param data - internal structure
@@ -58,10 +75,6 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
  */
 const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id);
 /*
- * Returns {"responses": [{"commandId": <command_id> "result": <rc>}]}
- */
-const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc);
-/*
  * Returns "{}"
  */
 const char* ao_answer_to_ws_ping();
@@ -78,12 +91,6 @@ const char* ao_rw_error_answer(char* buf, size_t size);
  */
 const char* ao_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size);
 const char* ao_ws_params(cJSON* report, char* buf, size_t size);
-/*
- * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
- * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
- * Return NULL if the message is too long
- */
-const char* ao_cloud_measures(cJSON* report, char* buf, size_t size);
 /*
  * {"sessionId":"2o7hh2VlxWkdWK9WyizBbhmv0", "requestViewers":true}
  */

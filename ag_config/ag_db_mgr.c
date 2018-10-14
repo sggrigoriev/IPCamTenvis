@@ -160,7 +160,7 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SW_VERSION,    0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
+{AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
 {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -423,7 +423,7 @@ cJSON* ag_db_get_startup_report() {
         add_version(rep);
         char* msg = cJSON_PrintUnformatted(rep);
         if(msg) {
-            pu_log(LL_DEBUG, "%s: report: %s", __FUNCTION__, msg);
+            pu_log(LL_DEBUG, "%s: report %s", __FUNCTION__, msg);
             free(msg);
         }
     pthread_mutex_unlock(&local_mutex);

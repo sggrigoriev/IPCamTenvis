@@ -76,7 +76,7 @@ static void send_startup_report() {
     cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
-        const char* msg = ao_cloud_measures(report, buf, sizeof(buf));
+        const char* msg = ao_cloud_msg(ag_getProxyID(), "153", NULL, NULL, ao_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
         cJSON_Delete(report);
         if(!msg) {
             pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
@@ -103,7 +103,7 @@ static void send_reboot() {
 }
 static void send_ACK_to_Proxy(int command_number) {
     char buf[128];
-    ao_answer_to_command(buf, sizeof(buf), command_number, 0);
+    ao_cloud_msg(ag_getProxyID(), "154", NULL, ao_cloud_responses(command_number, 0), NULL, buf, sizeof(buf));
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
 }
 

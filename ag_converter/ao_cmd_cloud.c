@@ -39,6 +39,96 @@ static const char* CLOUD_V_STATUS = "status";
 static const char* CLOUD_VIEWERS_COUNT = "viewersCount";
 static const char* CLOUD_PING_TO = "pingInterval";
 
+static cJSON* addArray(cJSON* obj, const char* name, cJSON* array) {
+    if(!array)
+        cJSON_AddItemToObject(obj, name, cJSON_CreateArray());
+    else
+        cJSON_AddItemToObject(obj, name, array);
+    return obj;
+}
+/*
+ * [{"commandId": <command_id>, "result": <rc>}]
+ */
+cJSON* ao_cloud_responses(int command_id, int rc) {
+  cJSON* ret = cJSON_CreateArray();
+    cJSON* elem = cJSON_CreateObject();
+    cJSON_AddItemToObject(elem, "commandId", cJSON_CreateNumber(command_id));
+    cJSON_AddItemToObject(elem, "result", cJSON_CreateNumber(rc));
+    cJSON_AddItemToArray(ret, elem);
+    return ret;
+}
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * [{"params":[<report>], "deviceId":"<deviceID>"}]
+ */
+cJSON* ao_cloud_measures(cJSON* report, const char* deviceID) {
+    cJSON* obj = cJSON_CreateArray();
+
+    cJSON* mes_item = cJSON_CreateObject();
+    cJSON_AddItemReferenceToObject(mes_item, "params", report); /* NB! will be freed externally! */
+    cJSON_AddItemToObject(mes_item, "deviceId", cJSON_CreateString(deviceID));
+
+    cJSON_AddItemToArray(obj, mes_item);
+    return obj;
+}
+/*
+ * creates the message:
+ * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
+ * if JSON is NULL - add empty array
+ * Return NULL if message is too long
+ */
+const char* ao_cloud_msg(const char* deviceID, const char* seq_number, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size) {
+    cJSON* obj = cJSON_CreateObject();
+
+    cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
+    cJSON_AddItemToObject(obj, "seq", cJSON_CreateString(seq_number));
+    addArray(obj, "alerts", alerts);
+    addArray(obj, "responses", responses);
+    addArray(obj, "measures", measures);
+
+    char* msg = cJSON_PrintUnformatted(obj);
+
+    const char* ret;
+    if(!msg || (strlen(msg)>(size-1))) {
+        buf[0] = '\0';
+        ret = NULL;
+        pu_log(LL_ERROR, "%s: Result message lendth %lu exceeds the max length %lu", strlen(msg), size-1);
+    }
+    else {
+        strcpy(buf, msg);
+        free(msg);
+        ret = buf;
+    }
+    cJSON_Delete(obj);
+    return ret;
+}
+/*******************************************************************************************************
+ * Cloud Web Socket & RC handling
+*/
+#define AO_WS_DIAGNOSTICS_AMOUNT 15
+
+typedef struct {
+    int rc;
+    const char* diagnostics;
+} t_ao_ws_diagnostics;
+
+static const t_ao_ws_diagnostics ws_diagnostics[AO_WS_DIAGNOSTICS_AMOUNT] = {
+        {AO_RW_THREAD_ERROR, "Streaming R/W treads error"},
+        {AO_WS_THREAD_ERROR, "WS thread internal error"},
+        {AO_WS_TO_ERROR, "No pings from Web Socket"},
+        {0, "successful"},
+        {1, "internal error"},
+        {2, "wrong API key"},
+        {3, "wrong device authentication token"},
+        {4, "wrong device ID or device has not been found"},
+        {5, "wrong session ID"},
+        {6, "camera not connected"},
+        {7, "camera not connected"},
+        {8, "wrong parameter value"},
+        {9, "missed mandatory parameter value"},
+        {AO_WS_PING_RC, "ping"},
+        {30, "service is temporary unavailable"}
+};
 /*
  * "params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}]
 */
@@ -140,7 +230,7 @@ t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
     data->ws_answer.viewers_delta = get_viewers_section(obj);
     data->ws_answer.viwers_count = get_count_section(obj);
 
-on_finish:
+    on_finish:
     cJSON_Delete(obj);
     return data->command_type;
 }
@@ -162,41 +252,6 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
     snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"params\":[], \"pingType\":2}", session_id);
     return buf;
 }
-/*
- * {"responses": [{"commandId": <command_id>, "result": <rc>}]}
- */
-const char* ao_answer_to_command(char *buf, size_t size, int command_id, int rc) {
-    snprintf(buf, size-1, "{\"responses\": [{\"commandId\": %d, \"result\": %d}]}",command_id, rc);
-    buf[size-1] = '\0';
-    return buf;
-}
-/*******************************************************************************************************
- * Cloud Web Socket RC handling
-*/
-#define AO_WS_DIAGNOSTICS_AMOUNT 15
-
-typedef struct {
-    int rc;
-    const char* diagnostics;
-} t_ao_ws_diagnostics;
-
-static const t_ao_ws_diagnostics ws_diagnostics[AO_WS_DIAGNOSTICS_AMOUNT] = {
-        {AO_RW_THREAD_ERROR, "Streaming R/W treads error"},
-        {AO_WS_THREAD_ERROR, "WS thread internal error"},
-        {AO_WS_TO_ERROR, "No pings from Web Socket"},
-        {0, "successful"},
-        {1, "internal error"},
-        {2, "wrong API key"},
-        {3, "wrong device authentication token"},
-        {4, "wrong device ID or device has not been found"},
-        {5, "wrong session ID"},
-        {6, "camera not connected"},
-        {7, "camera not connected"},
-        {8, "wrong parameter value"},
-        {9, "missed mandatory parameter value"},
-        {AO_WS_PING_RC, "ping"},
-        {30, "service is temporary unavailable"}
-};
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * The result should be:
@@ -229,43 +284,6 @@ const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
     }
     else {
         strncpy(buf, msg, size-1);
-        free(msg);
-        ret = buf;
-    }
-    cJSON_Delete(obj);
-    return ret;
-}
-/*
- * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
- * {"proxyId":"<deviceID>","seq":"153", "alerts":[],"responses":[],"measures":[{"params":[<report>], "deviceId":"<deviceID>"}]}
- * Return NULL if the message is too long
- */
-const char* ao_cloud_measures(cJSON* report, char* buf, size_t size) {
-    cJSON* obj = cJSON_CreateObject();
-
-    cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
-    cJSON_AddItemToObject(obj, "seq", cJSON_CreateString("153"));
-    cJSON_AddItemToObject(obj, "alerts", cJSON_CreateArray());
-    cJSON_AddItemToObject(obj, "responses", cJSON_CreateArray());
-
-    cJSON* measures = cJSON_CreateArray();
-    cJSON* mes_item = cJSON_CreateObject();
-    cJSON_AddItemToArray(measures, mes_item);
-
-    cJSON_AddItemReferenceToObject(mes_item, "params", report); /* NB! will be freed externally! */
-    cJSON_AddItemToObject(mes_item, "deviceId", cJSON_CreateString(ag_getProxyID()));
-
-    cJSON_AddItemToObject(obj, "measures", measures);
-
-    char* msg = cJSON_PrintUnformatted(obj);
-
-    const char* ret;
-    if(!msg || (strlen(msg)>(size-1))) {
-        buf[0] = '\0';
-        ret = NULL;
-    }
-    else {
-        strcpy(buf, msg);
         free(msg);
         ret = buf;
     }
