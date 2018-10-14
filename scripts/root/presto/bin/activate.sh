@@ -23,7 +23,7 @@ UPGRADE_DIR=$(cat $WUD_CONFIG_FILE | $JQ_COMMAND FW_UPGRADE_FOLDER);
 OTA_UPGRADE_FILE=$(cat $WUD_CONFIG_FILE | $JQ_COMMAND FW_UPGRADE_FILE_NAME);
 
 echo " ****** checking for $UPGRADE_DIR/$OTA_UPGRADE_FILE  *******"
-if [ -e $UPGRADE_DIR/$OTA_UPGRADE_FILE ]; 
+if [ -f $UPGRADE_DIR/$OTA_UPGRADE_FILE ]; 
 then
 	echo "******** OTA upgrade file exists, preforming upgrade ******"
 	cd $UPGRADE_DIR
