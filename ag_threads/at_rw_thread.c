@@ -362,8 +362,8 @@ void at_stop_rw() {
         if(rdwr_buf) free(rdwr_buf);
         rdwr_buf = NULL;
         stop = 1;
-        pu_log(LL_ERROR, "%s: RW thread is down", AT_THREAD_NAME);
-        pu_log(LL_ERROR, "%s: HartBeat thread is down", AT_THREAD_NAME);
+        pu_log(LL_INFO, "%s: RW thread is down", AT_THREAD_NAME);
+        pu_log(LL_INFO, "%s: HartBeat thread is down", AT_THREAD_NAME);
     }
 }
 /*****************************

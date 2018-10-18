@@ -52,20 +52,14 @@ static const char* make_dir_from_date(const char* path, time_t timestamp, char* 
  */
 static int is_right_name(const char* name, const char*prefix, const char* postfix) {
     char pr[10]={0}, nm[10]={0}, ps[10]={0};
+
     int rc = sscanf(name, "%2s%6s%[^.]", pr, nm, ps);
-    if(rc != 3) {
-        pu_log(LL_ERROR, "%s: Error name scan: %d %s\n", errno, strerror(errno));
-        return 0;
-    }
+    if(rc != 3) return 0;
+
     pu_log(LL_DEBUG, "%s: File name is %s, parsed name is =%s=%s=%s=", __FUNCTION__, name, pr,nm, ps);
-    if(strcmp(pr, prefix) != 0) {
-        pu_log(LL_DEBUG, "%s: %s!=%s. Pitty", __FUNCTION__, pr, prefix);
-        return 0;
-    }
-    if(strcmp(ps, postfix) != 0) {
-        pu_log(LL_DEBUG, "%s: %s!=%s. Pitty", __FUNCTION__, ps, postfix);
-        return 0;
-    }
+
+    if(strcmp(pr, prefix) != 0) return 0;
+    if(strcmp(ps, postfix) != 0) return 0;
 
     return 1;
 }
@@ -93,21 +87,19 @@ static unsigned long strHHMMSS_to_dig(const char* str) {
  */
 static int got_name(const char* name, time_t start, time_t end, const char* postfix) {
     struct tm tm_s, tm_e;
+    if(!is_right_name(name, DEFAULT_DT_FILES_PREFIX, postfix)) return 0;
     gmtime_r(&start, &tm_s);
     gmtime_r(&end, &tm_e);
     unsigned long start_time = tm2dig(tm_s.tm_hour, tm_s.tm_min, tm_s.tm_sec);
     unsigned long end_time = tm2dig(tm_e.tm_hour, tm_e.tm_min, tm_e.tm_sec);
     unsigned long event_time = strHHMMSS_to_dig(name+strlen(DEFAULT_DT_FILES_PREFIX));
 
-    pu_log(LL_DEBUG, "%s: start_time = %lu, event_time = %lu, end_time = %lu", __FUNCTION__, start_time, end_time, event_time);
-
-    return ((start_time <= event_time) && (event_time <= end_time) && is_right_name(name, DEFAULT_DT_FILES_PREFIX, postfix));
+    return ((start_time <= event_time) && (event_time <= end_time));
 }
 /*
  * concatinate [name, name, ... name]
 */
 static char* add_files_list(const char* dir_name, time_t start, time_t end, const char* postfix, char* buf, size_t size) {
-    pu_log(LL_DEBUG, "%s: Open dir %s", __FUNCTION__, dir_name);
     DIR *dir = opendir(dir_name);
     buf[0] = '\0';
     if (dir == NULL) {       /* Not a directory or doesn't exist */
@@ -125,8 +117,9 @@ static char* add_files_list(const char* dir_name, time_t start, time_t end, cons
                 }
                 strncat(buf, "\"", size - strlen(buf)-1);
                 strncat(buf, dir_ent->d_name, size - strlen(buf)-1);
-                 strncat(buf, "\"", size - strlen(buf)-1);
+                strncat(buf, "\"", size - strlen(buf)-1);
                 strncat(buf, ",", size - strlen(buf)-1);
+                pu_log(LL_DEBUG, "%s: file %s added to the list", __FUNCTION__, dir_ent->d_name);
             }
             else {
                 pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
@@ -355,6 +348,9 @@ int ac_cam_init() {
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
+
+    ac_delete_old_dirs();
+
     ret = 1;
     on_error:
     if(md_uri) free(md_uri);

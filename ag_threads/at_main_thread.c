@@ -34,6 +34,7 @@
 #include "at_wud_write.h"
 #include "at_cam_alerts_reader.h"
 #include "at_ws.h"
+#include "at_cam_files_sender.h"
 
 #include "ao_cmd_data.h"
 #include "ao_cmd_proxy.h"
@@ -55,13 +56,15 @@
 */
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
-static pu_queue_event_t events;         /* main thread events set */
+static pu_queue_event_t events;     /* main thread events set */
 static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;        /* main_thread->proxy */
 static pu_queue_t* to_wud;          /* main_thread -> wud_write  */
 static pu_queue_t* from_cam;        /* cam -> main_thread */
 static pu_queue_t* from_ws;         /* WS -> main_thread */
 static pu_queue_t* from_stream_rw;  /* from streaming threads to main */
+static pu_queue_t* to_sf;           /* from main_thread to files sender */
+static pu_queue_t* from_sf;         /* from main_thread to files sender */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -113,19 +116,32 @@ static void send_snapshot(const char* full_path) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
     snprintf(flist, sizeof(flist), fmt, full_path);
-    pr_make_send_files4WUD(buf, sizeof(buf), get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist);
-    pu_queue_push(to_wud, buf, strlen(buf) + 1);
+    ao_make_send_files(buf, sizeof(buf), get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist);
+    pu_queue_push(to_sf, buf, strlen(buf) + 1);
 }
 static void send_send_file(t_ao_cam_alert data) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char f_list[LIB_HTTP_MAX_MSG_SIZE];
 
     if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
-        pr_make_send_files4WUD(buf, sizeof(buf), get_event2file_type(data.cam_event), f_list);
-        pu_queue_push(to_wud, buf, strlen(buf) + 1);
+        ao_make_send_files(buf, sizeof(buf), get_event2file_type(data.cam_event), f_list);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
     }
     else {
-        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to WUD", AT_THREAD_NAME);
+        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to SF", AT_THREAD_NAME);
+    }
+}
+/*
+ * Send SD/MD/SNAPHOT files which wasn't sent before
+ * Call at start
+ */
+static void send_remaining_files(char t) {
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char* t_files = ac_get_all_files(t);
+    if(t_files) {
+        ao_make_send_files(buf, sizeof(buf), t, t_files);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+        free(t_files);
     }
 }
 
@@ -188,6 +204,11 @@ static void run_agent_actions() {
             ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* request WS connect */
             ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);        /* set Agent as connected */
             ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
+/* Send MD/SD/SNAPHOTS which weren't sent during the regular procedure */
+            send_remaining_files(get_event2file_type(AC_CAM_STOP_MD));
+            send_remaining_files(get_event2file_type(AC_CAM_STOP_SD));
+            send_remaining_files(get_event2file_type(AC_CAM_MADE_SNAPSHOT));
+
             break;
         case 10:     /* state: connected, no command -> Process Agent actions */
             if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {
@@ -367,13 +388,13 @@ static void run_actions() {
 }
 /*
  * 0 - ERROR
- * 1 - own (proxy)  "gw_cloudConnection"
- * 2 - cloud        "commands"
- * 3 - WS           "params"
+ * 1 - own      "gw_cloudConnection", "filesSent" (from WUD)
+ * 2 - cloud    "commands"
+ * 3 - WS       "params"
  */
 static int get_protocol_number(msg_obj_t* obj) {
     if(!obj) return 0;
-    if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return 1;
+    if((cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) || (cJSON_GetObjectItem(obj, "filesSent") != NULL))return 1;
     if(cJSON_GetObjectItem(obj, "commands") != NULL) return 2;
     if((cJSON_GetObjectItem(obj, "pingInterval")!=NULL)||(cJSON_GetObjectItem(obj, "params")!=NULL)||(cJSON_GetObjectItem(obj, "viewersCount")!=NULL)) return 3;
     return 0;
@@ -385,34 +406,35 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
     t_ao_msg data;
 
     ao_proxy_decode(own_msg, &data);
-    if(data.command_type == AO_IN_CONNECTION_INFO) {
-        int info_changed = 0;
+    switch (data.command_type) {
+        case AO_IN_CONNECTION_INFO: {
+            int info_changed = 0;
 
-        if(data.in_connection_state.is_online) {
-            if (strcmp(ag_getProxyID(), data.in_connection_state.proxy_device_id) != 0) {
-                pu_log(LL_INFO, "%s:Proxy sent new ProxyID. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                       ag_getProxyID(), data.in_connection_state.proxy_device_id);
-                ag_saveProxyID(data.in_connection_state.proxy_device_id);
-                info_changed = 1;
+            if(data.in_connection_state.is_online) {
+                if (strcmp(ag_getProxyID(), data.in_connection_state.proxy_device_id) != 0) {
+                    pu_log(LL_INFO, "%s:Proxy sent new ProxyID. Old one = %s, New one = %s.", AT_THREAD_NAME,
+                           ag_getProxyID(), data.in_connection_state.proxy_device_id);
+                    ag_saveProxyID(data.in_connection_state.proxy_device_id);
+                    info_changed = 1;
+                }
+                if (strcmp(ag_getProxyAuthToken(), data.in_connection_state.proxy_auth) != 0) {
+                    pu_log(LL_INFO, "%s:Proxy sent new Auth token. Old one = %s, New one = %s.", AT_THREAD_NAME,
+                           ag_getProxyAuthToken(), data.in_connection_state.proxy_auth);
+                    ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
+                    info_changed = 1;
+                }
+                if (strcmp(ag_getMainURL(), data.in_connection_state.main_url) != 0) {
+                    pu_log(LL_INFO, "%s:Proxy sent new Main URL. Old one = %s, New one = %s.", AT_THREAD_NAME,
+                           ag_getMainURL(), data.in_connection_state.main_url);
+                    ag_saveMainURL(data.in_connection_state.main_url);
+                    info_changed = 1;
+                }
             }
-            if (strcmp(ag_getProxyAuthToken(), data.in_connection_state.proxy_auth) != 0) {
-                pu_log(LL_INFO, "%s:Proxy sent new Auth token. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                       ag_getProxyAuthToken(), data.in_connection_state.proxy_auth);
-                ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
-                info_changed = 1;
-            }
-            if (strcmp(ag_getMainURL(), data.in_connection_state.main_url) != 0) {
-                pu_log(LL_INFO, "%s:Proxy sent new Main URL. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                       ag_getMainURL(), data.in_connection_state.main_url);
-                ag_saveMainURL(data.in_connection_state.main_url);
-                info_changed = 1;
-            }
+            if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
         }
-
-        if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
-    }
-    else {
-        pu_log(LL_ERROR, "%s: Can't process message from Proxy. Message type = %d. Message ignored", AT_THREAD_NAME, data.command_type);
+            break;
+        default:
+            pu_log(LL_INFO, "%s: Message type = %d. Message ignored", AT_THREAD_NAME, data.command_type);
     }
 }
 /*
@@ -556,6 +578,22 @@ static void process_alert(char* msg) {
             break;
     }
 }
+static void process_sf(char* msg) {
+    cJSON* obj = cJSON_Parse(msg);
+    if(!obj) {
+        pu_log(LL_ERROR, "%s: Error JSON parsing of %s. Message ignored", __FUNCTION__, msg);
+        return;
+    }
+    char* flist = ao_get_files_sent(msg);
+    if(!flist) {
+        pu_log(LL_WARNING, "%s: Empty flies list from SF. Nothing to delete", __FUNCTION__);
+    }
+    else {
+        ac_cam_delete_files(flist);
+        free(flist);
+    }
+    cJSON_Delete(obj);
+}
 
 static int main_thread_startup() {
 
@@ -572,6 +610,19 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromCam);
     events = pu_add_queue_event(events, AQ_FromWS);
     events = pu_add_queue_event(events, AQ_FromRW);
+    events = pu_add_queue_event(events, AQ_FromSF);
+
+/* Camera initiation & settings upload */
+    if(!ac_cam_init()) {
+        pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: Camera initiaied", __FUNCTION__);
+    if(!ag_db_load_cam_properties()) {
+        pu_log(LL_ERROR, "%s: Error load camera properties", __FUNCTION__);
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
 
 /* Threads start */
     if(!at_start_proxy_rw()) {
@@ -586,17 +637,11 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
 
-/* Camera initiation & settings upload */
-    if(!ac_cam_init()) {
-        pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
+    if(!at_start_sf()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "FILES_SENDER", strerror(errno));
         return 0;
     }
-    pu_log(LL_INFO, "%s: Camera initiaied", __FUNCTION__);
-    if(!ag_db_load_cam_properties()) {
-        pu_log(LL_ERROR, "%s: Error load camera properties", __FUNCTION__);
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
+    pu_log(LL_INFO, "%s: started", "FILES_SENDER", __FUNCTION__);
 
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
@@ -614,6 +659,7 @@ static void main_thread_shutdown() {
     at_set_stop_wud_write();
 
     at_stop_cam_alerts_reader();
+    at_stop_sf();
     at_stop_wud_write();
     at_stop_proxy_rw();
 
@@ -677,6 +723,13 @@ void at_main_thread() {
                     len = sizeof(mt_msg);
                 }
                 break;
+             case AQ_FromSF:
+                 while(pu_queue_pop(from_sf, mt_msg, &len)) {
+                     pu_log(LL_DEBUG, "%s: got message from SendFiles thread %s", AT_THREAD_NAME, mt_msg);
+                     process_sf(mt_msg);
+                     len = sizeof(mt_msg);
+                 }
+                 break;
             case AQ_Timeout:
 /*                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME); */
                 break;

@@ -130,10 +130,10 @@ t_ao_cam_alert ao_cam_decode_alert(const char* in) {
     cJSON* alrt_name = cJSON_GetObjectItem(obj, ALERT_NAME);
     if(alrt_name) ret.cam_event = ac_cam_string2event(alrt_name->valuestring);
 
-    cJSON* start_date = cJSON_GetObjectItem(obj, ALERT_END);
+    cJSON* start_date = cJSON_GetObjectItem(obj, ALERT_START);
     if(start_date) ret.start_date = start_date->valueint;
 
-    cJSON* end_date = cJSON_GetObjectItem(obj, ALERT_START);
+    cJSON* end_date = cJSON_GetObjectItem(obj, ALERT_END);
     if(end_date) ret.end_date = end_date->valueint;
 
     cJSON_Delete(obj);

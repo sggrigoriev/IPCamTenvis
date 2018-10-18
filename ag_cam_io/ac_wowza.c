@@ -196,6 +196,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     if(!ac_rtsp_set_setup_urls(new_description, sess, AT_RTSP_CONCAT)) goto on_error;
 //TODO! Find appropriate way to append additional parameters to audio/video URLs
     sess->audio_url = append_url(sess->audio_url, "?transcode=true");
+    sess->video_url = append_url(sess->video_url, "?transcode=true");
     if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
     if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
 // Header

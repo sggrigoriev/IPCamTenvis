@@ -26,13 +26,14 @@
 #include "pu_queue.h"
 
 #define AQ_MIN_QUEUE AQ_FromProxyQueue  /* The event with min number. Needed because of default STOP event */
-#define AQ_MAX_QUEUE AQ_FromRW           /* Event with the max user event number - las one before AQ_Stop */
+#define AQ_MAX_QUEUE AQ_ToSF           /* Event with the max user event number - las one before AQ_Stop */
 
 
 /* Full Agent's queues events list */
 typedef enum {AQ_Timeout = PQ_TIMEOUT,
     AQ_FromProxyQueue = 1, AQ_ToProxyQueue = 2, AQ_FromCam = 3, AQ_FromWS = 4, AQ_ToWUD = 5, AQ_FromRW = 6,
-    AQ_STOP = PQ_STOP} queue_events_t;      //NB! Got MAX queues!!
+    AQ_FromSF = 7, AQ_ToSF = 8,
+    AQ_STOP = PQ_STOP} queue_events_t;      /* MAX queue number (15th currently) */
 
 /* Init Agent queues service */
 void aq_init_queues();

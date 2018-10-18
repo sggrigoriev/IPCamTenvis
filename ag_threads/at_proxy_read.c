@@ -59,7 +59,6 @@ static void* proxy_read(void* params) {
         at_set_stop_proxy_rw_children();
         goto allez;
     }
-    sleep(5);
     while(!at_are_childs_stop()) {
         int rc;
         lib_tcp_rd_t *conn = lib_tcp_read(all_conns, 1, &rc); /* connection removed inside */

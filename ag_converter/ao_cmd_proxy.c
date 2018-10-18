@@ -111,7 +111,9 @@ static int get_old_proxy_msg_with_device_id(cJSON* data) {
     cJSON* item = cJSON_GetObjectItem(data, F_DEVICE_ID_OLD);
     return (item != NULL);
 }
-/* {"gw_cloudConnection": [{"deviceId":"<gateway device id>", "paramsMap": {"cloudConnection": "<connected/disconnected>", "deviceAuthToken":"<auth_token>"}}]} */
+/*
+ * {"gw_cloudConnection": [{"deviceId":"<gateway device id>", "paramsMap": {"cloudConnection": "<connected/disconnected>", "deviceAuthToken":"<auth_token>"}}]}
+*/
 static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
     cJSON* arr;
     cJSON* arr_item;
@@ -161,6 +163,7 @@ static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
 
     return 1;
 }
+
 
 static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
     cJSON* arr;
@@ -216,16 +219,48 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
     return 0;
 }
 
+/*
+ * Send file to cloud - internal Agent-SF command.
+ * buf         - buffer to store the message
+ * size        - buffer size
+ * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
+ * files_list   - JSON array of files with full path: "filesList":["name1",..."nameN"]
+ * device_id   - gateway device_id
+ *
+ * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
+ * Return pointer to the buf
+*/
+const char* ao_make_send_files(char* buf, size_t size, char files_type, const char* files_list) {
+    snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%c\", %s}", files_type, files_list);
+    buf[size-1] = '\0';
+    return buf;
+}
+
 void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data) {
     data->command_type = AO_UNDEF;
 
-     if(get_old_proxy_msg_with_device_id(own_msg)) {
-         data->command_type = AO_IN_PROXY_ID;
-     }
+    if(get_old_proxy_msg_with_device_id(own_msg)) {
+        data->command_type = AO_IN_PROXY_ID;
+    }
     else if(get_proxy_conn_status(own_msg, &data->in_connection_state)) {
          data->command_type = AO_IN_CONNECTION_INFO;
-     }
+    }
     else {
-         get_stream_start_stop(own_msg, &data->in_manage_video);
-     }
+        get_stream_start_stop(own_msg, &data->in_manage_video);
+    }
+}
+
+/*
+ * {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
+ * NB! Returned value should be freed!
+ */
+char* ao_get_files_sent(const char* msg) {
+    cJSON* item;
+    if(!cJSON_GetObjectItem(data, "filesSent")) return 0;
+    if(item = cJSON_GetObjectItem(data, "filesList"), !item) return 0;
+    if(item->type != cJSON_Array) {
+        pu_log(LL_ERROR, "%s: Wrong 'filesSent' message format: Array expexted on 'filesList'", __FUNCTION__);
+        return NULL;
+    }
+    return cJSON_PrintUnformatted(item);;
 }
