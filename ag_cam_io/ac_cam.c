@@ -64,7 +64,10 @@ static int remove_dir(const char* path_n_name) {
     pu_log(LL_DEBUG, "%s: Remove %s", __FUNCTION__, path_n_name);
 
     DIR *d = opendir(path_n_name);
-    if(!d) return 0;
+    if(!d) {
+        pu_log(LL_ERROR, "%s: Directory %s wasn't found", __FUNCTION__, path_n_name);
+        return 0;
+    }
 
     struct dirent *p;
     while (p=readdir(d), p != NULL) {
@@ -188,9 +191,9 @@ static char* get_files_list(const char* dir_name, time_t start, time_t end, cons
 
     while((dir_ent = readdir(dir)), dir_ent != NULL) {
         if(got_name(dir_ent->d_name, start, end, postfix)) {
-            snprintf(buf, sizeof(buf)-1, "\"%s\",", dir_ent->d_name);
+            snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", dir_name, dir_ent->d_name);
             ret = au_append_str(ret, buf);
-            pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, dir_ent->d_name);
+            pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
         }
         else {
             pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
@@ -239,7 +242,7 @@ char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date
         pu_log(LL_ERROR, "%s: Wrong file type %s. Only %s, %s or %s expected", __FUNCTION__, type, DEFAULT_MD_FILE_POSTFIX, DEFAULT_SD_FILE_POSTFIX, DEFAULT_SNAP_FILE_POSTFIX);
         return NULL;
     }
-    snprintf(dir, sizeof(dir)-1, "%s%s", DEFAULT_DT_FILES_PATH, "/");
+    snprintf(dir, sizeof(dir)-1, "%s/", DEFAULT_DT_FILES_PATH);
     add_dir_from_date(start_date, dir, sizeof(dir)-strlen(dir));
 
     return au_drop_last_symbol(get_files_list(dir, start_date, end_date, type));
@@ -261,8 +264,11 @@ char* ac_get_all_files(const char* ft) {
     }
     struct dirent *dir_ent;
     while (dir_ent = readdir(dir), dir_ent != NULL) {
+        char full_path[256]={0};
         if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
-        char* flist = get_files_list(dir_ent->d_name, start_date, end_date, ft);
+
+        snprintf(full_path, sizeof(full_path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, dir_ent->d_name);
+        char* flist = get_files_list(full_path, start_date, end_date, ft);
         if(flist) {
             ret = au_append_str(ret, flist);
             free(flist);

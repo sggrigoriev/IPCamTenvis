@@ -153,12 +153,12 @@ static void* thread_function(void* params) {
         switch (ev = pu_wait_for_queues(events, 1)) {
             case AQ_ToSF: {
                 while (pu_queue_pop(from_main, q_msg, &len)) {
-                    pu_log(LL_INFO, "%s: receive %s from Agent", PT_THREAD_NAME, q_msg);
+                    pu_log(LL_INFO, "%s: receive from Agent: %s ", PT_THREAD_NAME, q_msg);
                     fld_t* fld = open_flist(q_msg);
                     fd_t fd;
                     rep_t* rpt = open_rpt();
                     if(!fld) {
-                        pu_log(LL_ERROR, "%s: Can't get files list from %s is ", PT_THREAD_NAME, q_msg);
+                        pu_log(LL_ERROR, "%s: Can't get files list from %s ", PT_THREAD_NAME, q_msg);
                     }
                     else {
                         while(get_next_f(fld, &fd)) {
