@@ -116,26 +116,27 @@ static void send_snapshot(const char* full_path) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
     snprintf(flist, sizeof(flist), fmt, full_path);
-    ao_make_send_files(buf, sizeof(buf), get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist);
+    ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist);
     pu_queue_push(to_sf, buf, strlen(buf) + 1);
 }
 static void send_send_file(t_ao_cam_alert data) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char f_list[LIB_HTTP_MAX_MSG_SIZE];
+    char* f_list = ac_cam_get_files_name(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
 
-    if(strlen(ac_cam_get_files_name(data, f_list, sizeof(f_list))) > 0) {
-        ao_make_send_files(buf, sizeof(buf), get_event2file_type(data.cam_event), f_list);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+    if(!f_list) {
+        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to SF", AT_THREAD_NAME);
     }
     else {
-        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to SF", AT_THREAD_NAME);
+        ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(data.cam_event), f_list);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+        free(f_list);
     }
 }
 /*
  * Send SD/MD/SNAPHOT files which wasn't sent before
  * Call at start
  */
-static void send_remaining_files(char t) {
+static void send_remaining_files(const char* t) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char* t_files = ac_get_all_files(t);
     if(t_files) {
@@ -204,11 +205,6 @@ static void run_agent_actions() {
             ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* request WS connect */
             ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);        /* set Agent as connected */
             ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
-/* Send MD/SD/SNAPHOTS which weren't sent during the regular procedure */
-            send_remaining_files(get_event2file_type(AC_CAM_STOP_MD));
-            send_remaining_files(get_event2file_type(AC_CAM_STOP_SD));
-            send_remaining_files(get_event2file_type(AC_CAM_MADE_SNAPSHOT));
-
             break;
         case 10:     /* state: connected, no command -> Process Agent actions */
             if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {
@@ -429,6 +425,11 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
                     ag_saveMainURL(data.in_connection_state.main_url);
                     info_changed = 1;
                 }
+/* Send MD/SD/SNAPHOTS which weren't sent during the regular procedure */
+/* If we got conn data - Proxy lost connection. So it is possible we could not send files... */
+                send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_MD));
+                send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_SD));
+                send_remaining_files(ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT));
             }
             if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
         }
@@ -584,7 +585,7 @@ static void process_sf(char* msg) {
         pu_log(LL_ERROR, "%s: Error JSON parsing of %s. Message ignored", __FUNCTION__, msg);
         return;
     }
-    char* flist = ao_get_files_sent(msg);
+    char* flist = ao_get_files_sent(obj);
     if(!flist) {
         pu_log(LL_WARNING, "%s: Empty flies list from SF. Nothing to delete", __FUNCTION__);
     }
@@ -605,6 +606,9 @@ static int main_thread_startup() {
     from_cam = aq_get_gueue(AQ_FromCam);                /* cam_control -> main_thread */
     from_ws = aq_get_gueue(AQ_FromWS);                  /* WS -> main_thread */
     from_stream_rw = aq_get_gueue(AQ_FromRW);           /* Streaming RW tread(s) -> main */
+    from_sf = aq_get_gueue(AQ_FromSF);                  /* SF thread -> main */
+    to_sf = aq_get_gueue(AQ_ToSF);                      /* main -> SF thread */
+
 
     events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
     events = pu_add_queue_event(events, AQ_FromCam);
@@ -641,7 +645,7 @@ static int main_thread_startup() {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "FILES_SENDER", strerror(errno));
         return 0;
     }
-    pu_log(LL_INFO, "%s: started", "FILES_SENDER", __FUNCTION__);
+    pu_log(LL_INFO, "%s: %s started", "FILES_SENDER", __FUNCTION__);
 
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
@@ -685,6 +689,10 @@ void at_main_thread() {
 
     lib_timer_clock_t va_clock = {0};   /* timer for viewers amount check */
     lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
+
+    lib_timer_clock_t dir_clean_clock = {0};   /* timer for md/sd directories cleanup */
+    lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
+
 
     unsigned int events_timeout = 1; /* Wait 1 second */
 
@@ -751,6 +759,11 @@ void at_main_thread() {
         if(lib_timer_alarm(va_clock)) {
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
             lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
+        }
+        /*3. Directories for MD/SD cleanup */
+        if(lib_timer_alarm(dir_clean_clock)) {
+            ac_delete_old_dirs();
+            lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
         }
 /* Interpret changes made in properties */
         run_actions();

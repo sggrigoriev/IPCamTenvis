@@ -230,8 +230,8 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
  * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, char files_type, const char* files_list) {
-    snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%c\", %s}", files_type, files_list);
+const char* ao_make_send_files(char* buf, size_t size, const char* files_type, const char* files_list) {
+    snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": [%s]}", files_type, files_list);
     buf[size-1] = '\0';
     return buf;
 }
@@ -254,13 +254,13 @@ void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data) {
  * {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
  * NB! Returned value should be freed!
  */
-char* ao_get_files_sent(const char* msg) {
+char* ao_get_files_sent(cJSON* obj) {
     cJSON* item;
-    if(!cJSON_GetObjectItem(data, "filesSent")) return 0;
-    if(item = cJSON_GetObjectItem(data, "filesList"), !item) return 0;
+    if(!cJSON_GetObjectItem(obj, "filesSent")) return 0;
+    if(item = cJSON_GetObjectItem(obj, "filesList"), !item) return 0;
     if(item->type != cJSON_Array) {
         pu_log(LL_ERROR, "%s: Wrong 'filesSent' message format: Array expexted on 'filesList'", __FUNCTION__);
         return NULL;
     }
-    return cJSON_PrintUnformatted(item);;
+    return cJSON_PrintUnformatted(item);
 }

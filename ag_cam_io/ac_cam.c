@@ -23,6 +23,9 @@
 #include <time.h>
 #include <errno.h>
 #include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <curl/curl.h>
 
@@ -30,21 +33,76 @@
 #include "pu_logger.h"
 
 #include "ag_defaults.h"
+#include "au_string.h"
 #include "ag_settings.h"
 #include "ao_cma_cam.h"
 #include "ac_http.h"
 #include "ag_db_mgr.h"
 #include "ac_cam.h"
 
-static const char* make_dir_from_date(const char* path, time_t timestamp, char* buf, size_t size) {
+/*
+ * concat path & name
+ * NB! returned memory should be freed afetr use!
+ */
+static char* get_full_name(const char* path, const char* name) {
+    char buf[256]={0};
+    snprintf(buf, sizeof(buf)-1, "%s/%s", path, name);
+    buf[sizeof(buf)-1] = '\0';
+    char* ret = strdup(buf);
+    if(!ret) {
+        pu_log(LL_ERROR, "%s: Not enugh memory", __FUNCTION__);
+    }
+    return ret;
+}
+/*
+ * rmdir <name> -r
+ * https://stackoverflow.com/questions/2256945/removing-a-non-empty-directory-programmatically-in-c-or-c
+ * return 0 if Ok
+ */
+static int remove_dir(const char* path_n_name) {
+
+    pu_log(LL_DEBUG, "%s: Remove %s", __FUNCTION__, path_n_name);
+
+    DIR *d = opendir(path_n_name);
+    if(!d) return 0;
+
+    struct dirent *p;
+    while (p=readdir(d), p != NULL) {
+        char* full_name = NULL;
+
+        if(!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) continue; /* Skip the names "." and ".." as we don't want to recurse on them. */
+
+        if(full_name = get_full_name(path_n_name, p->d_name), !full_name) goto on_error;
+
+        struct stat statbuf;
+        if(lstat(full_name, &statbuf)) {
+            pu_log(LL_ERROR, "%s: stat %s error %d - %s", __FUNCTION__, full_name, errno, strerror(errno));
+            goto on_error;
+        }
+
+        if(S_ISDIR(statbuf.st_mode)) {    /* Directory again */
+            if(!remove_dir(full_name)) goto on_error;
+        }
+        else if(unlink(full_name)) {
+            pu_log(LL_ERROR, "%s: unlink %s error %d - %s", __FUNCTION__, full_name, errno, strerror(errno));
+            goto on_error;
+        }
+        on_error:
+        free(full_name);
+    }
+    closedir(d);
+
+    return rmdir(path_n_name);
+}
+
+static const char* add_dir_from_date(time_t timestamp, char* buf, size_t size) {
     struct tm t;
     char name[11] = {0};
 
     gmtime_r(&timestamp, &t);
-    strftime(name, sizeof(name), "%Y-%m-%d", &t);
-    strncpy(buf, path, size-1);
-    strncat(buf, "/", size-2);
-    strncat(buf, name, size - strlen(buf)-1);
+    strftime(name, sizeof(name), DEFAULT_DT_DIRS_FMT, &t);
+    strncat(buf, name, size-1);
+    buf[size-1] = '\0';
     return buf;
 }
 /*
@@ -61,6 +119,23 @@ static int is_right_name(const char* name, const char*prefix, const char* postfi
     if(strcmp(pr, prefix) != 0) return 0;
     if(strcmp(ps, postfix) != 0) return 0;
 
+    return 1;
+}
+/*
+ * return 1 if the name is YYYY-MM-DD
+ * if old == 1 -> the date represented by name sohuld be less than today
+ */
+static int is_right_dir(const char* name, int old) {
+    if((!name) && (strlen(name)!=strlen("YYYY-MM-DD"))) return 0;
+    if(old) {
+        char dir[20]={0};
+        add_dir_from_date(time(NULL), dir, sizeof(dir));
+        if(!strcmp(name, dir)) return 0;
+    }
+    int f, y, m, d;
+    char c1, c2;
+    f = sscanf(name, "%4d%[-]%2d%[-]%2d", &y, &c1, &m, &c2, &d);
+    if(f != 5) return 0;
     return 1;
 }
 /*
@@ -97,95 +172,165 @@ static int got_name(const char* name, time_t start, time_t end, const char* post
     return ((start_time <= event_time) && (event_time <= end_time));
 }
 /*
- * concatinate [name, name, ... name]
+ * return name, name, ... name,
+ * NB! returned memory should be freed!
 */
-static char* add_files_list(const char* dir_name, time_t start, time_t end, const char* postfix, char* buf, size_t size) {
+static char* get_files_list(const char* dir_name, time_t start, time_t end, const char* postfix) {
     DIR *dir = opendir(dir_name);
-    buf[0] = '\0';
     if (dir == NULL) {       /* Not a directory or doesn't exist */
         pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, dir_name);
-        return buf;
+        return NULL;
     }
-    else {
-        struct dirent* dir_ent;
-        int first = 0;
-        while((dir_ent = readdir(dir)), dir_ent != NULL) {
-             if(got_name(dir_ent->d_name, start, end, postfix)) {
-                if(!first) {
-                    first = 1;
-                    strncat(buf, "[", size - strlen(buf)-1);
-                }
-                strncat(buf, "\"", size - strlen(buf)-1);
-                strncat(buf, dir_ent->d_name, size - strlen(buf)-1);
-                strncat(buf, "\"", size - strlen(buf)-1);
-                strncat(buf, ",", size - strlen(buf)-1);
-                pu_log(LL_DEBUG, "%s: file %s added to the list", __FUNCTION__, dir_ent->d_name);
-            }
-            else {
-                pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
-            }
+
+    char buf[256] = {0};
+    char* ret = NULL;
+    struct dirent* dir_ent;
+
+    while((dir_ent = readdir(dir)), dir_ent != NULL) {
+        if(got_name(dir_ent->d_name, start, end, postfix)) {
+            snprintf(buf, sizeof(buf)-1, "\"%s\",", dir_ent->d_name);
+            ret = au_append_str(ret, buf);
+            pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, dir_ent->d_name);
         }
-        if(strlen(buf)) buf[strlen(buf)-1] = ']';  /* Replace last ',' to ']'*/
-        buf[size-1] = '\0';
-        closedir(dir);
+        else {
+            pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
+        }
     }
-    return buf;
+    closedir(dir);
+    return ret;
 }
 /***************************************************************************************************************/
 /*
- * AC_CAM_STOP_MD -> 'V'
- * AC_CAM_STOP_SD -> 'S'
- * AC_CAM_MADE_SNAPSHOT -> 'P'
- * Anything else -> '?
+ * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
+ * AC_CAM_STOP_SD -> DEFAULT_SD_FILE_POSTFIX
+ * AC_CAM_MADE_SNAPSHOT -> DEFAULT_SNAP_FILE_POSTFIX
+ * Anything else -> DEFAULT_UNDEF_FILE_POSTFIX
  */
-char get_event2file_type(t_ac_cam_events e) {
-    char ret;
+const char* ac_get_event2file_type(t_ac_cam_events e) {
+    const char* ret;
     switch(e) {
         case AC_CAM_STOP_MD:
-            ret = 'V';
+            ret = DEFAULT_MD_FILE_POSTFIX;
             break;
         case AC_CAM_STOP_SD:
-            ret = 'S';
+            ret = DEFAULT_SD_FILE_POSTFIX;
             break;
         case AC_CAM_MADE_SNAPSHOT:
-            ret = 'P';
+            ret = DEFAULT_SNAP_FILE_POSTFIX;
             break;
         default:
-            ret = '?';
+            ret = DEFAULT_UNDEF_FILE_POSTFIX;
             pu_log(LL_ERROR, "%s: Wrong event type %d only %d, %d or %d allowed", __FUNCTION__, e, AC_CAM_STOP_MD, AC_CAM_STOP_SD, AC_CAM_MADE_SNAPSHOT);
             break;
     }
     return ret;
 }
 /*
- * Create the JSON array with full file names& path for alert "filesList":["name1",..."nameN"]
+ * return "name1",..."nameN" or NULL if no files
  * If no files found - return empty string
  * 1. Find directory "yyyy-mm-dd" in DEFAULT_MD_FILES_PATH
  * 2. find files (S or M type) with filename as DEFAULT_ХХ_FILES_PREFIX+hhmmss+DEFAULT_XX_FILE_POSTFIX.*
  *      where hhmmss is between start and end dates of the alert
  */
-const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size) {
+char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date) {
     char dir[256] = {0};
-    const char* postfix;
 
-    make_dir_from_date(DEFAULT_DT_FILES_PATH, data.start_date, dir, sizeof(dir));
-    if(data.cam_event == AC_CAM_STOP_MD) postfix = DEFAULT_MD_FILE_POSTFIX;
-    else if(data.cam_event == AC_CAM_STOP_SD) postfix = DEFAULT_SD_FILE_POSTFIX;
-    else {
-        pu_log(LL_ERROR, "%s: Wrong event %s only %s or %s expected", __FUNCTION__, ac_cam_event2string(data.cam_event), ac_cam_event2string(AC_CAM_STOP_MD), ac_cam_event2string(AC_CAM_STOP_SD));
-        buf[0] = '\0';
-        return buf;
+    if(!strcmp(type, DEFAULT_UNDEF_FILE_POSTFIX)) {
+        pu_log(LL_ERROR, "%s: Wrong file type %s. Only %s, %s or %s expected", __FUNCTION__, type, DEFAULT_MD_FILE_POSTFIX, DEFAULT_SD_FILE_POSTFIX, DEFAULT_SNAP_FILE_POSTFIX);
+        return NULL;
     }
-    strncpy(buf, "\"filesList\": ", size-1);
-    size_t len = strlen(buf);
-    add_files_list(dir, data.start_date, data.end_date, postfix, buf, size);
-    if(strlen(buf) <= len) {
-        pu_log(LL_WARNING, "%s: no files were found", __FUNCTION__);
-        buf[0] = '\0';
-    }
-    return buf;
+    snprintf(dir, sizeof(dir)-1, "%s%s", DEFAULT_DT_FILES_PATH, "/");
+    add_dir_from_date(start_date, dir, sizeof(dir)-strlen(dir));
+
+    return au_drop_last_symbol(get_files_list(dir, start_date, end_date, type));
 }
-
+/*
+ * Get file list with all existing files of given type
+ * Return {"filesList":[]}
+ * Return NULL if no files found
+ * NB! Returned string should be freed!
+ */
+char* ac_get_all_files(const char* ft) {
+    const time_t start_date = 0;    /* 1970 01 01 00:00:00 */
+    const time_t end_date = 86399;  /* 1970 01 01 23:59:59 */
+    char* ret= NULL;
+    DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
+        return NULL;
+    }
+    struct dirent *dir_ent;
+    while (dir_ent = readdir(dir), dir_ent != NULL) {
+        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
+        char* flist = get_files_list(dir_ent->d_name, start_date, end_date, ft);
+        if(flist) {
+            ret = au_append_str(ret, flist);
+            free(flist);
+        }
+    }
+    closedir(dir);
+    return au_drop_last_symbol(ret);
+}
+/*
+ * Return empty string or all shit after the first '.' in file name
+ */
+const char* ac_cam_get_file_ext(const char* name) {
+    const char* ret = strchr(name, '.');
+    return (!ret)?"":ret;
+}
+/*
+ * Return file size in bytes
+ */
+size_t ac_get_file_size(const char* name) {
+    struct stat st;
+    if(lstat(name, &st)) {
+        pu_log(LL_ERROR, "%s: lstat %s error: %d - %s", __FUNCTION__, name, errno, strerror(errno));
+        return 0;
+    }
+    return st.st_size;
+}
+/*
+ * Delete files from list.
+ * file_list is a JSON array as ["name",...,"name"]
+ */
+void ac_cam_delete_files(const char* file_list) {
+    cJSON* arr = cJSON_Parse(file_list);
+    if((!arr) || (arr->type != cJSON_Array) || !cJSON_GetArraySize(arr)) {
+        pu_log(LL_ERROR, "%s: No files to delete found in %s", __FUNCTION__, file_list);
+        return;
+    }
+    int i;
+    for(i = 0; i < cJSON_GetArraySize(arr); i++) {
+        if(!unlink(cJSON_GetArrayItem(arr, i)->valuestring)) {
+            pu_log(LL_DEBUG, "%s: File %s deleted", __FUNCTION__, cJSON_GetArrayItem(arr, i)->valuestring);
+        }
+        else {
+            pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, cJSON_GetArrayItem(arr, i)->valuestring, errno, strerror(errno));
+        }
+    }
+}
+/*
+ * Delete all directories which are empty and elder than today
+ * Called from ac_cam_init()
+ */
+void ac_delete_old_dirs() {
+    DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
+        return;
+    }
+    struct dirent *dir_ent;
+    while (dir_ent = readdir(dir), dir_ent != NULL) {
+        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 1))) continue;
+        if(remove_dir(dir_ent->d_name)) {
+            pu_log(LL_DEBUG, "%s: Directory %s was deleted", __FUNCTION__, dir_ent->d_name);
+        }
+        else {
+            pu_log(LL_ERROR, "%s: Error %s deletion: %d - %s", __FUNCTION__, dir_ent->d_name, errno, strerror(errno));
+        }
+    }
+    closedir(dir);
+}
 /***************************
  * cURL support local functions
  */
@@ -348,8 +493,6 @@ int ac_cam_init() {
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
-
-    ac_delete_old_dirs();
 
     ret = 1;
     on_error:

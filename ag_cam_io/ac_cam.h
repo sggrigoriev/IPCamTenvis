@@ -26,16 +26,25 @@
 #include "ao_cmd_data.h"
 
 /*
- * AC_CAM_STOP_MD -> 'V'
- * AC_CAM_STOP_SD -> 'S'
- * AC_CAM_MADE_SNAPSHOT -> 'P'
- * Anything else -> '?
+ * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
+ * AC_CAM_STOP_SD -> DEFAULT_SD_FILE_POSTFIX
+ * AC_CAM_MADE_SNAPSHOT -> DEFAULT_SNAP_FILE_POSTFIX
+ * Anything else -> DEFAULT_UNDEF_FILE_POSTFIX
  */
-char get_event2file_type(t_ac_cam_events e);
+const char* ac_get_event2file_type(t_ac_cam_events e);
 /*
  * Create the JSON array with full file names& path for alert
+ * Return NULL if no files found
+ * NB! Returned string should be freed!
  */
-const char* ac_cam_get_files_name(t_ao_cam_alert data, char* buf, size_t size);
+char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date);
+/*
+ * Get file list with all existing files of given type
+ * Return {"filesList":[]}
+ * Return NULL if no files found
+ * NB! Returned string should be freed!
+ */
+char* ac_get_all_files(const char* ft);
 /*
  * Return empty string or all shit after the first '.' in file name
  */
@@ -44,24 +53,16 @@ const char* ac_cam_get_file_ext(const char* name);
  * Return file size in bytes
  */
 size_t ac_get_file_size(const char* name);
-
 /*
  * Delete files from list.
  * file_list is a JSON array as ["name",...,"name"]
  */
 void ac_cam_delete_files(const char* file_list);
 /*
- * Get file list with all existing files of given type
- * Return {"filesList":[]}
- * Return NULL if no files found
- */
-char* ac_get_all_files(char ft);
-/*
  * Delete all directories which are empty and elder than today
  * Called from ac_cam_init()
  */
 void ac_delete_old_dirs();
-
 /************************************************************************/
 
 /*

@@ -153,6 +153,7 @@ static void* thread_function(void* params) {
         switch (ev = pu_wait_for_queues(events, 1)) {
             case AQ_ToSF: {
                 while (pu_queue_pop(from_main, q_msg, &len)) {
+                    pu_log(LL_INFO, "%s: receive %s from Agent", PT_THREAD_NAME, q_msg);
                     fld_t* fld = open_flist(q_msg);
                     fd_t fd;
                     rep_t* rpt = open_rpt();

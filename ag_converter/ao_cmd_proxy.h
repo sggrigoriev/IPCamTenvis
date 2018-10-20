@@ -58,14 +58,14 @@ const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
  * Send file to cloud - internal Agent-SF command.
  * buf         - buffer to store the message
  * size        - buffer size
- * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
+ * files_type   - see defaults
  * files_list   - JSON array of files with full path: "filesList":["name1",..."nameN"]
  * device_id   - gateway device_id
  *
  * {"name": "sendFiles", "type": "<fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, char files_type, const char* files_list);
+const char* ao_make_send_files(char* buf, size_t size, const char* files_type, const char* files_list);
 /*
  * Answer from SF about files sent
  * files_list - JSON array of files with full path:
@@ -77,7 +77,7 @@ const char* pr_make_send_filesAnswer(char* buf, size_t size, const char* files_l
  * {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
  * NB! Returned value should be freed!
  */
-char* ao_get_files_sent(const char* msg);
+char* ao_get_files_sent(cJSON* obj);
 
 void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data);
 

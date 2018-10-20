@@ -45,7 +45,6 @@
 char* au_strcpy(char* dest, const char* source, size_t size);
 char* au_strcat(char* dest, const char* source, size_t size);
 char* au_strdup(const char* source);
-char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size);
 
 /* Return position in the msg when subs starts. Else return -1. */
 int au_findSubstr(const char* msg, const char* subs, int case_sencitive);
@@ -55,9 +54,17 @@ int au_findFirstOutOfSet(const char* msg, const char* set);
 
 /* If msg starts from digit, return substr before furst non-digit. Else return empty str */
 const char* au_getNumber(char* buf, size_t size, const char* msg);
-
-const char* au_getSection(char* buf, size_t size, const char* msg, const char* before, const char* after, int case_sencitive);
-
-char* au_replaceSection(char* msg, size_t m_size,  const char* before, const char* after, int caseSencitive, const char* substr);
+/*
+ * concat dest and src.
+ * NB! the result should be freed after use!
+ * IF dest == NULL -> just strdup(src)
+ */
+char* au_append_str(char* dest, char* src);
+/*
+ * Take off last symbol
+ * Required for strings as name, name, ... , name
+ *
+ */
+char* au_drop_last_symbol(char* str);
 
 #endif /* IPCAMTENVIS_AU_STRING_H */

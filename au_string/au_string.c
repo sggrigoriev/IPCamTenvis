@@ -38,27 +38,6 @@ static int char_eq(char a, char b, int cs) {
     if(cs) return a == b;
     return tolower(a) == tolower(b);
 }
-static t_au_pos findSection(const char* msg, const char* before, const char* after, int case_sencitive) {
-    t_au_pos ret = {0};
-    ssize_t end;
-
-    if(!msg) return ret;
-    if(!before)
-        ret.start = 0;
-    else if(ret.start = au_findSubstr(msg, before, case_sencitive), ret.start < 0)
-        return ret;
-    ret.start += strlen(before);
-
-    if(!after)
-        ret.len = strlen(msg)-ret.start;
-    else if(end = au_findSubstr(msg+ret.start, after, case_sencitive), end < 0)
-        ret.len = strlen(msg)-ret.start;
-    else
-        ret.len = end;
-
-    ret.found = 1;
-    return ret;
-}
 
 char* au_strcpy(char* dest, const char* source, size_t size) {
     if((!size) || (!source) || (!dest)) return dest;
@@ -80,25 +59,6 @@ char* au_strdup(const char* source) {
 
     return strcpy(ret, source);
 }
-char* au_bytes_2_hex_str(char* dest, const unsigned char* src, unsigned int src_len, size_t size) {
-    if((!size) || (!src_len) || (!dest) || (!src)) return dest;
-
-    unsigned int i, len;
-    len = 0;
-    dest[0] = '\0';
-    for(i = 0; i < src_len; i++) {
-        char hex[3]={0};
-        sprintf(hex, "%x", src[i]);
-        if(!au_strcat(dest, hex, size)) return NULL;
-        len += strlen(hex);
-    }
-    if(len+1 > size)
-        dest[size-1] = '\0';
-    else
-        dest[len] = '\0';
-    return dest;
-}
-
 
 int au_findSubstr(const char* msg, const char* subs, int case_sencitive) {
     if(!msg || !subs) return -1;
@@ -144,41 +104,32 @@ const char* au_getNumber(char* buf, size_t size, const char* msg) {
     }
     return buf;
 }
-const char* au_getSection(char* buf, size_t size, const char* msg, const char* before, const char* after, int case_sencitive) {
-    if(!buf || !size) return buf;
+/*
+ * concat dest and src.
+ * NB! the result should be freed after use!
+ * IF dest == NULL -> just strdup(src)
+ */
+char* au_append_str(char* dest, char* src) {
+    if(!src) return NULL;
+    if(!dest) return strdup(src);
 
-    t_au_pos pos = findSection(msg, before, after, case_sencitive);
-    if(!pos.found) return NULL;
-    if((size-1) < pos.len) return NULL;
-    memcpy(buf, msg+pos.start, pos.len);
-    buf[pos.len] = '\0';
-    return buf;
-}
-char* au_replaceSection(char* msg, size_t m_size,  const char* before, const char* after, int caseSencitive, const char* substr) {
-    size_t end;
-    char* buf;
-    t_au_pos pos = {0};
-
-    if(!msg || !m_size || !substr) return msg;
-
-    pos = findSection(msg, before, after, caseSencitive);
-    if(!pos.found) return 0;
-
-    end = strlen(msg)-pos.len+strlen(substr)+1;
-
-    if(buf = calloc(end, 1), !buf) {
-        pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
+    char* ret = calloc(strlen(dest)+strlen(src)+1, 1);
+    if(!ret) {
+        pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
         return NULL;
     }
-
-    memcpy(buf, msg, pos.start); buf[pos.start] = '\0';
-    if(!au_strcat(buf, substr, end)) return NULL;
-    if(!au_strcat(buf, msg+pos.start+pos.len, end)) return NULL;
-
-    if(!au_strcpy(msg, buf, m_size)) return NULL;
-    free(buf);
-
-    return msg;
+    sprintf(ret, "%s%s", dest, src);
+    return ret;
+}
+/*
+ * Take off last symbol
+ * Required for strings as name, name, ... , name
+ *
+ */
+char* au_drop_last_symbol(char* str) {
+    if((str) && (strlen(str)))
+        str[strlen(str)-1] = '\0';
+    return str;
 }
 
 
