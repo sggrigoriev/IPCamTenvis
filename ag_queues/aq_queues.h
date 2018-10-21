@@ -32,7 +32,7 @@
 /* Full Agent's queues events list */
 typedef enum {AQ_Timeout = PQ_TIMEOUT,
     AQ_FromProxyQueue = 1, AQ_ToProxyQueue = 2, AQ_FromCam = 3, AQ_FromWS = 4, AQ_ToWUD = 5, AQ_FromRW = 6,
-    AQ_FromSF = 7, AQ_ToSF = 8,
+    AQ_ToSF = 7,
     AQ_STOP = PQ_STOP} queue_events_t;      /* MAX queue number (15th currently) */
 
 /* Init Agent queues service */

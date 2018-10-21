@@ -73,7 +73,11 @@
 #define DEFAULT_MD_FILE_POSTFIX "M"
 #define DEFAULT_SD_FILE_POSTFIX "S"
 #define DEFAULT_SNAP_FILE_POSTFIX "P"
+#define DEFAULT_VIDEO_FILE_POSTFIX "V"
 #define DEFAULT_UNDEF_FILE_POSTFIX "?"
+
+#define DEFAULLT_SNAP_FILE_PREFIX "pic"
+#define DEFAULLT_VIDEO_FILE_PREFIX "video"
 
 #define DEFAULT_MSD_FILE_EXT    "mp4"
 #define DEFAULT_SNAP_FILE_EXT    "jpg"
@@ -84,6 +88,7 @@
 #define DEFAULT_TO_FOR_DIR_CLEANUP  24*5*3600
 
 #define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
-#define DEFAULT_SNAP_PATH   "./the_snapshot.jpg"
+#define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
+#define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

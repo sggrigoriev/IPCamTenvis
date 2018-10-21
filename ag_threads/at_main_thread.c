@@ -64,7 +64,6 @@ static pu_queue_t* from_cam;        /* cam -> main_thread */
 static pu_queue_t* from_ws;         /* WS -> main_thread */
 static pu_queue_t* from_stream_rw;  /* from streaming threads to main */
 static pu_queue_t* to_sf;           /* from main_thread to files sender */
-static pu_queue_t* from_sf;         /* from main_thread to files sender */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -111,12 +110,10 @@ static void send_ACK_to_Proxy(int command_number) {
 }
 
 static void send_snapshot(const char* full_path) {
-    const char* fmt = "\"filesList\": [%s]";
-    char flist[256+strlen(fmt)+1];
     char buf[LIB_HTTP_MAX_MSG_SIZE];
-
-    snprintf(flist, sizeof(flist), fmt, full_path);
-    ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), flist);
+    char path[258]={0};
+    snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
+    ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path);
     pu_queue_push(to_sf, buf, strlen(buf) + 1);
 }
 static void send_send_file(t_ao_cam_alert data) {
@@ -358,17 +355,16 @@ static void run_snapshot_actions() {
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
     if (snapshot_command < 1) return;
 
-    const char *filename = "pictureXXXXXX";
-    const char *path = "./";
-    char full_path[strlen(filename) + strlen(path) + 1];
-    strcpy(full_path, path);
-    strcat(full_path, filename);
-    mktemp(full_path + strlen(path));
-    if (!ac_cam_make_snapshot(full_path)) {
+    char name[30]={0};
+    char path[256]={0};
+
+    ac_make_name_from_date(DEFAULLT_SNAP_FILE_PREFIX, time(NULL), DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, name, sizeof(name)-1);
+    snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
+    if (!ac_cam_make_snapshot(path)) {
         pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
         return;
     }
-    send_snapshot(full_path);
+    send_snapshot(path);
     ag_db_store_property(AG_DB_STATE_SNAPSHOT, "0");
 /*
  * if snapshot_command == 1 the alert should be sent. Was removed as unnecessary
@@ -430,6 +426,7 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
                 send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_MD));
                 send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_SD));
                 send_remaining_files(ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT));
+                send_remaining_files(ac_get_event2file_type(AC_CAM_RECORD_VIDEO));
             }
             if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
         }
@@ -579,22 +576,6 @@ static void process_alert(char* msg) {
             break;
     }
 }
-static void process_sf(char* msg) {
-    cJSON* obj = cJSON_Parse(msg);
-    if(!obj) {
-        pu_log(LL_ERROR, "%s: Error JSON parsing of %s. Message ignored", __FUNCTION__, msg);
-        return;
-    }
-    char* flist = ao_get_files_sent(obj);
-    if(!flist) {
-        pu_log(LL_WARNING, "%s: Empty flies list from SF. Nothing to delete", __FUNCTION__);
-    }
-    else {
-        ac_cam_delete_files(flist);
-        free(flist);
-    }
-    cJSON_Delete(obj);
-}
 
 static int main_thread_startup() {
 
@@ -606,7 +587,6 @@ static int main_thread_startup() {
     from_cam = aq_get_gueue(AQ_FromCam);                /* cam_control -> main_thread */
     from_ws = aq_get_gueue(AQ_FromWS);                  /* WS -> main_thread */
     from_stream_rw = aq_get_gueue(AQ_FromRW);           /* Streaming RW tread(s) -> main */
-    from_sf = aq_get_gueue(AQ_FromSF);                  /* SF thread -> main */
     to_sf = aq_get_gueue(AQ_ToSF);                      /* main -> SF thread */
 
 
@@ -614,7 +594,6 @@ static int main_thread_startup() {
     events = pu_add_queue_event(events, AQ_FromCam);
     events = pu_add_queue_event(events, AQ_FromWS);
     events = pu_add_queue_event(events, AQ_FromRW);
-    events = pu_add_queue_event(events, AQ_FromSF);
 
 /* Camera initiation & settings upload */
     if(!ac_cam_init()) {
@@ -690,10 +669,6 @@ void at_main_thread() {
     lib_timer_clock_t va_clock = {0};   /* timer for viewers amount check */
     lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
 
-    lib_timer_clock_t dir_clean_clock = {0};   /* timer for md/sd directories cleanup */
-    lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
-
-
     unsigned int events_timeout = 1; /* Wait 1 second */
 
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
@@ -731,13 +706,6 @@ void at_main_thread() {
                     len = sizeof(mt_msg);
                 }
                 break;
-             case AQ_FromSF:
-                 while(pu_queue_pop(from_sf, mt_msg, &len)) {
-                     pu_log(LL_DEBUG, "%s: got message from SendFiles thread %s", AT_THREAD_NAME, mt_msg);
-                     process_sf(mt_msg);
-                     len = sizeof(mt_msg);
-                 }
-                 break;
             case AQ_Timeout:
 /*                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME); */
                 break;
@@ -759,11 +727,6 @@ void at_main_thread() {
         if(lib_timer_alarm(va_clock)) {
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
             lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
-        }
-        /*3. Directories for MD/SD cleanup */
-        if(lib_timer_alarm(dir_clean_clock)) {
-            ac_delete_old_dirs();
-            lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
         }
 /* Interpret changes made in properties */
         run_actions();

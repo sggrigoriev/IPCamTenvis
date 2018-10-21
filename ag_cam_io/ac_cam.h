@@ -52,17 +52,25 @@ const char* ac_cam_get_file_ext(const char* name);
 /*
  * Return file size in bytes
  */
-size_t ac_get_file_size(const char* name);
+unsigned long ac_get_file_size(const char* name);
 /*
- * Delete files from list.
- * file_list is a JSON array as ["name",...,"name"]
+ * Delete all files from directory
  */
-void ac_cam_delete_files(const char* file_list);
+void ac_cam_clean_dir(const char* path);
 /*
  * Delete all directories which are empty and elder than today
  * Called from ac_cam_init()
  */
 void ac_delete_old_dirs();
+/*
+ * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
+ * Return buf
+ */
+const char* ac_make_name_from_date(const char* prefix, time_t timestamp, const char* postfix, const char* ext, char* buf, size_t size);
+/*
+ * Makes path directory. If already exists - ok all other errors reported!
+ */
+void ac_make_directory(const char* path, const char* dir_name);
 /************************************************************************/
 
 /*

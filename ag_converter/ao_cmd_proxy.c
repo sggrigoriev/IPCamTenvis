@@ -224,7 +224,7 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
  * buf         - buffer to store the message
  * size        - buffer size
  * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
- * files_list   - JSON array of files with full path: "filesList":["name1",..."nameN"]
+ * files_list   - JSON array of files with full path: "name1",..."nameN"
  * device_id   - gateway device_id
  *
  * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
@@ -256,8 +256,7 @@ void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data) {
  */
 char* ao_get_files_sent(cJSON* obj) {
     cJSON* item;
-    if(!cJSON_GetObjectItem(obj, "filesSent")) return 0;
-    if(item = cJSON_GetObjectItem(obj, "filesList"), !item) return 0;
+     if(item = cJSON_GetObjectItem(obj, "filesList"), !item) return NULL;
     if(item->type != cJSON_Array) {
         pu_log(LL_ERROR, "%s: Wrong 'filesSent' message format: Array expexted on 'filesList'", __FUNCTION__);
         return NULL;

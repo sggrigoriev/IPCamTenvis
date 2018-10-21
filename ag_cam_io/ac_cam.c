@@ -202,6 +202,60 @@ static char* get_files_list(const char* dir_name, time_t start, time_t end, cons
     closedir(dir);
     return ret;
 }
+/*
+* Return {"filesList":[]} for snaphots
+* Return NULL if no files found
+* NB! Returned string should be freed!
+*/
+static char* get_files_from_dir(const char* path) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, path);
+        return NULL;
+    }
+    char* ret = NULL;
+    struct dirent* dir_ent;
+    while((dir_ent = readdir(dir)), dir_ent != NULL) {
+        if(dir_ent->d_type != DT_REG) continue;
+
+        char buf[256] = {0};
+        snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", path, dir_ent->d_name);
+        ret = au_append_str(ret, buf);
+        pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
+    }
+    closedir(dir);
+    return au_drop_last_symbol(ret);
+}
+
+/*
+* Return {"filesList":[]} for MD/SD files
+* Return NULL if no files found
+* NB! Returned string should be freed!
+*/
+static char* get_dt_files(const char* ft) {
+    const time_t start_date = 0;    /* 1970 01 01 00:00:00 */
+    const time_t end_date = 86399;  /* 1970 01 01 23:59:59 */
+    char* ret= NULL;
+    DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
+        return NULL;
+    }
+    struct dirent *dir_ent;
+    while (dir_ent = readdir(dir), dir_ent != NULL) {
+        char full_path[256]={0};
+        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
+
+        snprintf(full_path, sizeof(full_path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, dir_ent->d_name);
+        char* flist = get_files_list(full_path, start_date, end_date, ft);
+        if(flist) {
+            ret = au_append_str(ret, flist);
+            free(flist);
+        }
+    }
+    closedir(dir);
+    return au_drop_last_symbol(ret);
+}
 /***************************************************************************************************************/
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
@@ -220,6 +274,9 @@ const char* ac_get_event2file_type(t_ac_cam_events e) {
             break;
         case AC_CAM_MADE_SNAPSHOT:
             ret = DEFAULT_SNAP_FILE_POSTFIX;
+            break;
+        case AC_CAM_RECORD_VIDEO:
+            ret = DEFAULT_VIDEO_FILE_POSTFIX;
             break;
         default:
             ret = DEFAULT_UNDEF_FILE_POSTFIX;
@@ -254,28 +311,24 @@ char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date
  * NB! Returned string should be freed!
  */
 char* ac_get_all_files(const char* ft) {
-    const time_t start_date = 0;    /* 1970 01 01 00:00:00 */
-    const time_t end_date = 86399;  /* 1970 01 01 23:59:59 */
-    char* ret= NULL;
-    DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
-    if (dir == NULL) {       /* Not a directory or doesn't exist */
-        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
-        return NULL;
+    if(!ft) return NULL;
+    
+    if(!strcmp(ft, DEFAULT_MD_FILE_POSTFIX) || !strcmp(ft, DEFAULT_SD_FILE_POSTFIX))
+        return get_dt_files(ft);
+    else if(!strcmp(ft, DEFAULT_SNAP_FILE_POSTFIX)) {
+        char path[256] = {0};
+        snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
+        return get_files_from_dir(path);
     }
-    struct dirent *dir_ent;
-    while (dir_ent = readdir(dir), dir_ent != NULL) {
-        char full_path[256]={0};
-        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
+    else if(!strcmp(ft, DEFAULT_VIDEO_FILE_POSTFIX)) {
+        char path[256] = {0};
+        snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
+        return get_files_from_dir(path);
+    }
+    else
+        pu_log(LL_ERROR, "%s: Wrong files type %s. Ignored", __FUNCTION__, ft);
 
-        snprintf(full_path, sizeof(full_path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, dir_ent->d_name);
-        char* flist = get_files_list(full_path, start_date, end_date, ft);
-        if(flist) {
-            ret = au_append_str(ret, flist);
-            free(flist);
-        }
-    }
-    closedir(dir);
-    return au_drop_last_symbol(ret);
+    return NULL;
 }
 /*
  * Return empty string or all shit after the first '.' in file name
@@ -287,7 +340,7 @@ const char* ac_cam_get_file_ext(const char* name) {
 /*
  * Return file size in bytes
  */
-size_t ac_get_file_size(const char* name) {
+unsigned long ac_get_file_size(const char* name) {
     struct stat st;
     if(lstat(name, &st)) {
         pu_log(LL_ERROR, "%s: lstat %s error: %d - %s", __FUNCTION__, name, errno, strerror(errno));
@@ -296,24 +349,26 @@ size_t ac_get_file_size(const char* name) {
     return st.st_size;
 }
 /*
- * Delete files from list.
- * file_list is a JSON array as ["name",...,"name"]
+ * Delete all files from directory
  */
-void ac_cam_delete_files(const char* file_list) {
-    cJSON* arr = cJSON_Parse(file_list);
-    if((!arr) || (arr->type != cJSON_Array) || !cJSON_GetArraySize(arr)) {
-        pu_log(LL_ERROR, "%s: No files to delete found in %s", __FUNCTION__, file_list);
+void ac_cam_clean_dir(const char* path) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {       /* Not a directory or doesn't exist */
+        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, path);
         return;
     }
-    int i;
-    for(i = 0; i < cJSON_GetArraySize(arr); i++) {
-        if(!unlink(cJSON_GetArrayItem(arr, i)->valuestring)) {
-            pu_log(LL_DEBUG, "%s: File %s deleted", __FUNCTION__, cJSON_GetArrayItem(arr, i)->valuestring);
-        }
-        else {
-            pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, cJSON_GetArrayItem(arr, i)->valuestring, errno, strerror(errno));
-        }
+    struct dirent* dir_ent;
+    while((dir_ent = readdir(dir)), dir_ent != NULL) {
+        if(dir_ent->d_type != DT_REG) continue;
+
+        char buf[256] = {0};
+        snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", path, dir_ent->d_name);
+        if(!unlink(buf))
+            pu_log(LL_DEBUG, "%s: file %s deleted", __FUNCTION__, buf);
+        else
+            pu_log(LL_ERROR, "%s: file %s delete error %d - %s", __FUNCTION__, buf, errno, strerror(errno));
     }
+    closedir(dir);
 }
 /*
  * Delete all directories which are empty and elder than today
@@ -337,6 +392,48 @@ void ac_delete_old_dirs() {
     }
     closedir(dir);
 }
+/*
+ * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
+ * Return buf
+ */
+#define AC_CAM_FIX_L 20
+const char* ac_make_name_from_date(const char* prefix, time_t timestamp, const char* postfix, const char* ext, char* buf, size_t size) {
+
+    char fix[AC_CAM_FIX_L] = {0};
+    if(!ext || !strlen(ext)) {
+        pu_log(LL_ERROR, "%s no extention found! No Masha - no candy", __FUNCTION__);
+        return "";
+    }
+    size_t tot_len = (prefix)?strlen(prefix):0 + AC_CAM_FIX_L + (postfix)?strlen(postfix):0 + strlen(ext)+1;
+    if(size <= tot_len) {
+        pu_log(LL_ERROR, "%s: buffer size too small. %d size requires", __FUNCTION__, tot_len+1);
+        return "";
+    }
+    struct tm tm_d;
+    gmtime_r(&timestamp, &tm_d);
+    snprintf(fix, sizeof(fix)-1, "%04d-%02d-%02d_%02d%02d%02d", tm_d.tm_year+1900, tm_d.tm_mon+1, tm_d.tm_mday, tm_d.tm_hour, tm_d.tm_min, tm_d.tm_sec);
+    snprintf(buf, size, "%s%s%s.%s", (prefix)?prefix:"", fix, (postfix)?postfix:"", ext);
+    return buf;
+
+}
+/*
+ * Makes path directory. If already exists - ok all other errors reported!
+ * called from cam_init
+ */
+void ac_make_directory(const char* path, const char* dir_name) {
+    char buf[256] = {0};
+    if((!path) || (!dir_name)) {
+        pu_log(LL_ERROR, "%s path or dir_name is NULL. Can't work in such nervious conditions!", __FUNCTION__);
+        return;
+    }
+    snprintf(buf, sizeof(buf)-1, "%s/%s", path, dir_name);
+
+    int ret = mkdir(buf, 0777);
+    if(!ret || (errno == EEXIST)) return;    /* Directory was created or was alreay created - both cases are suitable */
+
+    pu_log(LL_ERROR, "%s: error directory %s creattion %d - %s", __FUNCTION__, buf, errno, strerror(errno));
+}
+
 /***************************
  * cURL support local functions
  */
@@ -499,6 +596,9 @@ int ac_cam_init() {
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
+
+    ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
+    ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
 
     ret = 1;
     on_error:

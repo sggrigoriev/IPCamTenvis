@@ -23,8 +23,10 @@
 
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
+#include <errno.h>
 
-
+#include "lib_timer.h"
 #include "cJSON.h"
 #include "pu_logger.h"
 
@@ -40,7 +42,6 @@ static volatile int is_stop = 0;
 static pthread_t id;
 static pthread_attr_t attr;
 
-static pu_queue_t* to_main;
 static pu_queue_t* from_main;
 static pu_queue_msg_t q_msg[1024];    /* Buffer for messages received */
 
@@ -64,6 +65,17 @@ typedef struct {
     cJSON* report;
     cJSON* array;
 } rep_t;
+
+static void clean_snap_n_video() {
+    char path[256]={0};
+    pu_log(LL_INFO, "%s: Clean SNAPSHOTS", PT_THREAD_NAME);
+    snprintf(path, sizeof(path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
+    ac_cam_clean_dir(path);
+
+    pu_log(LL_INFO, "%s: Clean VIDEOS", PT_THREAD_NAME);
+    snprintf(path, sizeof(path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
+    ac_cam_clean_dir(path);
+}
 
 static fld_t* open_flist(const char* msg) {
     fld_t* ret = NULL;
@@ -97,6 +109,7 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
         fd->ext = ac_cam_get_file_ext(fd->name);
         fd->size = ac_get_file_size(fd->name);
         fld->idx++;
+        return 1;
     }
     return 0;
 }
@@ -105,47 +118,29 @@ static void close_fld(fld_t* fld) {
 /* The rest fields are pointerd to the root */
     free(fld);
 }
-static rep_t* open_rpt() {
-    cJSON* obj = cJSON_CreateObject();
-    cJSON_AddItemToObject(obj, "name", cJSON_CreateString("filesSent"));
-    cJSON* arr = cJSON_CreateArray();
-    cJSON_AddItemToObject(obj, "filesList", arr);
-    rep_t* ret = calloc(sizeof(rep_t), 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: not enough memory", __FUNCTION__);
-        cJSON_Delete(obj);
-        return NULL;
-    }
-    ret->report = obj;
-    ret->array = arr;
-    return ret;
-}
-static void add_to_rpt(rep_t* rep, const char* name) {
-    cJSON_AddItemToArray(rep->array, cJSON_CreateString(name));
-}
-static void close_rpt(rep_t* rep) {
-    cJSON_Delete(rep->report);
-    free(rep);
-}
-
-static void send_rpt(const rep_t* rep) {
-    char* report = cJSON_PrintUnformatted(rep->report);
-    pu_log(LL_DEBUG, "%s: Report %s is going to set to the main thread", __FUNCTION__, report);
-/*
- * Here should be the sending to the cloud
- */
-    free(report);
-}
 
 static int send_file(fd_t fd) {
-    return 0;
+/* Sending file to cloud */
+
+/* Delete file if sent */
+    if(!unlink(fd.name)) {
+        pu_log(LL_DEBUG, "%s: File %s deleted", __FUNCTION__, fd.name);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, fd.name, errno, strerror(errno));
+    }
+
+    return 1;
 }
 
 static void* thread_function(void* params) {
-    to_main = aq_get_gueue(AQ_FromSF);
     from_main = aq_get_gueue(AQ_ToSF);
-
     pu_queue_event_t events = pu_add_queue_event(pu_create_event_set(), AQ_ToSF);
+
+    lib_timer_clock_t dir_clean_clock = {0};   /* timer for md/sd directories cleanup */
+    lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
+
+
     size_t len = sizeof(q_msg);
     while(!is_stop) {
         pu_queue_event_t ev;
@@ -153,25 +148,15 @@ static void* thread_function(void* params) {
         switch (ev = pu_wait_for_queues(events, 1)) {
             case AQ_ToSF: {
                 while (pu_queue_pop(from_main, q_msg, &len)) {
-                    pu_log(LL_INFO, "%s: receive from Agent: %s ", PT_THREAD_NAME, q_msg);
+                    pu_log(LL_INFO, "%s: received from Agent: %s ", PT_THREAD_NAME, q_msg);
                     fld_t* fld = open_flist(q_msg);
-                    fd_t fd;
-                    rep_t* rpt = open_rpt();
-                    if(!fld) {
-                        pu_log(LL_ERROR, "%s: Can't get files list from %s ", PT_THREAD_NAME, q_msg);
+                    if(fld) {
+                        fd_t fd;
+                        while(get_next_f(fld, &fd)) send_file(fd);
+                        close_fld(fld);
                     }
                     else {
-                        while(get_next_f(fld, &fd)) {
-                            if(!send_file(fd)) {
-                                pu_log(LL_ERROR, "%s: file %s was not sent to cloud", PT_THREAD_NAME, fd.name);
-                            }
-                            else {
-                                add_to_rpt(rpt, fd.name);
-                            }
-                        }
-                        close_fld(fld);
-                        send_rpt(rpt);
-                        close_rpt(rpt);
+                        pu_log(LL_ERROR, "%s: Can't get files list from %s ", PT_THREAD_NAME, q_msg);
                     }
                     len = sizeof(q_msg);
                  }
@@ -187,6 +172,13 @@ static void* thread_function(void* params) {
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait (to server)!", PT_THREAD_NAME, ev);
                 break;
         }
+/*3. MD/SD directories cleanup */
+        if(lib_timer_alarm(dir_clean_clock)) {
+            ac_delete_old_dirs();
+            clean_snap_n_video();
+            lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
+        }
+
     }
     return NULL;
 }
