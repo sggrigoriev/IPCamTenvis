@@ -66,22 +66,6 @@ static void clear_session(t_gst_session* gs) {
         free(gs);
     }
 }
-/*
- * Mage for Chandani's experiments.
- * Replaces url to url+addition
- */
-static char* append_url(char *url, const char* addition) {
-    if((!url) || (!addition)) return url;
-    char buf[LIB_HTTP_MAX_URL_SIZE] = {0};
-    snprintf(buf, sizeof(buf)-1, "%s%s", url, addition);
-    char *ret = strdup(buf);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Not enough memory!", __FUNCTION__);
-        return url;
-    }
-    free(url);
-    return ret;
-}
 
 int ac_WowzaInit(t_at_rtsp_session* sess, const char* wowza_session_id) {
     pu_log(LL_DEBUG, "%s start", __FUNCTION__);
@@ -194,9 +178,6 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     pu_log(LL_DEBUG, "%s: New body for announnce =\n%s", __FUNCTION__, new_description);
 
     if(!ac_rtsp_set_setup_urls(new_description, sess, AT_RTSP_CONCAT)) goto on_error;
-//TODO! Find appropriate way to append additional parameters to audio/video URLs
-    sess->audio_url = append_url(sess->audio_url, "?transcode=true");
-    sess->video_url = append_url(sess->video_url, "?transcode=true");
     if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
     if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
 // Header
@@ -295,13 +276,13 @@ int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
     snprintf(num, sizeof(num)-1, "%d", sess->CSeq);
 
     rc = gst_rtsp_message_init (&msg); AC_GST_ANAL(rc);
-//1. Add trackId = 0 or 1 to the url;
-    char tmp_url[AC_RTSP_MAX_URL_SIZE] = {0};
+//1. Use audio or video URL;
+    const char* tmp_url;
 
     if(media_type == AC_RTSP_VIDEO_SETUP)
-        snprintf(tmp_url, sizeof(tmp_url), "%s/%s%s", sess->url, AC_TRACK, AC_VIDEO_TRACK);
+        tmp_url = sess->video_url;
     else //AUDIO
-        snprintf(tmp_url, sizeof(tmp_url), "%s/%s%s", sess->url, AC_TRACK, AC_AUDIO_TRACK);
+        tmp_url = sess->audio_url;
 
     rc = gst_rtsp_message_init_request (&msg, GST_RTSP_SETUP, tmp_url); AC_GST_ANAL(rc);
 
@@ -467,13 +448,13 @@ const char* ac_make_wowza_url(char *url, size_t size, const char* protocol, cons
     url[0] = '\0';
     sprintf(s_port, "%d", port);
 
-    if((strlen(vs_url)+strlen(s_port)+strlen(vs_session_id)+strlen(DEFAULT_PPC_VIDEO_FOLDER) + 4) > (size-1)) {
+    if((strlen(vs_url)+strlen(s_port)+strlen(vs_session_id)+strlen(DEFAULT_PPC_VIDEO_FOLDER) + strlen(DEFAULT_TRANSCODE_PARAM) + 5) > (size-1)) {
         pu_log(LL_ERROR, "%s: buffer size %d too low. VS URL can't be constructed", __FUNCTION__, size);
-        pu_log(LL_ERROR, "%s: vs_url=%s, s_port = %s, vs_session_id=%s, DEFAULT_PPC_VIDEO_FOLDER=%s",
-            __FUNCTION__, vs_url, s_port, vs_session_id, DEFAULT_PPC_VIDEO_FOLDER);
+        pu_log(LL_ERROR, "%s: vs_url=%s, s_port = %s, vs_session_id=%s, DEFAULT_PPC_VIDEO_FOLDER=%s, DEFAULT_TRANSCODE_PARAM = %s",
+            __FUNCTION__, vs_url, s_port, vs_session_id, DEFAULT_PPC_VIDEO_FOLDER, DEFAULT_TRANSCODE_PARAM);
         return url;
     }
-    sprintf(url, "%s://%s:%s/%s/%s", protocol, vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id);
+    sprintf(url, "%s://%s:%s/%s/%s/%s", protocol, vs_url, s_port, DEFAULT_PPC_VIDEO_FOLDER, vs_session_id, DEFAULT_TRANSCODE_PARAM);
     return url;
 
 }

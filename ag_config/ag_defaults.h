@@ -59,6 +59,7 @@
 #define DEFAULT_IPCAM_INTERLEAVED_MODE  1
 
 #define DEFAULT_PPC_VIDEO_FOLDER        "ppcvideoserver"
+#define DEFAULT_TRANSCODE_PARAM         "?transcode=true"
 
 #define DEFAULT_IS_SSL                     1
 

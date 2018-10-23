@@ -283,7 +283,7 @@ static void run_streaming_actions() {
     switch(variant) {
         case 0:     /* all is off */
             if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS)) {
-                pu_log(LL_INFO, "%s: Got streamStatis set to 1", __FUNCTION__);
+                pu_log(LL_INFO, "%s: Got streamStatus set to 1", __FUNCTION__);
                 if (!ac_start_video()) {
                     ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
                     pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);

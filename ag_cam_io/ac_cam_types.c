@@ -315,6 +315,7 @@ on_error:
 /**************************************************
  * Setup sess->audie/video _url use audio/media "a=control": values
  * Add values to the session url or replace session url for audio/video setups
+ * If URL got params -> write track(s) instead of it (Concat case)
  * @param sdp - Wowze/AP SDP
  * @param sess - Wowza/AP sesion descriptor
  * @param is_replace - 1 - make replacement,0 - concatinate
@@ -349,8 +350,15 @@ int ac_rtsp_set_setup_urls(const char* text_sdp, t_at_rtsp_session* sess, int is
                 *url = au_strdup(buf);
             else {
                 char bbuf[AC_RTSP_MAX_URL_SIZE] = {0};
-                snprintf(bbuf, sizeof(bbuf)-1, "%s/%s", sess->url, buf);
-                if(*url = au_strdup(bbuf), !url) AT_MEM_ERR();
+                int pos = au_findSubstr(sess->url, "?", NO_CASE_SENS);
+                if(pos >= 0) {
+                    snprintf(bbuf, pos+1, "%s", sess->url); /* +1 - until the '?' and '\0' */
+                    strcat(bbuf, buf);                      /* insert the shit from SDP (track) */
+                }
+                else {
+                    snprintf(bbuf, sizeof(bbuf) - 1, "%s/%s", sess->url, buf);
+                }
+                if(*url = au_strdup(bbuf), !url) AT_MEM_ERR();  /* copy it into audio or video URL */
             }
         }
     }
