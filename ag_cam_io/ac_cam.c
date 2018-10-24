@@ -195,9 +195,6 @@ static char* get_files_list(const char* dir_name, time_t start, time_t end, cons
             ret = au_append_str(ret, buf);
             pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
         }
-        else {
-            pu_log(LL_DEBUG, "%s: file %s not good for us", __FUNCTION__, dir_ent->d_name);
-        }
     }
     closedir(dir);
     return ret;

@@ -92,4 +92,6 @@
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
 #define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
+#define DEFAULT_FILES_UPL_PATH  "cloud/json/files"  /* Should be added to the main URL for files upload */
+
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */
