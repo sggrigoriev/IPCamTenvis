@@ -109,7 +109,7 @@ const char* au_getNumber(char* buf, size_t size, const char* msg) {
  * NB! the result should be freed after use!
  * IF dest == NULL -> just strdup(src)
  */
-char* au_append_str(char* dest, char* src) {
+char* au_append_str(char* dest, const char* src) {
     if(!src) return NULL;
     if(!dest) return strdup(src);
 
@@ -119,6 +119,7 @@ char* au_append_str(char* dest, char* src) {
         return NULL;
     }
     sprintf(ret, "%s%s", dest, src);
+    free(dest);
     return ret;
 }
 /*

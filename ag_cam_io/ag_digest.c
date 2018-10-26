@@ -61,29 +61,39 @@ static const char* AI(char* buf, size_t size, const char* p1, const char* p2, co
 }
 
 int ag_digest_init() {
+/*
     OpenSSL_add_all_digests();
 
     md = EVP_md5();
 
     un = NULL; p = NULL; r = NULL; n = NULL; m = NULL; u = NULL;
-
+*/
     return 1;
 }
 void ag_digest_destroy() {
-
-    if(un) free(un); if(p) free(p); if(r) free(r); if(n) free(n); if(m) free(m); if(u) free(u);
+/*
+    if(un) free(un);
+    if(p) free(p);
+    if(r) free(r);
+    if(n) free(n); if(m) free(m); if(u) free(u);
+*/
 }
 int ag_digest_start(const char* uname, const char* password, const char* realm, const char* nonce, const char* method, const char* url) {
+/*
     assert(uname); assert(password); assert(realm); assert(nonce); assert(method); assert(url);
     un = strdup(uname); p = strdup(password); r = strdup(realm), n = strdup(nonce); m = strdup(method); u = strdup(url);
+*/
     return 1;
 }
 const char* ag_digest_make_response(char* buf, size_t size) {
+/*
     char A1[EVP_MAX_MD_SIZE*2+1];  // Max len in symbols + 0-byte
     char A2[EVP_MAX_MD_SIZE*2+1];
 
     if(!AI(A1, sizeof(A1), un, r, p)) return NULL;
     if(!AI(A2, sizeof(A2), m, u, "")) return NULL;
     return AI(buf, size, A1, n, A2);
+*/
+    return NULL;
 }
 

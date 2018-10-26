@@ -530,6 +530,7 @@ static void process_rw_message(char* msg) {
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
     ac_set_stream_error(err_message);
+    pr_erase_msg(obj_msg);
 }
 
 static void restart_events_monitor() {

@@ -69,7 +69,7 @@
 #define DEFAULT_CLOUD_PING_TO   300
 
 #define DEFAULT_DT_DIRS_FMT     "%Y-%m-%d"
-#define DEFAULT_DT_FILES_PATH   "/mnt/rd/0"
+#define DEFAULT_DT_FILES_PATH   /*"/mnt/rd/0" */ "/home/gsg"
 #define DEFAULT_DT_FILES_PREFIX "0-"            /*NB!!! ag_cam_io/ac_cam functions strictly relates on PREFIX & POSTFIX length!!! */
 #define DEFAULT_MD_FILE_POSTFIX "M"
 #define DEFAULT_SD_FILE_POSTFIX "S"

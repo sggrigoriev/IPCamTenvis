@@ -55,11 +55,11 @@ int au_findFirstOutOfSet(const char* msg, const char* set);
 /* If msg starts from digit, return substr before furst non-digit. Else return empty str */
 const char* au_getNumber(char* buf, size_t size, const char* msg);
 /*
- * concat dest and src.
+ * concat dest and src. dest frees!!
  * NB! the result should be freed after use!
  * IF dest == NULL -> just strdup(src)
  */
-char* au_append_str(char* dest, char* src);
+char* au_append_str(char* dest, const char* src);
 /*
  * Take off last symbol
  * Required for strings as name, name, ... , name

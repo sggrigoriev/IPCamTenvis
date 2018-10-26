@@ -471,14 +471,14 @@ int ag_db_get_flag(const char* property_name) {
 int ag_db_store_int_property(const char* property_name, int property_value) {
     int ret = 0;
     pthread_mutex_lock(&local_mutex);
-    int pos = find_param(property_name);
-    if(pos < 0)
-        ret = 0;
-    else if(property_value != IMDB[pos].value) {
-        replace_int_param_value(pos, property_value);
-        ret = 1;
-    }
-    IMDB[pos].change_flag = 1;
+        int pos = find_param(property_name);
+        if(pos < 0)
+            ret = 0;
+        else if(property_value != IMDB[pos].value) {
+            replace_int_param_value(pos, property_value);
+            IMDB[pos].change_flag = 1;
+            ret = 1;
+        }
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }

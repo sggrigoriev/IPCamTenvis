@@ -36,6 +36,10 @@
 #include "at_main_thread.h"
 
 /* Cutle & Gstreamer initiations */
+static void gst_and_curl_shutdown() {
+    curl_global_cleanup();
+    gst_deinit();
+}
 static int gst_and_curl_startup() {
     CURLcode res = CURLE_OK;
 
@@ -49,10 +53,10 @@ static int gst_and_curl_startup() {
         g_error_free(err);
         goto on_error;
     }
+
     return 1;
 on_error:
-    curl_global_cleanup();
-    gst_deinit();
+    gst_and_curl_shutdown();
     return 0;
 }
 
@@ -141,9 +145,7 @@ int main(int argc, char* argv[]) {
     }
 
     pu_stop_logger();
-
-    curl_global_cleanup();
-    gst_deinit();
+    gst_and_curl_shutdown();
     exit(0);
 }
 

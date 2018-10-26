@@ -35,7 +35,6 @@
 #include "aq_queues.h"
 #include "ac_cam.h"
 #include "ag_settings.h"
-#include "ac_http.h"
 
 #include "at_cam_files_sender.h"
 
@@ -66,7 +65,7 @@ typedef struct {
 /******************************************************************/
 /*         Send files functions                                   */
 typedef struct {
-    char url[128];
+    char url[512];
     const char* device_id;
     const char* auth_token;
     const char* ext;
@@ -104,11 +103,11 @@ static CURL* init(){
         return 0;
     }
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 120L);   /* timeout if the thansmission slower than 1 byte per 2 minutes */
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
 
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-//    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L);
+/*    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L); */
 /* CA_INFO & SSL_VERIFYER */
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, ag_getCurloptSSLVerifyPeer());
     if(strlen(ag_getCurloptCAInfo())) {
@@ -130,16 +129,14 @@ static struct curl_slist* make_getSF_header(const sf_url_in_t* in_par, struct cu
         case 3:
             content = "audio/";
             break;
-        case -1:
-            content = "application/json";
-            break;
-        default:
+         default:
             pu_log(LL_ERROR, "%s: Unknown content type %d", __FUNCTION__, in_par->f_type);
             return NULL;
             break;
     }
     snprintf(buf, sizeof(buf)-1, "Content-Type: %s%s", content, in_par->ext);
-    sl = curl_slist_append(sl, buf);
+    if(sl = curl_slist_append(sl, buf), !sl) return NULL;
+
     snprintf(buf, sizeof(buf)-1, "PPCAuthorization: esp token=%s", in_par->auth_token);
     sl = curl_slist_append(sl, buf);
     return sl;
@@ -227,8 +224,10 @@ static char* post_n_reply(const struct curl_slist *hs, const char* url) {
     if(res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_POST, 1L), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(curl);
-    if (ac_http_analyze_perform(res, curl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_perform(curl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
 
     fflush(fp);
     if(!ptr) {
@@ -280,8 +279,10 @@ static char* put_n_reply(const struct curl_slist *hs, const char* url) {
     if(res = curl_easy_setopt(curl, CURLOPT_READDATA, fpr), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_PUT, 1L), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(curl);
-    if (ac_http_analyze_perform(res, curl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_perform(curl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
 
     fflush(fpw);
     if(!ptrw) {
@@ -384,7 +385,7 @@ static int getSF_URL(const sf_url_in_t* in_par, const struct curl_slist *hs, uns
         goto on_error;
     }
     ret = 1;
-    on_error:
+on_error:
     if(ptr)free(ptr);
     return ret;
 }
@@ -394,22 +395,23 @@ static int sendFile(const char* sf_url, const struct curl_slist *hs, const char*
     CURL *curl;
     CURLcode res;
 
+    char* ptr = NULL;
+    size_t sz=0;
+    FILE* fp = NULL;
+
     if(curl = init(), !curl) return 0;
 
     FILE* fd = fopen(f_path, "rb"); /* open file to upload */
     if(!fd) {
         pu_log(LL_ERROR, "%s: Open %s file error %d-%s", __FUNCTION__, f_path, errno, strerror(errno));
-        return 0;
+        goto on_error;
     }
-    char* ptr = NULL;
-    size_t sz=0;
-    FILE* fp = NULL;
 
     if(fp = open_memstream(&ptr, &sz), !fp) {
         pu_log(LL_ERROR, "%s: Error open memstream: %d - %s", __FUNCTION__, errno, strerror(errno));
         goto on_error;
     }
-    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, err_b);
+    if(res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, err_b), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_URL, sf_url), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L), res != CURLE_OK) goto on_error;
@@ -419,8 +421,10 @@ static int sendFile(const char* sf_url, const struct curl_slist *hs, const char*
     if(res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(curl);
-    if (ac_http_analyze_perform(res, curl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_perform(curl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
 
     fflush(fp);
     if(!ptr) {
@@ -430,8 +434,8 @@ static int sendFile(const char* sf_url, const struct curl_slist *hs, const char*
     pu_log(LL_DEBUG, "%s: Answer = %s", __FUNCTION__, ptr);
 
     ret = 1;
-    on_error:
-    fclose(fd);
+on_error:
+    if(fd)fclose(fd);
     if(fp)fclose(fp);
     if(ptr) free(ptr);
     curl_easy_cleanup(curl);
@@ -442,12 +446,13 @@ static int sendSF_update(const sf_url_in_t* in_par, struct curl_slist *hs, unsig
 
     char* ptr = NULL;
     char url_cmd[1024]={0};
+
     make_updSF_url(in_par, fid, url_cmd, sizeof(url_cmd));
     pu_log(LL_DEBUG, "%s: URL = %s", __FUNCTION__, url_cmd);
 
     if(ptr = put_n_reply(hs, url_cmd), !ptr) goto on_error;
-
     if(!is_cloud_answerOK(ptr)) goto on_error;
+
     ret = 1;
 on_error:
     if(ptr)free(ptr);
@@ -503,30 +508,27 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
     }
     return 0;
 }
-static void close_fld(fld_t* fld) {
+static void close_flist(fld_t* fld) {
     cJSON_Delete(fld->root);
 /* The rest fields are pointerd to the root */
     free(fld);
 }
-
-static int send_file(fd_t fd) {
 /* Sending file to cloud */
-
+static int send_file(fd_t fd) {
     int ret = 0;
-
-
-    struct curl_slist *hs1=NULL;
-    struct curl_slist *hs2=NULL;
-
-
-    sf_url_in_t ip;
-    fill_sf_url_in(fd, &ip);
-
-    hs1 = make_getSF_header(&ip, hs1);
 
     char sf_url[1024]={0};
     char upl_hdrs[1024]={0};
     unsigned long file_id;
+
+    struct curl_slist *hs1=NULL;
+    struct curl_slist *hs2=NULL;
+
+    sf_url_in_t ip;
+    fill_sf_url_in(fd, &ip);
+
+    if(hs1 = make_getSF_header(&ip, hs1), !hs1) goto on_error;
+
     if(!getSF_URL(&ip, hs1, &file_id, sf_url, sizeof(sf_url)-1, upl_hdrs, sizeof(upl_hdrs)-1)) {
         pu_log(LL_ERROR, "%s: error getting URL, no upload", __FUNCTION__);
         goto on_error;
@@ -559,8 +561,6 @@ static int send_file(fd_t fd) {
 on_error:
     if(hs2) curl_slist_free_all(hs2);
     if(hs1) curl_slist_free_all(hs1);
-
-    curl_global_cleanup();
     return ret;
 }
 
@@ -584,7 +584,7 @@ static void* thread_function(void* params) {
                     if(fld) {
                         fd_t fd;
                         while(get_next_f(fld, &fd)) send_file(fd);
-                        close_fld(fld);
+                        close_flist(fld);
                     }
                     else {
                         pu_log(LL_ERROR, "%s: Can't get files list from %s ", PT_THREAD_NAME, q_msg);

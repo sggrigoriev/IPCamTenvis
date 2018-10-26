@@ -36,7 +36,7 @@
 #include "au_string.h"
 #include "ag_settings.h"
 #include "ao_cma_cam.h"
-#include "ac_http.h"
+
 #include "ag_db_mgr.h"
 #include "ac_cam.h"
 
@@ -175,6 +175,7 @@ static int got_name(const char* name, time_t start, time_t end, const char* post
     return ((start_time <= event_time) && (event_time <= end_time));
 }
 /*
+ * Provides all appropriate filenames from directory dir_name
  * return name, name, ... name,
  * NB! returned memory should be freed!
 */
@@ -185,7 +186,7 @@ static char* get_files_list(const char* dir_name, time_t start, time_t end, cons
         return NULL;
     }
 
-    char buf[256] = {0};
+    char buf[512] = {0};
     char* ret = NULL;
     struct dirent* dir_ent;
 
@@ -215,7 +216,7 @@ static char* get_files_from_dir(const char* path) {
     while((dir_ent = readdir(dir)), dir_ent != NULL) {
         if(dir_ent->d_type != DT_REG) continue;
 
-        char buf[256] = {0};
+        char buf[512] = {0};
         snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", path, dir_ent->d_name);
         ret = au_append_str(ret, buf);
         pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
@@ -225,7 +226,7 @@ static char* get_files_from_dir(const char* path) {
 }
 
 /*
-* Return {"filesList":[]} for MD/SD files
+* Return {"filesList":[]} for MD/SD files from all directories with appropriate names (YYYY-MM-DD)
 * Return NULL if no files found
 * NB! Returned string should be freed!
 */
@@ -240,7 +241,7 @@ static char* get_dt_files(const char* ft) {
     }
     struct dirent *dir_ent;
     while (dir_ent = readdir(dir), dir_ent != NULL) {
-        char full_path[256]={0};
+        char full_path[512]={0};
         if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
 
         snprintf(full_path, sizeof(full_path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, dir_ent->d_name);
@@ -358,7 +359,7 @@ void ac_cam_clean_dir(const char* path) {
     while((dir_ent = readdir(dir)), dir_ent != NULL) {
         if(dir_ent->d_type != DT_REG) continue;
 
-        char buf[256] = {0};
+        char buf[512] = {0};
         snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", path, dir_ent->d_name);
         if(!unlink(buf))
             pu_log(LL_DEBUG, "%s: file %s deleted", __FUNCTION__, buf);
@@ -442,10 +443,12 @@ static CURL *open_curl_session(){
         pu_log(LL_ERROR, "%s: Error on curl_easy_init call.", __FUNCTION__);
         return NULL;
     }
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    if(res = curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
-    if (res = curl_easy_setopt(curl, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;
-    if (res = curl_easy_setopt(curl, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
-    if (res = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(curl, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(curl, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
+/*    if(res = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L), res != CURLE_OK) goto on_error; */
     return curl;
 on_error:
     curl_easy_cleanup(curl);
@@ -461,7 +464,17 @@ static int send_command(const char* url_cmd, const char* params) {
     CURL* crl = open_curl_session();
     if(!crl) return 0;
 
+    FILE* fpw=NULL;
+    char* ptrw=NULL;
+    size_t szw=0;
     struct curl_slist *hs=NULL;
+
+    fpw = open_memstream(&ptrw, &szw);
+    if( fpw == NULL ) {
+        pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
+        goto on_error;
+    }
+
     if(hs = curl_slist_append(hs, "Content-Type: text/plain;charset=UTF-8"), !hs) goto on_error;
 
     if(res = curl_easy_setopt(crl, CURLOPT_HTTPHEADER, hs), res != CURLE_OK) goto on_error;
@@ -469,12 +482,24 @@ static int send_command(const char* url_cmd, const char* params) {
     if(res = curl_easy_setopt(crl, CURLOPT_POSTFIELDS, params), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_POST, 1L), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(crl);
-    if(ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fpw), res != CURLE_OK) goto on_error;
+
+    if(res = curl_easy_perform(crl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
+
+    fflush(fpw);
+    if(ptrw && strlen(ptrw)) {
+        pu_log(LL_DEBUG, "%s: returned %s", __FUNCTION__, ptrw);
+    }
 
     ret = 1;
 on_error:
     if(hs) curl_slist_free_all(hs);
+    if(fpw) fclose(fpw);
+    if(ptrw) free(ptrw);
     close_curl_session(crl);
     return ret;
 }
@@ -499,20 +524,22 @@ static char* get_current_params(const char* url_cmd) {
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(crl);
-    if (ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_perform(crl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
 
     fflush(fp);
     if(!ptr) {
-        pu_log(LL_ERROR, "%s: Cam returns empty answer on %s request", __FUNCTION__, url_cmd);
+        pu_log(LL_ERROR, "%s: Cam returns NULL answer on %s request", __FUNCTION__, url_cmd);
         goto on_error;
     }
-    ret = calloc(1, sz+1);
+    ret = calloc(sz+1, 1);
     memcpy(ret, ptr, sz);
     ret[sz] = '\0';   /* to be sure about NULL-termination */
 on_error:
-    fclose(fp);
-    free(ptr);
+    if(fp)fclose(fp);
+    if(ptr)free(ptr);
     close_curl_session(crl);
     return ret;
 }
@@ -521,7 +548,7 @@ on_error:
  */
 static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
     int ret = 0;
-    char* lst=0;
+    char* lst=NULL;
     char* read_uri=0;
     char* write_uri=0;
 /*Read params */
@@ -573,6 +600,7 @@ int ac_cam_init() {
     char* sd_uri = NULL;
     char* time_uri = NULL;
     int ret = 0;
+
     if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
     if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
 
@@ -598,7 +626,7 @@ int ac_cam_init() {
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
 
     ret = 1;
-    on_error:
+on_error:
     if(md_uri) free(md_uri);
     if(sd_uri) free(sd_uri);
     if(time_uri) free(time_uri);
@@ -615,7 +643,8 @@ void ac_cam_deinit() {
 int ac_cam_make_snapshot(const char* full_path) {
     int ret = 0;
     CURLcode res;
-    FILE* fp;
+    FILE* fp=NULL;
+    char* uri = NULL;
 
     CURL* crl = open_curl_session();
     if(!crl) return 0;
@@ -624,20 +653,22 @@ int ac_cam_make_snapshot(const char* full_path) {
         pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
         goto on_error;
     }
-    char* uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT, AO_CAM_WRITE);
-    if(!uri) goto on_error;
+    if(uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT, AO_CAM_WRITE), !uri) goto on_error;
 
     if(res = curl_easy_setopt(crl, CURLOPT_URL, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
 
-    res = curl_easy_perform(crl);
-    if(ac_http_analyze_perform(res, crl, __FUNCTION__) != CURLE_OK) goto on_error;
+    if(res = curl_easy_perform(crl), res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
 
     pu_log(LL_INFO, "%s: Got the picture!\n", __FUNCTION__);
     ret = 1;
 on_error:
-    fclose(fp);
+    if(fp)fclose(fp);
+    if(uri) free(uri);
     close_curl_session(crl);
     return ret;
 }
