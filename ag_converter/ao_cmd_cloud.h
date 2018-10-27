@@ -40,6 +40,23 @@
  */
 cJSON* ao_cloud_responses(int command_id, int rc);
 /*
+ * Return JSON* alert as "alerts":   "alerts": [
+    {
+      "alertId": "12345",
+      "deviceId": "DEVICE_ID",
+      "alertType": "motion",
+      "timestamp": 1418428568000,
+      "params": [					-- will be empty if no file uploaded!!
+        {
+          "name": "fileRef",
+          "value": "1234567"
+        }
+      ]
+    }
+  ]
+ */
+cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef);
+/*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * [{"params":[<report>], "deviceId":"<deviceID>"}]
  * Return NULL if the message is too long

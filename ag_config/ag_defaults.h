@@ -69,7 +69,7 @@
 #define DEFAULT_CLOUD_PING_TO   300
 
 #define DEFAULT_DT_DIRS_FMT     "%Y-%m-%d"
-#define DEFAULT_DT_FILES_PATH   /*"/mnt/rd/0" */ "/home/gsg"
+#define DEFAULT_DT_FILES_PATH   "/mnt/rd/0" /* "/home/gsg" */
 #define DEFAULT_DT_FILES_PREFIX "0-"            /*NB!!! ag_cam_io/ac_cam functions strictly relates on PREFIX & POSTFIX length!!! */
 #define DEFAULT_MD_FILE_POSTFIX "M"
 #define DEFAULT_SD_FILE_POSTFIX "S"
@@ -87,6 +87,7 @@
 #define DEFAULT_AM_ALERT_TO_SEC 10
 #define DEFAULT_AV_ASK_TO_SEC   5*60
 #define DEFAULT_TO_FOR_DIR_CLEANUP  24*5*3600
+#define DEFAULT_TO_FOR_FILES_RESEND 3600
 
 #define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */

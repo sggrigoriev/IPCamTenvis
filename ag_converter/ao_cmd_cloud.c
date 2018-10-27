@@ -58,6 +58,58 @@ cJSON* ao_cloud_responses(int command_id, int rc) {
     return ret;
 }
 /*
+ * Sends after the file was sucesully sent
+ * Return JSON* alert as "alerts":   "alerts": [
+    {
+      "alertId": "12345",
+      "deviceId": "DEVICE_ID",
+      "alertType": "motion",
+      "timestamp": 1418428568000,
+      "params": [					-- will be empty if no file uploaded!!
+        {
+          "name": "fileRef",
+          "value": "1234567"
+        }
+      ]
+    }
+  ]
+ */
+cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef) {
+    cJSON* ret = cJSON_CreateObject();                  /* {} */
+    cJSON* arr = cJSON_CreateArray();                   /* [] */
+    cJSON* item = cJSON_CreateObject();                 /* {} */
+    cJSON_AddItemToObject(ret, "alerts", arr);          /* {"alerts: []} */
+    cJSON_AddItemToArray(arr, item);                    /* {"alerts: [{}]}*/
+    cJSON* params = cJSON_CreateArray();                /* []*/
+    if(fileRef) {
+        cJSON_AddItemToObject(item, "params", params);      /* {"alerts: [{params: []}]}*/
+        cJSON *params_elem = cJSON_CreateObject();          /* {} */
+        cJSON_AddItemToArray(params, params_elem);          /* {"alerts: [{params: [{}]}]} */
+        cJSON_AddItemToObject(params_elem, "name", cJSON_CreateString("fileRef"));
+        cJSON_AddItemToObject(params_elem, "value", cJSON_CreateString(fileRef));
+    }
+
+    cJSON_AddItemToObject(item, "alertId", cJSON_CreateString(alert_no));
+    cJSON_AddItemToObject(item, "deviceId", cJSON_CreateString(deviceID));
+    const char* ev_name;
+    switch (ev) {
+        case AC_CAM_STOP_MD:
+            ev_name = "motion";
+            break;
+        case AC_CAM_STOP_SD:
+            ev_name = "audio";
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Unsupported event type = %d", __FUNCTION__, ev);
+            cJSON_Delete(ret);
+            return NULL;
+    }
+
+    cJSON_AddItemToObject(item, "alertType", cJSON_CreateString(ev_name));
+
+    return ret;
+}
+/*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * [{"params":[<report>], "deviceId":"<deviceID>"}]
  */

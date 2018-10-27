@@ -34,6 +34,8 @@
 #include "ag_defaults.h"
 #include "aq_queues.h"
 #include "ac_cam.h"
+#include "ao_cmd_cloud.h"
+#include "ao_cmd_proxy.h"
 #include "ag_settings.h"
 
 #include "at_cam_files_sender.h"
@@ -45,6 +47,7 @@ static pthread_t id;
 static pthread_attr_t attr;
 
 static pu_queue_t* from_main;
+static pu_queue_t* to_proxy;
 static pu_queue_msg_t q_msg[1024];    /* Buffer for messages received */
 
 typedef struct {
@@ -513,9 +516,13 @@ static void close_flist(fld_t* fld) {
 /* The rest fields are pointerd to the root */
     free(fld);
 }
-/* Sending file to cloud */
-static int send_file(fd_t fd) {
-    int ret = 0;
+/*
+ * Sending file to cloud
+ * Return 0 if error and fileID if Ok
+ *
+ */
+static const unsigned long send_file(fd_t fd) {
+    unsigned long ret = 0;
 
     char sf_url[1024]={0};
     char upl_hdrs[1024]={0};
@@ -557,22 +564,115 @@ static int send_file(fd_t fd) {
         pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, fd.name, errno, strerror(errno));
     }
 
-    ret = 1;
+    ret = file_id;
 on_error:
     if(hs2) curl_slist_free_all(hs2);
     if(hs1) curl_slist_free_all(hs1);
     return ret;
 }
+/*
+ * return queue with all not sent files
+ * In ultimate case all this crap will be deleted after DEFAULT_TO_FOR_DIR_CLEANUP timeout
+ */
+static ac_cam_resend_queue_t* resend(ac_cam_resend_queue_t* q) {
+    if(!q) {
+        pu_log(LL_ERROR, "%s: Internal error: Resend Queue is NULL!", __FUNCTION__);
+        return q;
+    }
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char* txt;
+    if(q->md_arr) {
+        txt = cJSON_PrintUnformatted(q->md_arr);
+        if(txt) {
+            ao_make_send_files(buf, sizeof(buf), DEFAULT_MD_FILE_POSTFIX, txt);
+            pu_queue_push(from_main, buf, strlen(buf) + 1);
+            pu_log(LL_DEBUG, "%s: SF resends MD files", __FUNCTION__, txt);
+            free(txt);
+        }
+        cJSON_Delete(q->md_arr); q->md_arr = NULL;
+    }
+    if(q->sd_arr) {
+        txt = cJSON_PrintUnformatted(q->sd_arr);
+        if(txt) {
+            ao_make_send_files(buf, sizeof(buf), DEFAULT_SD_FILE_POSTFIX, txt);
+            pu_queue_push(from_main, buf, strlen(buf) + 1);
+            pu_log(LL_DEBUG, "%s: SF resends SD files", __FUNCTION__, txt);
+            free(txt);
+        }
+        cJSON_Delete(q->sd_arr); q->sd_arr = NULL;
+    }
+    if(q->snap_arr) {
+        txt = cJSON_PrintUnformatted(q->snap_arr);
+        if(txt) {
+            ao_make_send_files(buf, sizeof(buf), DEFAULT_SNAP_FILE_POSTFIX, txt);
+            pu_queue_push(from_main, buf, strlen(buf) + 1);
+            pu_log(LL_DEBUG, "%s: SF resends SNAP files", __FUNCTION__, txt);
+            free(txt);
+        }
+        cJSON_Delete(q->snap_arr); q->snap_arr = NULL;
+    }
+    return q;
+}
+
+static int alert_number = 1;
+static const char* inc_alert_number(char* buf, size_t size) {
+    snprintf(buf, size, "%d", alert_number++);
+    return buf;
+}
+static void send_alert_to_proxy(char type, unsigned long fileRef) {
+    t_ac_cam_events ev;
+    switch (type) {
+        case 'M':
+            ev = AC_CAM_STOP_MD;
+            break;
+        case 'S':
+            ev = AC_CAM_STOP_SD;
+            break;
+        default:
+            /* Not our case - get out of here */
+            return;
+    }
+    char a_num[20]={0};
+    cJSON *alert;
+    if(fileRef) {
+        char f_num[20] = {0};
+        snprintf(f_num, sizeof(f_num), "%lu", fileRef);
+        alert = ao_cloud_alerts(ag_getProxyID(), inc_alert_number(a_num, sizeof(a_num) - 1), ev, f_num);
+    }
+    else {
+        alert = ao_cloud_alerts(ag_getProxyID(), inc_alert_number(a_num, sizeof(a_num) - 1), ev, NULL);
+    }
+    if(alert) {
+        char buf[LIB_HTTP_MAX_MSG_SIZE];
+        const char *msg = ao_cloud_msg(ag_getProxyID(), "153", alert, NULL, NULL, buf, sizeof(buf));
+        cJSON_Delete(alert);
+        if(!msg) {
+            pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
+            return;
+        }
+        pu_queue_push(to_proxy, msg, strlen(msg)+1);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: Error alert creation. Nothing was sent.", __FUNCTION__);
+    }
+}
 
 static void* thread_function(void* params) {
     from_main = aq_get_gueue(AQ_ToSF);
+    to_proxy = aq_get_gueue(AQ_ToProxyQueue);
     pu_queue_event_t events = pu_add_queue_event(pu_create_event_set(), AQ_ToSF);
+
+
+    lib_timer_clock_t files_resend_clock = {0};
+    lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
 
     lib_timer_clock_t dir_clean_clock = {0};   /* timer for md/sd directories cleanup */
     lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
 
+    ac_cam_resend_queue_t* resend_queue = ac_cam_create_not_sent();
 
     size_t len = sizeof(q_msg);
+
     while(!is_stop) {
         pu_queue_event_t ev;
 
@@ -583,7 +683,11 @@ static void* thread_function(void* params) {
                     fld_t* fld = open_flist(q_msg);
                     if(fld) {
                         fd_t fd;
-                        while(get_next_f(fld, &fd)) send_file(fd);
+                        while(get_next_f(fld, &fd)) {
+                            unsigned long f_id = send_file(fd);
+                             if(!f_id) ac_cam_add_not_sent(resend_queue, fd.type, fd.name);
+                             send_alert_to_proxy(fd.type, f_id);
+                        }
                         close_flist(fld);
                     }
                     else {
@@ -603,7 +707,12 @@ static void* thread_function(void* params) {
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait (to server)!", PT_THREAD_NAME, ev);
                 break;
         }
-/*3. MD/SD directories cleanup */
+/*1. Try to resend not sent files */
+        if(lib_timer_alarm(files_resend_clock)) {
+            resend_queue = resend(resend_queue);
+            lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
+        }
+/*2. MD/SD directories cleanup */
         if(lib_timer_alarm(dir_clean_clock)) {
             ac_delete_old_dirs();
             clean_snap_n_video();
@@ -611,6 +720,7 @@ static void* thread_function(void* params) {
         }
 
     }
+    ac_cam_delete_not_sent(resend_queue);
     return NULL;
 }
 

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <limits.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "pu_logger.h"
 
@@ -149,14 +150,14 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
 {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  0,  1,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD,            0,  0,  1,  0,  1,  0,  0,  0,  NULL,               NULL,               ac_set_md},
-{AG_DB_STATE_SD,            0,  0,  1,  0,  1,  0,  0,  0,  NULL,               NULL,               ac_set_sd},
+{AG_DB_STATE_MD,            0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               ac_set_md},
+{AG_DB_STATE_SD,            0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               ac_set_sd},
 {AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  0,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -200,6 +201,30 @@ static char* get_persistent_data(const char* file_name) {
         return NULL;
     }
     return JSON_string;
+}
+static int save_persistent_data(const char* file_name, const char* JSON_string) {
+    int ret = 0;
+    if(!file_name || !JSON_string || !strlen(JSON_string)) {
+        pu_log(LL_ERROR, "%s: some input params are NULL or empty", __FUNCTION__);
+        return ret;
+    }
+
+    FILE* fd = fopen(file_name, "w");
+    if(!fd) {
+        pu_log(LL_WARNING, "%s: %s not found. Data not saved", __FUNCTION__, file_name);
+        return ret;
+    }
+
+    if(fputs(JSON_string, fd) != strlen(JSON_string)) {
+        pu_log(LL_ERROR, "%s: Error saving data into %s: %d %s", __FUNCTION__, file_name, errno, strerror(errno));
+    }
+    else {
+        ret = 1;
+    }
+    pu_log(LL_DEBUG, "%s: Persistent data saved %s: %s", __FUNCTION__, file_name, JSON_string);
+    fclose(fd);
+
+    return ret;
 }
 
 /*
@@ -297,6 +322,35 @@ static int load_persistent_data() {
 on_error:
     FREE(JSON_string);
     FREE(data);
+    return ret;
+}
+/*
+ * Create JSON from all IMDB fields where persistent == 1
+ * Set updated = 0
+ * Save it to disk
+ * Delete JSON
+ */
+static int update_persistent_store() {
+    cJSON* obj = cJSON_CreateObject();
+    if(!obj) return 0;
+    cJSON* arr = cJSON_CreateArray();
+
+    cJSON_AddItemToObject(obj, "params_array", arr);
+    int i;
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].persistent) {
+            cJSON* elem = cJSON_CreateObject();
+            cJSON_AddItemToObject(elem, "name", cJSON_CreateString(IMDB[i].name));
+            char buf[20]={0};
+            snprintf(buf, sizeof(buf), "%d", IMDB[i].value);
+            cJSON_AddItemToObject(elem, "value", cJSON_CreateString(buf));
+            cJSON_AddItemToArray(arr, elem);
+        }
+    }
+    char* txt = cJSON_Print(obj);
+    int ret = save_persistent_data(DEFAULT_DB_PATH, txt);
+    if(txt) free(txt);
+    if(obj) cJSON_Delete(obj);
     return ret;
 }
 /*
@@ -477,6 +531,7 @@ int ag_db_store_int_property(const char* property_name, int property_value) {
         else if(property_value != IMDB[pos].value) {
             replace_int_param_value(pos, property_value);
             IMDB[pos].change_flag = 1;
+            if(IMDB[pos].persistent) update_persistent_store();
             ret = 1;
         }
     pthread_mutex_unlock(&local_mutex);
@@ -502,7 +557,6 @@ int ag_db_get_int_property(const char* property_name) {
 /*
  * Cloud-Cam parameters set: set on cam, re-read and store into DB
  * If param was changed by cloud update - set it on Cam.
- * If returned from cam value <> cloud update - set change flag On
  */
 int ag_db_update_changed_cam_parameters() {
     int i;

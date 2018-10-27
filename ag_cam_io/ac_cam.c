@@ -64,10 +64,7 @@ static int remove_dir(const char* path_n_name) {
     pu_log(LL_DEBUG, "%s: Remove %s", __FUNCTION__, path_n_name);
 
     DIR *d = opendir(path_n_name);
-    if(!d) {
-        pu_log(LL_ERROR, "%s: Directory %s wasn't found", __FUNCTION__, path_n_name);
-        return 0;
-    }
+    if(!d) return 0;
 
     struct dirent *p;
     while (p=readdir(d), p != NULL) {
@@ -255,6 +252,44 @@ static char* get_dt_files(const char* ft) {
     return au_drop_last_symbol(ret);
 }
 /***************************************************************************************************************/
+ac_cam_resend_queue_t* ac_cam_create_not_sent() {
+    ac_cam_resend_queue_t* ret = calloc(sizeof(ac_cam_resend_queue_t), 1);
+    if(!ret) {
+        pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
+    }
+    return ret;
+}
+int ac_cam_add_not_sent(ac_cam_resend_queue_t* q, char type, const char* name) {
+    if(!q || !name) {
+        pu_log(LL_ERROR, "%s: queue or name is NULL. No candy - no Masha!", __FUNCTION__);
+        return 0;
+    }
+    cJSON* arr;
+    switch (type) {
+        case 'M':
+            arr = q->md_arr;
+            break;
+        case 'S':
+            arr = q->sd_arr;
+            break;
+        case 'P':
+            arr = q->snap_arr;
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: wrong file type %c", __FUNCTION__, type);
+            return 0;
+    }
+    if(!arr) arr = cJSON_CreateArray();
+    cJSON_AddItemToArray(arr, cJSON_CreateString(name));
+    return 1;
+}
+void ac_cam_delete_not_sent(ac_cam_resend_queue_t* q) {
+    if(!q) return;
+    if(q->md_arr) cJSON_Delete(q->md_arr);
+    if(q->sd_arr) cJSON_Delete(q->sd_arr);
+    if(q->snap_arr) cJSON_Delete(q->snap_arr);
+}
+
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
  * AC_CAM_STOP_SD -> DEFAULT_SD_FILE_POSTFIX
@@ -303,30 +338,15 @@ char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date
     return au_drop_last_symbol(get_files_list(dir, start_date, end_date, type));
 }
 /*
- * Get file list with all existing files of given type
- * Return {"filesList":[]}
- * Return NULL if no files found
- * NB! Returned string should be freed!
+ * Get all older than today files for all types
+ * NB! md, sd, snap should be freed after use! NULL if no files diven type found
  */
-char* ac_get_all_files(const char* ft) {
-    if(!ft) return NULL;
-    
-    if(!strcmp(ft, DEFAULT_MD_FILE_POSTFIX) || !strcmp(ft, DEFAULT_SD_FILE_POSTFIX))
-        return get_dt_files(ft);
-    else if(!strcmp(ft, DEFAULT_SNAP_FILE_POSTFIX)) {
-        char path[256] = {0};
-        snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
-        return get_files_from_dir(path);
-    }
-    else if(!strcmp(ft, DEFAULT_VIDEO_FILE_POSTFIX)) {
-        char path[256] = {0};
-        snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
-        return get_files_from_dir(path);
-    }
-    else
-        pu_log(LL_ERROR, "%s: Wrong files type %s. Ignored", __FUNCTION__, ft);
-
-    return NULL;
+void ac_get_all_files(char** md, char** sd, char** snap) {
+    *md = get_dt_files(DEFAULT_MD_FILE_POSTFIX);
+    *sd = get_dt_files(DEFAULT_SD_FILE_POSTFIX);
+    char path[256] = {0};
+    snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
+    *snap = get_files_from_dir(path);
 }
 /*
  * Return empty string or all shit after the first '.' in file name
@@ -381,7 +401,7 @@ void ac_delete_old_dirs() {
     struct dirent *dir_ent;
     while (dir_ent = readdir(dir), dir_ent != NULL) {
         if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 1))) continue;
-        if(remove_dir(dir_ent->d_name)) {
+        if(remove_dir(dir_ent->d_name) || errno == ENOENT) {
             pu_log(LL_DEBUG, "%s: Directory %s was deleted", __FUNCTION__, dir_ent->d_name);
         }
         else {
@@ -621,7 +641,7 @@ int ac_cam_init() {
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
-
+/* TODO if can't make directory - snaphots sohuld be disabled! */
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
 

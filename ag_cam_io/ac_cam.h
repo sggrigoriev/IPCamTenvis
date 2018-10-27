@@ -22,8 +22,21 @@
 #ifndef IPCAMTENVIS_AC_CAM_H
 #define IPCAMTENVIS_AC_CAM_H
 
-
+#include "cJSON.h"
 #include "ao_cmd_data.h"
+
+/*
+ * [name, ..., name] for all 3 types
+ */
+typedef struct {
+    cJSON* md_arr;
+    cJSON* sd_arr;
+    cJSON* snap_arr;
+} ac_cam_resend_queue_t;
+
+ac_cam_resend_queue_t* ac_cam_create_not_sent();
+int ac_cam_add_not_sent(ac_cam_resend_queue_t* q, char type, const char* name);
+void ac_cam_delete_not_sent(ac_cam_resend_queue_t* q);
 
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
@@ -39,12 +52,10 @@ const char* ac_get_event2file_type(t_ac_cam_events e);
  */
 char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date);
 /*
- * Get file list with all existing files of given type
- * Return {"filesList":[]}
- * Return NULL if no files found
- * NB! Returned string should be freed!
+ * Get all older than today files for all types
+ * NB! md, sd, snap should be freed after use! NULL if no files diven type found
  */
-char* ac_get_all_files(const char* ft);
+void ac_get_all_files(char** md, char** sd, char** snap);
 /*
  * Return empty string or all shit after the first '.' in file name
  */

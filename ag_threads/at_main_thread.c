@@ -109,6 +109,7 @@ static void send_ACK_to_Proxy(int command_number) {
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
 }
 
+
 static void send_snapshot(const char* full_path) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char path[258]={0};
@@ -134,16 +135,31 @@ static void send_send_file(t_ao_cam_alert data) {
  * Send SD/MD/SNAPHOT files which wasn't sent before
  * Call at start
  */
-static void send_remaining_files(const char* t) {
+static void send_remaining_files() {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char* t_files = ac_get_all_files(t);
-    if(t_files) {
-        ao_make_send_files(buf, sizeof(buf), t, t_files);
+    char* md;
+    char* sd;
+    char* snap;
+    ac_get_all_files(&md, &sd, &snap);
+    if(md) {
+        ao_make_send_files(buf, sizeof(buf), DEFAULT_MD_FILE_POSTFIX, md);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        free(t_files);
+        pu_log(LL_DEBUG, "%s: not sent MD files %s sent to SF_thread", __FUNCTION__, md);
+        free(md);
+    }
+    if(sd) {
+        ao_make_send_files(buf, sizeof(buf), DEFAULT_SD_FILE_POSTFIX, sd);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+        pu_log(LL_DEBUG, "%s: not sent SD files %s sent to SF_thread", __FUNCTION__, sd);
+        free(sd);
+    }
+    if(snap) {
+        ao_make_send_files(buf, sizeof(buf), DEFAULT_SNAP_FILE_POSTFIX, snap);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+        pu_log(LL_DEBUG, "%s: not sent SNAP files %s sent to SF_thread", __FUNCTION__, snap);
+        free(snap);
     }
 }
-
 /*
  * To WS
  */
@@ -205,7 +221,7 @@ static void run_agent_actions() {
             ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
             break;
         case 10:     /* state: connected, no command -> Process Agent actions */
-            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {
+            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {       /* Send Watch Dog to WUD */
                 send_wd();
                 ag_db_set_flag_off(AG_DB_CMD_SEND_WD_AGENT);
                 pu_log(LL_INFO, "%s: Watchdog sent to WUD", __FUNCTION__);
@@ -424,10 +440,7 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
                 }
 /* Send MD/SD/SNAPHOTS which weren't sent during the regular procedure */
 /* If we got conn data - Proxy lost connection. So it is possible we could not send files... */
-                send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_MD));
-                send_remaining_files(ac_get_event2file_type(AC_CAM_STOP_SD));
-                send_remaining_files(ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT));
-                send_remaining_files(ac_get_event2file_type(AC_CAM_RECORD_VIDEO));
+                send_remaining_files();
             }
             if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
         }
