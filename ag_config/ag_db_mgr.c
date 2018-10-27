@@ -150,16 +150,16 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
 {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  0,  1,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD,            0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               ac_set_md},
-{AG_DB_STATE_SD,            0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               ac_set_sd},
+{AG_DB_STATE_MD,            0,  0,  1,  0,  0,  0,  1,  0,  NULL,               NULL,               ac_set_md},
+{AG_DB_STATE_SD,            0,  0,  1,  0,  0,  0,  1,  0,  NULL,               NULL,               ac_set_sd},
 {AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  0,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  0,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  0,  1,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
 {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -181,26 +181,34 @@ static int char2int(const char* str) {
  * Return string {"params_array":[{"name":"<name>", "value":"<value>"}, ...]} or NULL
  */
 static char* get_persistent_data(const char* file_name) {
+    char* ret = NULL;
     FILE* fd = fopen(file_name, "r");
     if(!fd) {
         pu_log(LL_WARNING, "%s: %s not found. Default values will be used", __FUNCTION__, file_name);
-        return NULL;
+        goto on_error;
     }
     fseek(fd, 0L, SEEK_END);
     long sz = ftell(fd);
     fseek(fd, 0L, SEEK_SET);
     if(sz <= 0) {
         pu_log(LL_WARNING, "%s: %s Got zero size.", __FUNCTION__, file_name);
-        fclose(fd);
-        return NULL;
+        goto on_error;
     }
-    char* JSON_string = calloc((size_t)sz, 1);
+    char* JSON_string = calloc((size_t)sz+1, 1);
     if(!JSON_string) {
         pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
-        fclose(fd);
-        return NULL;
+        goto on_error;
     }
-    return JSON_string;
+    size_t rd_len = fread(JSON_string, 1, (size_t)sz, fd);
+    if(rd_len != sz) {
+        pu_log(LL_ERROR, "%s: error reading %s: %d - %s", __FUNCTION__, errno, strerror(errno));
+        free(JSON_string);
+        goto on_error;
+    }
+    ret = JSON_string;
+on_error:
+    if(fd) fclose(fd);
+    return ret;
 }
 static int save_persistent_data(const char* file_name, const char* JSON_string) {
     int ret = 0;
@@ -321,7 +329,7 @@ static int load_persistent_data() {
     ret = 1;    /* we're here if OK */
 on_error:
     FREE(JSON_string);
-    FREE(data);
+    if(data) cJSON_Delete(data);
     return ret;
 }
 /*

@@ -144,19 +144,19 @@ static void send_remaining_files() {
     if(md) {
         ao_make_send_files(buf, sizeof(buf), DEFAULT_MD_FILE_POSTFIX, md);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: not sent MD files %s sent to SF_thread", __FUNCTION__, md);
+        pu_log(LL_DEBUG, "%s: remaining MD files %s sent to SF_thread", __FUNCTION__, md);
         free(md);
     }
     if(sd) {
         ao_make_send_files(buf, sizeof(buf), DEFAULT_SD_FILE_POSTFIX, sd);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: not sent SD files %s sent to SF_thread", __FUNCTION__, sd);
+        pu_log(LL_DEBUG, "%s: remaining files %s sent to SF_thread", __FUNCTION__, sd);
         free(sd);
     }
     if(snap) {
         ao_make_send_files(buf, sizeof(buf), DEFAULT_SNAP_FILE_POSTFIX, snap);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: not sent SNAP files %s sent to SF_thread", __FUNCTION__, snap);
+        pu_log(LL_DEBUG, "%s: remaining SNAP files %s sent to SF_thread", __FUNCTION__, snap);
         free(snap);
     }
 }

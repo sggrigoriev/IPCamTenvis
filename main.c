@@ -99,7 +99,7 @@ static void print_Agent_start_params() {
  */
 volatile uint32_t contextId = 0;
 void signalHandler( int signum ) {
-    pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%d\n", __FUNCTION__, signum, contextId, pthread_self());
+    pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%lu\n", __FUNCTION__, signum, contextId, pthread_self());
     exit(signum);
 }
 

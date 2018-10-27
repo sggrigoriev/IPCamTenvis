@@ -46,6 +46,18 @@ static cJSON* addArray(cJSON* obj, const char* name, cJSON* array) {
         cJSON_AddItemToObject(obj, name, array);
     return obj;
 }
+static const char* get_cloud_alert_type(t_ac_cam_events ev) {
+    switch (ev) {
+        case AC_CAM_STOP_MD:
+            return "motion";
+        case AC_CAM_STOP_SD:
+            return "audio";
+        default:
+            pu_log(LL_ERROR, "%s: Unsupported event type %d", __FUNCTION__, ev);
+            break;
+    }
+    return NULL;
+}
 /*
  * [{"commandId": <command_id>, "result": <rc>}]
  */
@@ -59,7 +71,7 @@ cJSON* ao_cloud_responses(int command_id, int rc) {
 }
 /*
  * Sends after the file was sucesully sent
- * Return JSON* alert as "alerts":   "alerts": [
+ * Return JSON* alert as [
     {
       "alertId": "12345",
       "deviceId": "DEVICE_ID",
@@ -75,39 +87,26 @@ cJSON* ao_cloud_responses(int command_id, int rc) {
   ]
  */
 cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef) {
-    cJSON* ret = cJSON_CreateObject();                  /* {} */
-    cJSON* arr = cJSON_CreateArray();                   /* [] */
-    cJSON* item = cJSON_CreateObject();                 /* {} */
-    cJSON_AddItemToObject(ret, "alerts", arr);          /* {"alerts: []} */
-    cJSON_AddItemToArray(arr, item);                    /* {"alerts: [{}]}*/
-    cJSON* params = cJSON_CreateArray();                /* []*/
+    const char* alert_type = get_cloud_alert_type(ev);
+    if(!alert_type) return NULL;
+
+    cJSON* arr = cJSON_CreateArray();
+
+    cJSON* alert_item = cJSON_CreateObject();
+    cJSON_AddItemToObject(alert_item, "alertId", cJSON_CreateString(alert_no));
+    cJSON_AddItemToObject(alert_item, "deviceId", cJSON_CreateString(deviceID));
+    cJSON_AddItemToObject(alert_item, "alertType", cJSON_CreateString(alert_type));
+    cJSON_AddItemToArray(arr, alert_item);
+
     if(fileRef) {
-        cJSON_AddItemToObject(item, "params", params);      /* {"alerts: [{params: []}]}*/
-        cJSON *params_elem = cJSON_CreateObject();          /* {} */
-        cJSON_AddItemToArray(params, params_elem);          /* {"alerts: [{params: [{}]}]} */
-        cJSON_AddItemToObject(params_elem, "name", cJSON_CreateString("fileRef"));
-        cJSON_AddItemToObject(params_elem, "value", cJSON_CreateString(fileRef));
+        cJSON* param_array = cJSON_CreateArray();
+        cJSON_AddItemToObject(alert_item, "params", param_array);
+        cJSON *param_array_el = cJSON_CreateObject();
+        cJSON_AddItemToObject(param_array_el, "name", cJSON_CreateString("fileRef"));
+        cJSON_AddItemToObject(param_array_el, "value", cJSON_CreateString(fileRef));
+        cJSON_AddItemToArray(param_array, param_array_el);
     }
-
-    cJSON_AddItemToObject(item, "alertId", cJSON_CreateString(alert_no));
-    cJSON_AddItemToObject(item, "deviceId", cJSON_CreateString(deviceID));
-    const char* ev_name;
-    switch (ev) {
-        case AC_CAM_STOP_MD:
-            ev_name = "motion";
-            break;
-        case AC_CAM_STOP_SD:
-            ev_name = "audio";
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: Unsupported event type = %d", __FUNCTION__, ev);
-            cJSON_Delete(ret);
-            return NULL;
-    }
-
-    cJSON_AddItemToObject(item, "alertType", cJSON_CreateString(ev_name));
-
-    return ret;
+    return arr;
 }
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
@@ -128,6 +127,7 @@ cJSON* ao_cloud_measures(cJSON* report, const char* deviceID) {
  * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
  * if JSON is NULL - add empty array
  * Return NULL if message is too long
+ * NB! Function frees all JSONs by itself!
  */
 const char* ao_cloud_msg(const char* deviceID, const char* seq_number, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size) {
     cJSON* obj = cJSON_CreateObject();

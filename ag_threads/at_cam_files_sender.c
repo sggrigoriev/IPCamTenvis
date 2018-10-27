@@ -632,29 +632,25 @@ static void send_alert_to_proxy(char type, unsigned long fileRef) {
             /* Not our case - get out of here */
             return;
     }
-    char a_num[20]={0};
-    cJSON *alert;
+    char a_buf[20]={0};
+    const char* a_num = inc_alert_number(a_buf, sizeof(a_buf) - 1);
+
+    char f_buf[20]={0};
+    const char* f_num;
     if(fileRef) {
-        char f_num[20] = {0};
-        snprintf(f_num, sizeof(f_num), "%lu", fileRef);
-        alert = ao_cloud_alerts(ag_getProxyID(), inc_alert_number(a_num, sizeof(a_num) - 1), ev, f_num);
+        snprintf(f_buf, sizeof(f_buf), "%lu", fileRef);
+        f_num = f_buf;
     }
     else {
-        alert = ao_cloud_alerts(ag_getProxyID(), inc_alert_number(a_num, sizeof(a_num) - 1), ev, NULL);
+        f_num = NULL;
     }
-    if(alert) {
-        char buf[LIB_HTTP_MAX_MSG_SIZE];
-        const char *msg = ao_cloud_msg(ag_getProxyID(), "153", alert, NULL, NULL, buf, sizeof(buf));
-        cJSON_Delete(alert);
-        if(!msg) {
-            pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
-            return;
-        }
-        pu_queue_push(to_proxy, msg, strlen(msg)+1);
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    const char *msg = ao_cloud_msg(ag_getProxyID(), "153", ao_cloud_alerts(ag_getProxyID(), a_num, ev, f_num), NULL, NULL, buf, sizeof(buf));
+    if(!msg) {
+        pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
+        return;
     }
-    else {
-        pu_log(LL_ERROR, "%s: Error alert creation. Nothing was sent.", __FUNCTION__);
-    }
+    pu_queue_push(to_proxy, msg, strlen(msg)+1);
 }
 
 static void* thread_function(void* params) {

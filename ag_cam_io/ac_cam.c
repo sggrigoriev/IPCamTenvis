@@ -353,7 +353,7 @@ void ac_get_all_files(char** md, char** sd, char** snap) {
  */
 const char* ac_cam_get_file_ext(const char* name) {
     const char* ret = strchr(name, '.');
-    return (!ret)?"":ret;
+    return (!ret)?"":ret+1;
 }
 /*
  * Return file size in bytes
