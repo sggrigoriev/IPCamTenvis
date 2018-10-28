@@ -215,11 +215,7 @@ static void store_str(int cmd, par_t par_id, const char* buf) {
     }
     char* value = NULL;
     int pos = au_findSubstr(buf, " ", AU_CASE);
-
-    if(pos >= 0) {
-        char val[128] = {0};
-        if (sscanf(buf, "%s", val) == 1) value = strdup(val);
-    }
+    if((pos >= 0) && (strlen(buf) > (pos+1))) value = strdup(buf+pos+1);
     int i;
     switch (par_id) {
         case EP_TS0:
@@ -295,7 +291,10 @@ static char* make_md_params() {
             "&%s=%d";
     const char* rect_fmt="%d,%d,%d,%d, %d";
     if(MD_PARAMS.rect[0]) snprintf(rect_buf0, sizeof(rect_buf0)-1, rect_fmt, MD_PARAMS.rect[0]->x0,MD_PARAMS.rect[0]->x1,MD_PARAMS.rect[0]->x2,MD_PARAMS.rect[0]->x3,MD_PARAMS.rect[0]->sensitivity);
-    if(MD_PARAMS.ts[0]) strncpy(ts0_buf, MD_PARAMS.ts[0], sizeof(ts0_buf)-1);
+    if(MD_PARAMS.ts[0]) {
+        strncpy(ts0_buf, MD_PARAMS.ts[0], sizeof(ts0_buf)-1);
+        pu_log(LL_DEBUG, "%s: ts0 value is %s", __FUNCTION__, ts0_buf);
+    }
     snprintf(buf, sizeof(buf)-1, md_fmt,
         PAR_ARRAY[EP_RECCH], MD_PARAMS.recch,PAR_ARRAY[EP_TAPECH], MD_PARAMS.tapech,
         PAR_ARRAY[EP_TS0], ts0_buf, PAR_ARRAY[EP_TS1], PAR_ARRAY[EP_TS2], PAR_ARRAY[EP_TS3],
@@ -411,14 +410,15 @@ void ao_save_params(int cmd_id, const char* lst) {
     const char* ptr = lst;
     while(ptr = get_next_param(buf, sizeof(buf), ptr), strlen(buf) != 0) {
         int par_id = str2par_name(buf);
+
         if(par_id == EP_UNDEFINED) {
             pu_log(LL_ERROR, "%s: parameter %s undefined. Value ignored.", __FUNCTION__, buf);
             continue;
         }
         if((par_id == EP_RECT0)|| (par_id == EP_RECT1)||
             (par_id == EP_RECT2)||(par_id == EP_RECT3)) store_rect(cmd_id, par_id, buf);
-        else if((par_id == EP_TS0)|| (par_id == EP_TS1)||(par_id == EP_TS2) ||
-            (par_id == EP_TS3)||(par_id == EP_TS3)) store_str(cmd_id, par_id, buf);
+        else if((par_id == EP_TS0)|| (par_id == EP_TS1)||
+                (par_id == EP_TS2) ||(par_id == EP_TS3)) store_str(cmd_id, par_id, buf);
         else store_int(cmd_id, par_id, buf);
     }
 }

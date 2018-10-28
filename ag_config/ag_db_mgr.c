@@ -472,7 +472,7 @@ cJSON* ag_db_get_changes_report() {
     pthread_mutex_unlock(&local_mutex);
     if(cJSON_GetArraySize(rep)) return rep;
 on_error:
-    FREE(rep);
+    if(rep)cJSON_Delete(rep);
     return NULL;
 }
 cJSON* ag_db_get_startup_report() {

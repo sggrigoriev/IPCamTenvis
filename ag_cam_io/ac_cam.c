@@ -574,7 +574,7 @@ static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
 /*Read params */
     if(read_uri = ao_make_cam_uri(cmd_id, AO_CAM_READ), !read_uri) goto on_error;
     if(lst = get_current_params(read_uri), !lst) goto on_error;
-    pu_log(LL_DEBUG, "%s: Current params for %d = %s", __FUNCTION__, cmd_id, lst);
+    pu_log(LL_DEBUG, "%s: for %d par_id = %d, new val = %d. Current params for %d = %s", __FUNCTION__, cmd_id, par_id, par_value, cmd_id, lst);
     ao_save_params(cmd_id, lst);
     free(lst);
 /* Update local store by our parameter */
