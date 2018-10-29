@@ -62,9 +62,10 @@ static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* bufffer for sending data */
 
 static pu_queue_t* to_agent;                /* transport here */
 
-static lib_timer_clock_t alarm_to_io;              /* 'Alarm over' clocks */
-static lib_timer_clock_t alarm_to_md;
-static lib_timer_clock_t alarm_to_sd;
+static lib_timer_clock_t alarm_to_io={0};              /* 'Alarm over' clocks */
+static lib_timer_clock_t alarm_to_md={0};
+static lib_timer_clock_t alarm_to_sd={0};
+static lib_timer_clock_t wd_clock = {0};
 static int is_md=0, is_sd=0, is_io=0;
 
 /**********************************************************************/
@@ -115,6 +116,10 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
                 is_io = 0;
                 return AC_CAM_STOP_IO;
             }
+            if(lib_timer_alarm(wd_clock)) {
+                lib_timer_init(&wd_clock, DEFAULT_TO_AR_PING);
+                return AC_CAM_TIME_TO_PING;
+            }
             break;
         case EMM_CAM_TO:    /* Cam's monitor timeout */
             break;
@@ -160,6 +165,7 @@ static void* thread_function(void* params) {
     to_agent = aq_get_gueue(AQ_FromCam);
 
     time_t md_start=0, sd_start=0, io_start=0;
+    lib_timer_init(&wd_clock, DEFAULT_TO_AR_PING);
 
     while(!stop) {
         t_ac_cam_events ret = monitor_wrapper(DEFAULT_AM_READ_TO_SEC, DEFAULT_AM_ALERT_TO_SEC);
@@ -190,6 +196,9 @@ static void* thread_function(void* params) {
             case AC_CAM_STOP_SERVICE:
                 ao_make_cam_alert(ret, 0, 0, out_buf, sizeof(out_buf));
                 stop = 1;
+                break;
+            case AC_CAM_TIME_TO_PING:
+                ao_make_cam_alert(ret, 0, 0, out_buf, sizeof(out_buf));
                 break;
             default:
                 pu_log(LL_ERROR, "%s: Unrecognized event %d. Ignored", AT_THREAD_NAME, ret);

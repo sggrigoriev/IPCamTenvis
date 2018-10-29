@@ -45,9 +45,9 @@ const char* ao_proxy_get_cloud_param_name(msg_obj_t* param);
 const char* ao_proxy_get_cloud_param_value(msg_obj_t* param);
 
 /*
- * Returns "params":[] object
+ * Returns "<arr_name>":[] object
  */
-msg_obj_t* ao_proxy_get_ws_params_array(msg_obj_t* msg);
+msg_obj_t* ao_proxy_get_ws_array(msg_obj_t* msg, const char* arr_name);
 /*
  * Returns "name" or "setValue" from params Ith element
  */

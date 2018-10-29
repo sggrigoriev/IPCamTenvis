@@ -55,6 +55,8 @@
     Main thread global variables
 */
 
+extern uint32_t contextId;
+
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;     /* main thread events set */
 static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
@@ -74,6 +76,7 @@ static volatile int main_finish;        /* stop flag for main thread */
  * To Proxy & WUD
  */
 static void send_startup_report() {
+    IP_CTX_(1000);
     pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
     cJSON* report = ag_db_get_startup_report();
     if(report) {
@@ -91,12 +94,14 @@ static void send_startup_report() {
     }
 }
 static void send_wd() {
+    IP_CTX_(2000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
     pr_make_wd_alert4WUD(buf, sizeof(buf), ag_getAgentName(), ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf)+1);
 }
 static void send_reboot() {
+    IP_CTX_(3000);
     char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
 
     pu_log(LL_INFO, "%s: Cam Agent requests for reboot", __FUNCTION__);
@@ -104,6 +109,7 @@ static void send_reboot() {
     pu_queue_push(to_wud, buf, strlen(buf) + 1);
 }
 static void send_ACK_to_Proxy(int command_number) {
+    IP_CTX_(4000);
     char buf[128];
     ao_cloud_msg(ag_getProxyID(), "154", NULL, ao_cloud_responses(command_number, 0), NULL, buf, sizeof(buf));
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
@@ -111,6 +117,7 @@ static void send_ACK_to_Proxy(int command_number) {
 
 
 static void send_snapshot(const char* full_path) {
+    IP_CTX_(5000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char path[1024]={0};
     snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
@@ -119,6 +126,7 @@ static void send_snapshot(const char* full_path) {
     pu_queue_push(to_sf, buf, strlen(buf) + 1);
 }
 static void send_send_file(t_ao_cam_alert data) {
+    IP_CTX_(6000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char* f_list = ac_cam_get_files_name(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
 
@@ -136,6 +144,7 @@ static void send_send_file(t_ao_cam_alert data) {
  * Call at start
  */
 static void send_remaining_files() {
+    IP_CTX_(7000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char* md;
     char* sd;
@@ -164,6 +173,7 @@ static void send_remaining_files() {
  * To WS
  */
 static int send_to_ws(const char* msg) {
+    IP_CTX_(8000);
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
         ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
@@ -173,6 +183,7 @@ static int send_to_ws(const char* msg) {
 }
 
 static void send_stream_errror() {
+    IP_CTX_(9000);
     char buf[512] = {0};
     char err[128] = {0};
     char sess[128] = {0};
@@ -185,6 +196,7 @@ static void send_stream_errror() {
     ac_clear_stream_error();
 }
 static void send_active_viewers_reqiest(){
+    IP_CTX_(10000);
     char sess[128] = {0};
     char buf[256] = {0};
     send_to_ws(
@@ -192,15 +204,25 @@ static void send_active_viewers_reqiest(){
             );
 }
 static int send_answers_to_ws() {
+    IP_CTX_(11000);
     int ret = 1;
+    IP_CTX_(11001);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
+    IP_CTX_(11002);
     cJSON* changes_report = ag_db_get_changes_report();
+    IP_CTX_(11003);
     if(changes_report) {
+        IP_CTX_(11004);
         if(ao_ws_params(changes_report, buf, sizeof(buf))) {
+            IP_CTX_(11005);
             ret = send_to_ws(buf);
+            IP_CTX_(11006);
         }
+        IP_CTX_(11007);
         cJSON_Delete(changes_report);
+        IP_CTX_(11008);
     }
+    IP_CTX_(11009);
     return ret;
 }
 /*
@@ -209,6 +231,7 @@ static int send_answers_to_ws() {
  * cam parameters change + change report 2 WS
  */
 static void run_agent_actions() {
+    IP_CTX_(12000);
     int variant = ag_db_get_int_property(AG_DB_STATE_AGENT_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT);
     switch(variant) {
         case 0:     /* state: disconnected, no command for connection */
@@ -239,6 +262,7 @@ static void run_agent_actions() {
     }
 }
 static void run_ws_actions() {
+    IP_CTX_(13000);
     int variant = ag_db_get_int_property(AG_DB_STATE_WS_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_WS);
     switch(variant) {
         case 0: /* Disconnected, no command */
@@ -261,6 +285,7 @@ static void run_ws_actions() {
             if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
                 pu_log(LL_DEBUG, "%s: Got streaming error!", __FUNCTION__);
                 send_stream_errror();
+                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask for stream reconnection */
                 break;
             }
             if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
@@ -296,6 +321,7 @@ static void run_ws_actions() {
     }
 }
 static void run_streaming_actions() {
+    IP_CTX_(14000);
     int variant = ag_db_get_int_property(AG_DB_STATE_RW_ON)*100+ag_db_get_flag(AG_DB_CMD_CONNECT_RW)*10+ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW);
     switch(variant) {
         case 0:     /* all is off */
@@ -309,6 +335,17 @@ static void run_streaming_actions() {
                     ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
                     ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS);
                     ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1); /* On case WS is late */
+                }
+            }
+            else if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) {    /* alternative to ppc.streamStatus */
+                pu_log(LL_INFO, "%s: Viewers amout > 0 -> start streaming", __FUNCTION__);
+                if (!ac_start_video()) {
+                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
+                    pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
+                }
+                else {
+                    ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
+                    ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS);
                 }
             }
             break;
@@ -362,6 +399,7 @@ static void run_cam_actions() {
 /* Switch On/Off SD */
 /* Change Audio sensitivity */
 /* Change Video sensitivity */
+    IP_CTX_(15000);
     ag_db_update_changed_cam_parameters();
 
     if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
@@ -369,6 +407,7 @@ static void run_cam_actions() {
     }
 }
 static void run_snapshot_actions() {
+    IP_CTX_(16000);
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
     if (snapshot_command < 1) return;
 
@@ -389,6 +428,7 @@ static void run_snapshot_actions() {
 }
 
 static void run_actions() {
+    IP_CTX_(17000);
     run_agent_actions();        /* Agent connet/reconnect */
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
@@ -402,6 +442,7 @@ static void run_actions() {
  * 3 - WS       "params"
  */
 static int get_protocol_number(msg_obj_t* obj) {
+    IP_CTX_(18000);
     if(!obj) return 0;
     if((cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) || (cJSON_GetObjectItem(obj, "filesSent") != NULL))return 1;
     if(cJSON_GetObjectItem(obj, "commands") != NULL) return 2;
@@ -412,6 +453,7 @@ static int get_protocol_number(msg_obj_t* obj) {
  * TODO Change to common ag_db staff
  */
 static void process_own_proxy_message(msg_obj_t* own_msg) {
+    IP_CTX_(19000);
     t_ao_msg data;
 
     ao_proxy_decode(own_msg, &data);
@@ -453,79 +495,163 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
  * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
  */
 static void process_message(char* msg) {
+    IP_CTX_(20000);
     msg_obj_t *obj_msg = pr_parse_msg(msg);
     if (obj_msg == NULL) {
         pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
         return;
     }
     int protocol_number = get_protocol_number(obj_msg);
+    IP_CTX_(20001);
     if(!protocol_number) {
+        IP_CTX_(20002);
         pu_log(LL_ERROR, "%s: protocol for %s unrecognized. Message ignored.", __FUNCTION__, msg);
-        cJSON_Delete(obj_msg);
+        IP_CTX_(20003);
+        pr_erase_msg(obj_msg);
+        IP_CTX_(20004);
         return;
     }
     switch (protocol_number) {
         case 1:     /* Local message from Proxy to Agent */
+            IP_CTX_(20005);
             process_own_proxy_message(obj_msg);
+            IP_CTX_(20006);
             break;
         case 2: {     /* Cloud case */
+            IP_CTX_(20007);
             int is_ack = ao_proxy_ack_required(obj_msg);
-
+            IP_CTX_(20008);
             msg_obj_t* commands = pr_get_cmd_array(obj_msg);
+            IP_CTX_(20009);
             size_t i;
+            IP_CTX_(20010);
             for (i = 0; i < pr_get_array_size(commands); i++) {
+                IP_CTX_(20011);
                 msg_obj_t* cmd = pr_get_arr_item(commands, i);
+                IP_CTX_(20012);
                 if(is_ack) send_ACK_to_Proxy(ao_proxy_get_cmd_no(cmd));
-
+                IP_CTX_(20013);
                 msg_obj_t* params = ao_proxy_get_cloud_params_array(cmd);
+                IP_CTX_(20014);
                 size_t j;
+                IP_CTX_(20015);
                 for(j = 0; j < pr_get_array_size(params); j++) {
+                    IP_CTX_(20016);
                     msg_obj_t* param = pr_get_arr_item(params, j);
+                    IP_CTX_(20017);
                     const char* param_name = ao_proxy_get_cloud_param_name(param);
+                    IP_CTX_(20018);
                     const char* param_value = ao_proxy_get_cloud_param_value(param);
+                    IP_CTX_(20019);
                     ag_db_store_property(param_name, param_value);
+                    IP_CTX_(20020);
                 }
             }
         }
             break;
         case 3: {   /* WS case */
+            IP_CTX_(20021);
             msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
+            IP_CTX_(20022);
             if(result_code) {
+                IP_CTX_(20023);
                 if(result_code->valueint == AO_WS_PING_RC) {
+                    IP_CTX_(20024);
                     ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST); /* Ping received - Pong should be sent */
+                    IP_CTX_(20025);
                 }
                 else if((result_code->valueint == AO_WS_THREAD_ERROR)||(result_code->valueint == AO_WS_TO_ERROR)) {
+                    IP_CTX_(20026);
                     ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS); /* WS thread error - reconnect required */
+                    IP_CTX_(20027);
                 }
             }
 
 /* First, lets store change on viewersCount and  pingInterval (if any). */
+            IP_CTX_(20028);
             msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
-            if(viewers_count)
+            IP_CTX_(20029);
+            if(viewers_count) {
                 ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
-
+                IP_CTX_(20030);
+            }
+            IP_CTX_(20031);
             msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
+            IP_CTX_(20032);
             if(ping_interval) ag_db_store_int_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valueint);
-
-            msg_obj_t* params = ao_proxy_get_ws_params_array(obj_msg);
+            IP_CTX_(20033);
+            msg_obj_t* params = ao_proxy_get_ws_array(obj_msg, "params");
+            IP_CTX_(20034);
             if(params) {
+                IP_CTX_(20035);
                 size_t i;
+                IP_CTX_(20036);
                 for (i = 0; i < pr_get_array_size(params); i++) {
+                    IP_CTX_(20037);
                     msg_obj_t *param = pr_get_arr_item(params, i);
+                    IP_CTX_(20038);
                     const char *param_name = ao_proxy_get_ws_param_name(param);
+                    IP_CTX_(20039);
                     const char *param_value = ao_proxy_get_ws_param_value(param);
+                    IP_CTX_(20040);
                     ag_db_store_property(param_name, param_value);
+                    IP_CTX_(20041);
                 }
             }
+            IP_CTX_(20042);
+            msg_obj_t* viewers = ao_proxy_get_ws_array(obj_msg, "viewers");
+            IP_CTX_(20043);
+            if(viewers) {
+                IP_CTX_(20044);
+                size_t i;
+                IP_CTX_(20045);
+                for (i = 0; i < pr_get_array_size(viewers); i++) {
+                    IP_CTX_(20046);
+                    cJSON* v = cJSON_GetArrayItem(viewers, i);
+                    IP_CTX_(20047);
+                    cJSON* status = cJSON_GetObjectItem(v, "status");
+                    IP_CTX_(20048);
+                    int vc = ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT);
+                    IP_CTX_(20049);
+                    if((status) && (status->type == cJSON_Number)) {
+                        IP_CTX_(20050);
+                        switch (status->valueint) {
+                            case -1:
+                                IP_CTX_(20051);
+                                if(vc--) ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, vc);
+                                IP_CTX_(20052);
+                                break;
+                            case 0:
+                                IP_CTX_(20053);
+                                if(!vc) ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);
+                                IP_CTX_(20054);
+                                break;
+                            case 1:
+                                IP_CTX_(20055);
+                                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, vc+1);
+                                IP_CTX_(20056);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+            } /* Work with viewers */
         }
+            IP_CTX_(20057);
             break;
         default:
+            IP_CTX_(20058);
             pu_log(LL_ERROR, "%s: Protocol # %d: unrecognized  message %s. Ignored.", __FUNCTION__, protocol_number, msg);
+            IP_CTX_(20059);
             break;
     }
+    IP_CTX_(20060);
     pr_erase_msg(obj_msg);
+    IP_CTX_(20061);
 }
 static void process_rw_message(char* msg) {
+    IP_CTX_(21000);
   char error_code[10] = {0};
     char err_message[256] = {0};
     msg_obj_t *obj_msg = pr_parse_msg(msg);
@@ -543,10 +669,13 @@ static void process_rw_message(char* msg) {
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
     ac_set_stream_error(err_message);
+/* Set the reconnect flag for streamer */
+    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
     pr_erase_msg(obj_msg);
 }
 
 static void restart_events_monitor() {
+    IP_CTX_(22000);
     at_stop_cam_alerts_reader();
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
@@ -554,6 +683,7 @@ static void restart_events_monitor() {
     }
 }
 static void process_alert(char* msg) {
+    IP_CTX_(23000);
     t_ao_cam_alert data = ao_cam_decode_alert(msg);
     pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
@@ -586,6 +716,8 @@ static void process_alert(char* msg) {
             pu_log(LL_ERROR, "%s: Camera Events Monitor is out of service. Restart.", __FUNCTION__);
             sleep(1);   /* Just on case... */
             restart_events_monitor();
+        case AC_CAM_TIME_TO_PING:
+            break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Ignored", data.cam_event);
             break;
@@ -593,7 +725,7 @@ static void process_alert(char* msg) {
 }
 
 static int main_thread_startup() {
-
+    IP_CTX_(24000);
     aq_init_queues();
 
     from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
@@ -650,6 +782,7 @@ static int main_thread_startup() {
     return 1;
 }
 static void main_thread_shutdown() {
+    IP_CTX_(25000);
     ac_stop_video();
     ac_disconnect_video();
 
@@ -670,6 +803,7 @@ static void main_thread_shutdown() {
     Global function definition
 */
 void at_main_thread() {
+    IP_CTX_(26000);
     main_finish = 0;
 
     if(!main_thread_startup()) {
@@ -689,64 +823,108 @@ void at_main_thread() {
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
     while(!main_finish) {
+        IP_CTX_(26001);
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
+        IP_CTX_(26002);
         pu_queue_event_t ev;
-
+        IP_CTX_(26003);
          switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
+                IP_CTX_(26004);
                 while(pu_queue_pop(from_poxy, mt_msg, &len)) {
+                    IP_CTX_(26005);
                     pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
+                    IP_CTX_(26006);
                     process_message(mt_msg);
+                    IP_CTX_(26007);
                     len = sizeof(mt_msg);
+                    IP_CTX_(26008);
                  }
+                 IP_CTX_(26009);
                  break;
             case AQ_FromWS:
+                IP_CTX_(26010);
                 while(pu_queue_pop(from_ws, mt_msg, &len)) {
+                    IP_CTX_(26011);
                     pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s, len = %d", AT_THREAD_NAME, mt_msg, len);
+                    IP_CTX_(26012);
                     process_message(mt_msg);
+                    IP_CTX_(26013);
                     len = sizeof(mt_msg);
+                    IP_CTX_(26014);
                 }
+                 IP_CTX_(26015);
                 break;
             case AQ_FromRW:
+                IP_CTX_(26016);
                 while(pu_queue_pop(from_stream_rw, mt_msg, &len)) {
+                    IP_CTX_(26017);
                     pu_log(LL_DEBUG, "%s: got message from the streaming threads %s", AT_THREAD_NAME, mt_msg);
+                    IP_CTX_(26018);
                     process_rw_message(mt_msg);
+                    IP_CTX_(26019);
                     len = sizeof(mt_msg);
+                    IP_CTX_(26020);
                 }
+                 IP_CTX_(26021);
                 break;
             case AQ_FromCam:
+                IP_CTX_(26022);
                 while(pu_queue_pop(from_cam, mt_msg, &len)) {
+                    IP_CTX_(26023);
                     pu_log(LL_DEBUG, "%s: got message from the Cam async interface %s", AT_THREAD_NAME, mt_msg);
+                    IP_CTX_(26024);
                     process_alert(mt_msg);
+                    IP_CTX_(26025);
                     len = sizeof(mt_msg);
+                    IP_CTX_(26026);
                 }
+                 IP_CTX_(26027);
                 break;
             case AQ_Timeout:
+                IP_CTX_(26028);
 /*                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME); */
                 break;
             case AQ_STOP:
+                IP_CTX_(26029);
                 main_finish = 1;
+                 IP_CTX_(26030);
                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
+                 IP_CTX_(26031);
                 break;
             default:
+                IP_CTX_(26032);
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
+                 IP_CTX_(26033);
                  break;
         }
          /* Place for own periodic actions */
         /*1. Wathchdog */
+        IP_CTX_(26034);
         if(lib_timer_alarm(wd_clock)) {
+            IP_CTX_(26035);
             ag_db_set_flag_on(AG_DB_CMD_SEND_WD_AGENT);
+            IP_CTX_(26036);
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
+            IP_CTX_(26037);
         }
         /*2. Ask viewer about active viewers */
         if(lib_timer_alarm(va_clock)) {
+            IP_CTX_(26038);
             ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
+            IP_CTX_(26039);
             lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
+            IP_CTX_(26040);
         }
 /* Interpret changes made in properties */
+        IP_CTX_(26041);
         run_actions();
+        IP_CTX_(26042);
     }
+    IP_CTX_(26043);
     main_thread_shutdown();
+    IP_CTX_(26044);
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
+    IP_CTX_(26045);
     pthread_exit(NULL);
 }

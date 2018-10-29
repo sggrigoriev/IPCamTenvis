@@ -86,10 +86,11 @@ const char* ao_proxy_get_cloud_param_value(msg_obj_t* param) {
     return par->valuestring;
 }
 /*
- * Returns "params":[] array
+ * Returns "<arr_name>":[] object
  */
-msg_obj_t* ao_proxy_get_ws_params_array(msg_obj_t* msg) {
-    return cJSON_GetObjectItem(msg, "params");
+msg_obj_t* ao_proxy_get_ws_array(msg_obj_t* msg, const char* arr_name) {
+    msg_obj_t* ret = cJSON_GetObjectItem(msg, arr_name);
+    return (!ret || (ret->type != cJSON_Array))?NULL:ret;
 }
 /*
  * Returns "name" or "setValue" from params Ith element

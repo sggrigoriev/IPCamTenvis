@@ -150,7 +150,7 @@ static unsigned long tm2dig(int h, int m, int s) {
 static unsigned long strHHMMSS_to_dig(const char* str) {
     int h, m, s;
 
-    int i = sscanf(str, "%2i%2i%2i", &h, &m, &s);
+    int i = sscanf(str, "%2d%2d%2d", &h, &m, &s);
     if(i != 3) {
         pu_log(LL_ERROR, "%s: Error name scan: %d %s\n", errno, strerror(errno));
         return 0;
@@ -260,27 +260,31 @@ ac_cam_resend_queue_t* ac_cam_create_not_sent() {
     return ret;
 }
 int ac_cam_add_not_sent(ac_cam_resend_queue_t* q, char type, const char* name) {
+    pu_log(LL_DEBUG, "%s: Going to add file %s type %c", __FUNCTION__, name, type);
     if(!q || !name) {
         pu_log(LL_ERROR, "%s: queue or name is NULL. No candy - no Masha!", __FUNCTION__);
         return 0;
     }
-    cJSON* arr;
+    cJSON** arr;
     switch (type) {
         case 'M':
-            arr = q->md_arr;
+            arr = &q->md_arr;
             break;
         case 'S':
-            arr = q->sd_arr;
+            arr = &q->sd_arr;
             break;
         case 'P':
-            arr = q->snap_arr;
+            arr = &q->snap_arr;
             break;
         default:
             pu_log(LL_ERROR, "%s: wrong file type %c", __FUNCTION__, type);
             return 0;
     }
-    if(!arr) arr = cJSON_CreateArray();
-    cJSON_AddItemToArray(arr, cJSON_CreateString(name));
+    if(!*arr) *arr = cJSON_CreateArray();
+    cJSON_AddItemToArray(*arr, cJSON_CreateString(name));
+    char* txt = cJSON_PrintUnformatted(*arr);
+    pu_log(LL_DEBUG, "%s: resend_queue = %s", __FUNCTION__, txt);
+    free(txt);
     return 1;
 }
 void ac_cam_delete_not_sent(ac_cam_resend_queue_t* q) {
@@ -463,7 +467,7 @@ static CURL *open_curl_session(){
         pu_log(LL_ERROR, "%s: Error on curl_easy_init call.", __FUNCTION__);
         return NULL;
     }
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    if(res = curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;

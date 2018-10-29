@@ -575,16 +575,17 @@ on_error:
  * In ultimate case all this crap will be deleted after DEFAULT_TO_FOR_DIR_CLEANUP timeout
  */
 static ac_cam_resend_queue_t* resend(ac_cam_resend_queue_t* q) {
+    pu_log(LL_INFO, "%s: Resend files", __FUNCTION__);
     if(!q) {
         pu_log(LL_ERROR, "%s: Internal error: Resend Queue is NULL!", __FUNCTION__);
         return q;
     }
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    char buf[LIB_HTTP_MAX_MSG_SIZE]={0};
     char* txt;
     if(q->md_arr) {
         txt = cJSON_PrintUnformatted(q->md_arr);
         if(txt) {
-            ao_make_send_files(buf, sizeof(buf), DEFAULT_MD_FILE_POSTFIX, txt);
+            snprintf(buf, sizeof(buf)-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": %s}", DEFAULT_MD_FILE_POSTFIX, txt);
             pu_queue_push(from_main, buf, strlen(buf) + 1);
             pu_log(LL_DEBUG, "%s: SF resends MD files", __FUNCTION__, txt);
             free(txt);
@@ -594,7 +595,7 @@ static ac_cam_resend_queue_t* resend(ac_cam_resend_queue_t* q) {
     if(q->sd_arr) {
         txt = cJSON_PrintUnformatted(q->sd_arr);
         if(txt) {
-            ao_make_send_files(buf, sizeof(buf), DEFAULT_SD_FILE_POSTFIX, txt);
+            snprintf(buf, sizeof(buf)-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": %s}", DEFAULT_SD_FILE_POSTFIX, txt);
             pu_queue_push(from_main, buf, strlen(buf) + 1);
             pu_log(LL_DEBUG, "%s: SF resends SD files", __FUNCTION__, txt);
             free(txt);
@@ -604,7 +605,7 @@ static ac_cam_resend_queue_t* resend(ac_cam_resend_queue_t* q) {
     if(q->snap_arr) {
         txt = cJSON_PrintUnformatted(q->snap_arr);
         if(txt) {
-            ao_make_send_files(buf, sizeof(buf), DEFAULT_SNAP_FILE_POSTFIX, txt);
+            snprintf(buf, sizeof(buf)-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": %s}", DEFAULT_SNAP_FILE_POSTFIX, txt);
             pu_queue_push(from_main, buf, strlen(buf) + 1);
             pu_log(LL_DEBUG, "%s: SF resends SNAP files", __FUNCTION__, txt);
             free(txt);

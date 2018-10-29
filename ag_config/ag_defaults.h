@@ -85,14 +85,17 @@
 
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
-#define DEFAULT_AV_ASK_TO_SEC   5*60
+#define DEFAULT_AV_ASK_TO_SEC   2*60
 #define DEFAULT_TO_FOR_DIR_CLEANUP  24*5*3600
-#define DEFAULT_TO_FOR_FILES_RESEND 3600
+#define DEFAULT_TO_FOR_FILES_RESEND 30
+#define DEFAULT_TO_AR_PING  30                      /* Alerts reader TO */
 
 #define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
 #define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
 #define DEFAULT_FILES_UPL_PATH  "cloud/json/files"  /* Should be added to the main URL for files upload */
+
+#define IP_CTX_(a) contextId = a
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H */

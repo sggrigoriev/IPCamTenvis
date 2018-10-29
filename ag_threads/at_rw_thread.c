@@ -42,27 +42,7 @@
  */
 static volatile int stop = 1;
 
-
-static int is_rt_mode;
-//RT socks
-static t_rtsp_media_pairs rd_socks = {{-1,-1}, {-1,-1}};
-static t_rtsp_media_pairs wr_socks = {{-1,-1}, {-1,-1}};
-
-static char* v_rtp_buf;
-static char* v_rtcp_buf;
-static char* a_rtp_buf;
-static char* a_rtcp_buf;
 static size_t media_buf_size;
-
-static pthread_t v_rtp_id;
-static pthread_attr_t v_rtp_attr;
-static pthread_t v_rtcp_id;
-static pthread_attr_t v_rtcp_attr;
-
-static pthread_t a_rtp_id;
-static pthread_attr_t a_rtp_attr;
-static pthread_t a_rtcp_id;
-static pthread_attr_t a_rtcp_attr;
 
 //Interleaved socks - they are separate just for better undestanding - no simultanious use RT and IL socks!
 static int read_il_sock = -1;
@@ -85,9 +65,12 @@ static volatile unsigned int bytes_accepted = 0;
 static char err_buf[120];
 static const char* stop_msg;
 
+static volatile int hart_bit_off = 0;
 
 static int hb_function() {
     int ret = 0;
+
+    if(hart_bit_off) goto on_error;
 
     if(!the_session) goto on_error;
 
@@ -101,9 +84,9 @@ on_error:
 static void* hart_beat(void* params) {
     pu_queue_t* q = (pu_queue_t*)params;
 
-
     lib_timer_clock_t rw_state = {0};
     lib_timer_init(&rw_state, 10);
+
     pu_log(LL_INFO, "%s start", __FUNCTION__);
     while(!stop) {
         sleep(1);
@@ -112,6 +95,7 @@ static void* hart_beat(void* params) {
             if(!bytes_accepted) {
                 pu_log(LL_ERROR, "%s: Cam stops provide the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+                hart_bit_off = 1;
                 sleep(3600);
             }
             else {
@@ -121,6 +105,7 @@ static void* hart_beat(void* params) {
             if(!bytes_passed) {
                 pu_log(LL_ERROR, "%s: WOWZA stops receive the stream!", __FUNCTION__);
                 pu_queue_push(q, stop_msg, strlen(stop_msg)+1);
+                hart_bit_off = 1;
                 sleep(3600);
             }
             else {
@@ -199,47 +184,11 @@ static void thread_proc(const char* name, int read_sock, int write_sock, char* b
     pthread_exit(NULL);
 }
 
-static void* v_rtp_the_thread(void* params) {
-    thread_proc("VIDEO_RTP", rd_socks.video_pair.rtp, wr_socks.video_pair.rtp, v_rtp_buf, fromRW);
-    pthread_exit(NULL);
-}
-static void* v_rtcp_the_thread(void* params) {
-    thread_proc("VIDEO_RTCP", rd_socks.video_pair.rtcp, wr_socks.video_pair.rtcp, v_rtcp_buf, fromRW);
-    pthread_exit(NULL);
-}
-
-static void* a_rtp_the_thread(void* params) {
-    thread_proc("AUDIO_RTP", rd_socks.audio_pair.rtp, wr_socks.audio_pair.rtp, a_rtp_buf, fromRW);
-    pthread_exit(NULL);
-}
-static void* a_rtcp_the_thread(void* params) {
-    thread_proc("AUDIO_RTCP", rd_socks.audio_pair.rtcp, wr_socks.audio_pair.rtcp, a_rtcp_buf, fromRW);
-    pthread_exit(NULL);
-}
-
 static void *a_rdwr_the_thread(void* params) {
     thread_proc("INTERLEAVED_IO", read_il_sock, write_il_sock, rdwr_buf, fromRW);
     pthread_exit(NULL);
 }
 
-static int at_start_rt_rw_thread() {
-    if(at_is_rw_thread_run()) return 1;
-    stop = 0;
-    if(pthread_attr_init(&v_rtp_attr)) goto on_error;
-    if(pthread_create(&v_rtp_id, &v_rtp_attr, &v_rtp_the_thread, NULL)) goto on_error;
-    if(pthread_attr_init(&v_rtcp_attr)) goto on_error;
-    if(pthread_create(&v_rtcp_id, &v_rtcp_attr, &v_rtcp_the_thread, NULL)) goto on_error;
-
-    if(pthread_attr_init(&a_rtp_attr)) goto on_error;
-    if(pthread_create(&a_rtp_id, &a_rtp_attr, &a_rtp_the_thread, NULL)) goto on_error;
-    if(pthread_attr_init(&a_rtcp_attr)) goto on_error;
-    if(pthread_create(&a_rtcp_id, &a_rtcp_attr, &a_rtcp_the_thread, NULL)) goto on_error;
-
-    return 1;
-on_error:
-    stop = 1;
-    return 0;
-}
 static int at_start_interleaved_rw_thread() {
     if(at_is_rw_thread_run()) return 1;
 
@@ -259,43 +208,12 @@ on_error:
     return 0;
 }
 
-int at_set_rt_rw(t_rtsp_media_pairs rd, t_rtsp_media_pairs wr) {
-    if(at_is_rw_thread_run()) return 1;
-    fromRW = aq_get_gueue(AQ_FromRW);
-
-    rd_socks = rd;
-    wr_socks = wr;
-    is_rt_mode = 1;
-
-    media_buf_size = ag_getStreamBufferSize();
-    v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
-
-    if(v_rtp_buf = calloc(media_buf_size, 1), !v_rtp_buf) goto on_error;
-    if(v_rtcp_buf = calloc(media_buf_size, 1), !v_rtcp_buf) goto on_error;
-    if(a_rtp_buf = calloc(media_buf_size, 1), !a_rtp_buf) goto on_error;
-    if(a_rtcp_buf = calloc(media_buf_size, 1), !a_rtcp_buf) goto on_error;
-
-    return 1;
-on_error:
-    pu_log(LL_ERROR, "%s: can't allocate the buffer at %d", AT_THREAD_NAME, __LINE__);
-    if(v_rtp_buf) free(v_rtp_buf);
-    if(v_rtcp_buf) free(v_rtcp_buf);
-    if(a_rtp_buf) free(a_rtp_buf);
-    if(a_rtcp_buf) free(a_rtcp_buf);
-    v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
-    return 0;
-}
-void at_get_rt_rw(t_rtsp_media_pairs* rd, t_rtsp_media_pairs* wr) {
-    *rd = rd_socks;
-    *wr = wr_socks;
-}
 int at_set_interleaved_rw(int rd, int wr, t_at_rtsp_session* cam_sess) {
     if(at_is_rw_thread_run()) return 1;
     fromRW = aq_get_gueue(AQ_FromRW);
 
     read_il_sock = rd;
     write_il_sock = wr;
-    is_rt_mode = 0;
 
     media_buf_size = ag_getStreamBufferSize();
 
@@ -310,13 +228,10 @@ on_error:
     rdwr_buf = NULL;
     return 0;
 }
-void at_get_interleaved_rw(int* rd, int* wr) {
-    *rd = read_il_sock;
-    *wr = write_il_sock;
-}
 
 int at_start_rw() {
-    return (is_rt_mode)?at_start_rt_rw_thread():at_start_interleaved_rw_thread();
+    hart_bit_off = 0;
+    return at_start_interleaved_rw_thread();
 }
 /*****************************
  * Stop read streaming (join)
@@ -326,45 +241,23 @@ void at_stop_rw() {
         pu_log(LL_WARNING, "%s is already down", AT_THREAD_NAME);
         return;
     }
-    if(is_rt_mode) {
-        pthread_cancel(v_rtp_id);
-        pthread_cancel(v_rtcp_id);
-        pthread_cancel(a_rtp_id);
-        pthread_cancel(a_rtcp_id);
+    void *ret;
+    pthread_cancel(rdwr_id);
+    pthread_cancel(hb_id);
 
-        pthread_attr_destroy(&v_rtp_attr);
-        pthread_attr_destroy(&v_rtcp_attr);
-        pthread_attr_destroy(&a_rtp_attr);
-        pthread_attr_destroy(&a_rtcp_attr);
+    pthread_join(rdwr_id, &ret);
+    pthread_join(hb_id, &ret);
 
-        if(v_rtp_buf) free(v_rtp_buf);
-        if(v_rtcp_buf) free(v_rtcp_buf);
-        if(a_rtp_buf) free(a_rtp_buf);
-        if(a_rtcp_buf) free(a_rtcp_buf);
-        v_rtp_buf = NULL; v_rtcp_buf = NULL; a_rtp_buf = NULL; a_rtcp_buf = NULL;
-        stop = 1;
-        pu_log(LL_ERROR, "%s: RW threads are down", AT_THREAD_NAME);
-    }
-    else {
-        void *ret;
-        pthread_cancel(rdwr_id);
-        pthread_cancel(hb_id);
-
-        pthread_join(rdwr_id, &ret);
-        pthread_join(hb_id, &ret);
-
-        pthread_attr_destroy(&rdwr_attr);
-        pthread_attr_destroy(&hb_attr);
-
-
+    pthread_attr_destroy(&rdwr_attr);
+    pthread_attr_destroy(&hb_attr);
 //We do not close existing connections - they will be used for RTSP Teardown
 
-        if(rdwr_buf) free(rdwr_buf);
-        rdwr_buf = NULL;
-        stop = 1;
-        pu_log(LL_INFO, "%s: RW thread is down", AT_THREAD_NAME);
-        pu_log(LL_INFO, "%s: HartBeat thread is down", AT_THREAD_NAME);
-    }
+    stop = 1;
+    if(rdwr_buf) free(rdwr_buf);
+    rdwr_buf = NULL;
+
+    pu_log(LL_INFO, "%s: RW thread is down", AT_THREAD_NAME);
+    pu_log(LL_INFO, "%s: HartBeat thread is down", AT_THREAD_NAME);
 }
 /*****************************
  * Check if read stream runs

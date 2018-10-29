@@ -25,7 +25,8 @@
 static const char* CAM_EVENTS_NAMES[AC_CAM_EVENTS_SIZE] = {
     "AC_CAM_EVENT_UNDEF",
     "AC_CAM_START_MD", "AC_CAM_STOP_MD", "AC_CAM_START_SD", "AC_CAM_STOP_SD", "AC_CAM_START_IO", "AC_CAM_STOP_IO",
-    "AC_CAM_STOP_SERVICE"
+    "AC_CAM_MADE_SNAPSHOT", "AC_CAM_RECORD_VIDEO",
+    "AC_CAM_STOP_SERVICE", "AC_CAM_TIME_TO_PING"
 };
 
 const char* ac_cam_event2string(t_ac_cam_events e) {

@@ -214,6 +214,7 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
 #endif
     if(res = curl_easy_setopt(cs->h, CURLOPT_URL, sess->url), res != CURLE_OK) goto on_error;
 
+    if(res = curl_easy_setopt(cs->h, CURLOPT_VERBOSE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;

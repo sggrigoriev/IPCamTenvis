@@ -116,6 +116,7 @@ typedef enum {
     AC_CAM_MADE_SNAPSHOT,
     AC_CAM_RECORD_VIDEO,
     AC_CAM_STOP_SERVICE,
+    AC_CAM_TIME_TO_PING,
     AC_CAM_EVENTS_SIZE
 } t_ac_cam_events;
 

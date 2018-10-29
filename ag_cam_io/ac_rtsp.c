@@ -43,83 +43,6 @@
 #include "ac_tcp.h"
 
 /*******************************************************************************************/
-static void close_rt_connection() {
-    t_rtsp_media_pairs in, out;
-    at_get_rt_rw(&in, &out);
-
-    if(in.video_pair.rtp >= 0) ac_udp_close_connection(in.video_pair.rtp);
-    if(in.video_pair.rtcp >= 0) ac_udp_close_connection(in.video_pair.rtcp);
-    if(in.audio_pair.rtp >= 0) ac_udp_close_connection(in.audio_pair.rtp);
-    if(in.audio_pair.rtcp >= 0) ac_udp_close_connection(in.audio_pair.rtcp);
-
-    if(out.video_pair.rtp >= 0) ac_udp_close_connection(out.video_pair.rtp);
-    if(out.video_pair.rtcp >= 0) ac_udp_close_connection(out.video_pair.rtcp);
-    if(out.audio_pair.rtp >= 0) ac_udp_close_connection(out.audio_pair.rtp);
-    if(out.audio_pair.rtcp >= 0) ac_udp_close_connection(out.audio_pair.rtcp);
-
-    t_rtsp_media_pairs ein = {{-1,-1}, {-1, -1}};
-    t_rtsp_media_pairs eout = {{-1,-1}, {-1, -1}};
-    at_set_rt_rw(ein, eout);
-}
-static int open_rt_connection(t_ac_rtsp_rt_media media_in, t_ac_rtsp_rt_media media_out) {
-    t_rtsp_media_pairs in_socks = {{-1,-1}, {-1, -1}};
-    t_rtsp_media_pairs out_socks = {{-1,-1}, {-1, -1}};
-
-//Camera - video
-    if((in_socks.video_pair.rtp = ac_udp_p2p_connection(media_in.video.src.ip, media_in.video.src.port.rtp, media_in.video.dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((in_socks.video_pair.rtcp = ac_udp_p2p_connection(media_in.video.src.ip, media_in.video.src.port.rtcp, media_in.video.dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Cam-Agent video connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_in.video.src.ip, media_in.video.src.port.rtp, media_in.video.dst.port.rtp, media_in.video.src.ip, media_in.video.src.port.rtcp, media_in.video.dst.port.rtcp);
-
-//Camera - audio
-    if((in_socks.audio_pair.rtp = ac_udp_p2p_connection(media_in.audio.src.ip, media_in.audio.src.port.rtp, media_in.audio.dst.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((in_socks.audio_pair.rtcp = ac_udp_p2p_connection(media_in.audio.src.ip, media_in.audio.src.port.rtcp, media_in.audio.dst.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Cam-Agent audio connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_in.audio.src.ip, media_in.audio.src.port.rtp, media_in.audio.dst.port.rtp, media_in.audio.src.ip, media_in.audio.src.port.rtcp, media_in.audio.dst.port.rtcp);
-
-//Player - UDP connection
-// video
-    if((out_socks.video_pair.rtp = ac_udp_p2p_connection(media_out.video.dst.ip, media_out.video.dst.port.rtp, media_out.video.src.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((out_socks.video_pair.rtcp = ac_udp_p2p_connection(media_out.video.dst.ip, media_out.video.dst.port.rtcp, media_out.video.src.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera video RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Player-Agent video connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__,media_out.video.dst.ip, media_out.video.dst.port.rtp, media_out.video.src.port.rtp, media_out.video.dst.ip, media_out.video.dst.port.rtcp, media_out.video.src.port.rtcp);
-// audio
-    if((out_socks.audio_pair.rtp = ac_udp_p2p_connection(media_out.audio.dst.ip, media_out.audio.dst.port.rtp, media_out.audio.src.port.rtp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    if((out_socks.audio_pair.rtcp = ac_udp_p2p_connection(media_out.audio.dst.ip, media_out.audio.dst.port.rtcp, media_out.audio.src.port.rtcp)) < 0) {
-        pu_log(LL_ERROR, "%s Can't open UDP socket for Camera audio RTCP stream. Bye.", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: Player-Agent audio connection RTP: %s:%d-%d; RTCP connection %s:%d-%d", __FUNCTION__, media_out.audio.dst.ip, media_out.audio.dst.port.rtp, media_out.audio.src.port.rtp, media_out.audio.dst.ip, media_out.audio.dst.port.rtcp, media_out.audio.src.port.rtcp);
-
-    if(!at_set_rt_rw(in_socks,out_socks)) {
-        pu_log(LL_ERROR, "%s: Can't initiate streaming treads for non-interleaved mode", __FUNCTION__);
-        goto on_error;
-    }
-    pu_log(LL_DEBUG, "%s: streaming threads for non-interleaved mode are initiated", __FUNCTION__);
-
-    return 1;
-on_error:
-    close_rt_connection();
-    return 0;
-}
 
 static void close_il_connection() {
 /*    int in, out;
@@ -339,10 +262,10 @@ int ac_req_teardown(t_at_rtsp_session* sess) {
 }
 
 int ac_rtsp_open_streaming_connecion(t_at_rtsp_session* sess_in, t_at_rtsp_session* sess_out) {
-    return (ag_isCamInterleavedMode())?open_il_connection(sess_in, sess_out):open_rt_connection(sess_in->media.rt_media, sess_out->media.rt_media);
+    return open_il_connection(sess_in, sess_out);
 }
 void ac_rtsp_close_streaming_connecion() {
-    (!ag_isCamInterleavedMode())?close_rt_connection():close_il_connection;
+    close_il_connection();
 }
 
 int ac_rtsp_start_streaming() {

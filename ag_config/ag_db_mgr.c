@@ -223,7 +223,7 @@ static int save_persistent_data(const char* file_name, const char* JSON_string) 
         return ret;
     }
 
-    if(fputs(JSON_string, fd) != strlen(JSON_string)) {
+    if(fwrite(JSON_string, 1, strlen(JSON_string), fd) != strlen(JSON_string)) {
         pu_log(LL_ERROR, "%s: Error saving data into %s: %d %s", __FUNCTION__, file_name, errno, strerror(errno));
     }
     else {

@@ -162,7 +162,16 @@ void ac_disconnect_video() {
  *  2. Run streaming
  *  3. Send to WS Stream confirmation request
 */
+static int video_on = 0;
 int ac_start_video() {
+    if(video_on) {
+        pu_log(LL_WARNING, "%s: Video already on! Suspicious call", __FUNCTION__);
+        return 0;
+    }
+    else {
+        ac_rtsp_stop_streaming();   /* In case it still run */
+    }
+
     if(!init_proc()) {
         pu_log(LL_ERROR, "%s: Video initiation error, exit", __FUNCTION__);
         goto on_error;
@@ -180,20 +189,26 @@ int ac_start_video() {
         goto on_error;
     }
 
-    if(!ac_rtsp_open_streaming_connecion(CAM_SESSION, PLAYER_SESSION)) return 0;    //Open streaming sockets
+    if(!ac_rtsp_open_streaming_connecion(CAM_SESSION, PLAYER_SESSION)) {    //Open streaming sockets
+        pu_log(LL_ERROR, "%s: open streaming connections error", __FUNCTION__);
+        goto on_error;
+    }
 
     if(!process_play()) {
         pu_log(LL_ERROR, "%s: process play error", __FUNCTION__);
         goto on_error;
     }
 
-    if(!ac_rtsp_start_streaming()) return 0;                                        //Start streaming thread(s)
+    if(!ac_rtsp_start_streaming()) {                                        //Start streaming thread
+        pu_log(LL_ERROR, "%s: start streaming error", __FUNCTION__);
+        goto on_error;
+    }
 
     if(!ac_send_stream_confirmation()) {                                            //Send to WS streaming start confirmation
         pu_log(LL_ERROR, "%s: Stream confirmation send to WS failed", __FUNCTION__);
         goto on_error;
     }
-
+    video_on = 1;
     return 1;
 on_error:
     ac_rtsp_stop_streaming();
@@ -202,6 +217,10 @@ on_error:
     return 0;
 }
 void ac_stop_video() {
+    if(!video_on) {
+        pu_log(LL_WARNING, "%s: Video is already off. Suspicious call. Ignored", __FUNCTION__);
+        return;
+    }
     ac_rtsp_stop_streaming();
     ac_rtsp_close_streaming_connecion();
 
@@ -209,6 +228,7 @@ void ac_stop_video() {
     ac_req_teardown(PLAYER_SESSION);
 
     shutdown_proc();
+    video_on = 0;
 }
 
 /*****************************************
