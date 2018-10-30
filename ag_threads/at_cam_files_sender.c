@@ -195,9 +195,10 @@ static const char* make_getSF_url(const sf_url_in_t* in_par, char *url, size_t s
 }
 static const char* make_updSF_url(const sf_url_in_t* in_par, unsigned long fid, char* url, size_t size) {
     snprintf(url, size-1,
-             "%s/%lu?incomplete=false",
+             "%s/%lu?proxyId=%s&incomplete=false",
              in_par->url,
-             fid
+             fid,
+             in_par->device_id
     );
     return url;
 }
