@@ -180,7 +180,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             target_link_libraries(jq m)
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
-            ${PROJECT_SOURCE_DIR}/build/build_tenvis/libipcam.a
+            ${SYSROOT_PATH}/usr/lib/libipcam.a
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a

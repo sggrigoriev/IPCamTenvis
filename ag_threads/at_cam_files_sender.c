@@ -183,12 +183,13 @@ static struct curl_slist* make_SFupdate_header(struct curl_slist* sl, const char
 
 static const char* make_getSF_url(const sf_url_in_t* in_par, char *url, size_t size) {
     snprintf(url, size-1,
-             "%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%lu&thumbnail=false&rotate=0&incomplete=false&uploadUrl=true&type=%d",
+             "%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%lu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
              in_par->url,
              in_par->device_id,
              in_par->device_id,
              in_par->ext,
              in_par->f_size,
+             (in_par->f_type==2)?180:0,       /* Turn on 180 if image */
              in_par->f_type
     );
     return url;
@@ -393,6 +394,9 @@ on_error:
     if(ptr)free(ptr);
     return ret;
 }
+/*
+ * Return 1 if OK, 0 if error, 2 if file not found
+ */
 static int sendFile(const char* sf_url, const struct curl_slist *hs, const char* f_path, unsigned long f_size) {
     int ret = 0;
     char err_b[CURL_ERROR_SIZE]= {0};
@@ -408,6 +412,7 @@ static int sendFile(const char* sf_url, const struct curl_slist *hs, const char*
     FILE* fd = fopen(f_path, "rb"); /* open file to upload */
     if(!fd) {
         pu_log(LL_ERROR, "%s: Open %s file error %d-%s", __FUNCTION__, f_path, errno, strerror(errno));
+        if(errno == ENOENT) ret = 2;   /* No such file. It was sent already */
         goto on_error;
     }
 
@@ -520,6 +525,7 @@ static void close_flist(fld_t* fld) {
 /*
  * Sending file to cloud
  * Return 0 if error and fileID if Ok
+ * Return -1 if no file
  *
  */
 static const unsigned long send_file(fd_t fd) {
@@ -544,10 +550,16 @@ static const unsigned long send_file(fd_t fd) {
     pu_log(LL_DEBUG, "%s: URL = %s, UPL_HDRS = %s", __FUNCTION__, sf_url, upl_hdrs);
 
     hs1 = make_SF_header(upl_hdrs, hs1);    /* Add header to exisning for file upload */
-    if(!sendFile(sf_url, hs1, fd.name, ip.f_size)) {
+    int rc = sendFile(sf_url, hs1, fd.name, ip.f_size);
+    if(!rc) {
         pu_log(LL_ERROR, "%s: error file %s upload", __FUNCTION__, fd.name);
         goto on_error;
     }
+    else if(rc == 2) { /* file not found */
+        ret = -1;
+        goto on_error;
+    }
+
     pu_log(LL_DEBUG, "%s: file %s sent OK", "make_SF_header", fd.name);
 
     hs2 = make_SFupdate_header(hs2, ip.auth_token);
@@ -683,8 +695,10 @@ static void* thread_function(void* params) {
                         fd_t fd;
                         while(get_next_f(fld, &fd)) {
                             unsigned long f_id = send_file(fd);
-                             if(!f_id) ac_cam_add_not_sent(resend_queue, fd.type, fd.name);
-                             send_alert_to_proxy(fd.type, f_id);
+                            if(f_id >= 0) { /* id < 0 - file not found. nothing to do*/
+                                if(!f_id) ac_cam_add_not_sent(resend_queue, fd.type, fd.name);
+                                send_alert_to_proxy(fd.type, f_id);
+                            }
                         }
                         close_flist(fld);
                     }
