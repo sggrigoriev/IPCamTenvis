@@ -10,7 +10,7 @@
 
 
 #include <gst/gstconfig.h>
-#include <gst/rtsp/gstrtsp.h>
+/*#include <gst/rtsp/gstrtsp.h> */
 #include <gst/rtsp/gstrtspmessage.h>
 
 #ifdef GST_EXT

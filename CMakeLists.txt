@@ -81,7 +81,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions( -DGST_EXT)
     add_definitions(-D__LINUX__)
     add_definitions(-DEXTERN=)
-    file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
+#    file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
 
 #    set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -97,7 +97,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 #    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 #    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 #    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam  -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s -ldl -lz")
 
     set(REQUIRED_LIBRARIES
             curl
@@ -175,11 +175,12 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
+            install(TARGETS ipcam ARCHIVE DESTINATION ${SYSROOT_PATH}usr/lib)
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
             target_link_libraries(jq m)
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
-            ${SYSROOT_PATH}/usr/lib/libipcam.a
+            ${PROJECT_SOURCE_DIR}/build/build_tenvis/libipcam.a
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
@@ -210,7 +211,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             ${SYSROOT_PATH}/usr/lib/libintl.a
             ${SYSROOT_PATH}/usr/lib/libffi.a
             ${SYSROOT_PATH}/usr/lib/libcurl.a
-            ${SYSROOT_PATH}/usr/lib/libdl.so.0
+#            ${SYSROOT_PATH}/usr/lib/libdl.so.0
 
 
             )

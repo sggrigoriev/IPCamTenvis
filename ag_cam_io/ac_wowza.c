@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <gst/gst.h>
-#include <gst/rtsp/gstrtsp.h>
+/*#include <gst/rtsp/gstrtsp.h>*/
 #include <gst/rtsp/gstrtspurl.h>
 #include <gst/rtsp/gstrtspconnection.h>
 #include <netdb.h>
