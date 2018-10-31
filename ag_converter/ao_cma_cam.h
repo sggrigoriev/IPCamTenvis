@@ -24,13 +24,13 @@
 #define IPCAMTENVIS_AO_CMA_CAM_H
 
 #include <stddef.h>
-
+#include "cJSON.h"
 #include "ao_cmd_data.h"
 
 /*
  * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
  */
-t_ao_cam_alert ao_cam_decode_alert(const char* in);
+t_ao_cam_alert ao_cam_decode_alert(cJSON* obj);
 /*
  * Notify Agent about the event
  * if start_date or end_date is 0 fields are ignored

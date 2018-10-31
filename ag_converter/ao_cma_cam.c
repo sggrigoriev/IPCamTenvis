@@ -21,7 +21,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "cJSON.h"
 #include "pu_logger.h"
 
 #include "au_string.h"
@@ -117,15 +116,12 @@ const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t e
  * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
  * {"alertName" : "<name>[, "startDate" : <time_t>[, "endDate" : time_t]]}
  */
-t_ao_cam_alert ao_cam_decode_alert(const char* in) {
+t_ao_cam_alert ao_cam_decode_alert(cJSON* obj) {
     t_ao_cam_alert ret;
     ret.command_type = AO_ALRT_CAM;
     ret.cam_event = AC_CAM_EVENT_UNDEF;
     ret.start_date = 0;
     ret.end_date = 0;
-
-    cJSON* obj = cJSON_Parse(in);
-    if(!obj) return ret;
 
     cJSON* alrt_name = cJSON_GetObjectItem(obj, ALERT_NAME);
     if(alrt_name) ret.cam_event = ac_cam_string2event(alrt_name->valuestring);
@@ -136,7 +132,6 @@ t_ao_cam_alert ao_cam_decode_alert(const char* in) {
     cJSON* end_date = cJSON_GetObjectItem(obj, ALERT_END);
     if(end_date) ret.end_date = end_date->valueint;
 
-    cJSON_Delete(obj);
     return ret;
 }
 

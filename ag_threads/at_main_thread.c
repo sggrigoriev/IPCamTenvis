@@ -70,8 +70,16 @@ static pu_queue_t* to_sf;           /* from main_thread to files sender */
 static volatile int main_finish;        /* stop flag for main thread */
 
 /*****************************************************************************************
-    Local functions deinition
+    Local functions and types definitions
 */
+typedef enum {
+    MT_PROTO_UNDEF,     /* ERROR */
+    MT_PROTO_OWN,     /* own "gw_cloudConnection" (from Proxy), "filesSent" (from WUD)*/
+    MT_PROTO_CLOUD,     /* commands from cloud */
+    MT_PROTO_WS,        /* from WebSocket */
+    MT_PROTO_EM,    /* from events monitor */
+    MT_PROTO_STREAMING  /* from streamer */
+} protocol_type_t;
 /*
  * To Proxy & WUD
  */
@@ -141,7 +149,7 @@ static void send_send_file(t_ao_cam_alert data) {
 }
 /*
  * Send SD/MD/SNAPHOT files which wasn't sent before
- * Call at start
+ * Call on startup
  */
 static void send_remaining_files() {
     IP_CTX_(7000);
@@ -176,237 +184,51 @@ static int send_to_ws(const char* msg) {
     IP_CTX_(8000);
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
-        ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);
         return 0;
     }
     return 1;
 }
 
-static void send_stream_errror() {
-    IP_CTX_(9000);
+static int send_active_viewers_reqiest(){
+    IP_CTX_(10000);
+    char sess[128] = {0};
+    char buf[256] = {0};
+    return send_to_ws(
+            ao_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
+            );
+}
+static int send_stream_error() {
     char buf[512] = {0};
     char err[128] = {0};
     char sess[128] = {0};
 
-    send_to_ws(
+    int ret = send_to_ws(
             ao_stream_error_report(ac_get_stream_error(err, sizeof(err)-1),
-            ac_get_session_id(sess, sizeof(sess)-1),
-            buf, sizeof(buf)-1)
-            );
+                                   ac_get_session_id(sess, sizeof(sess)-1),
+                                   buf, sizeof(buf)-1)
+    );
     ac_clear_stream_error();
-}
-static void send_active_viewers_reqiest(){
-    IP_CTX_(10000);
-    char sess[128] = {0};
-    char buf[256] = {0};
-    send_to_ws(
-            ao_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
-            );
-}
-static int send_answers_to_ws() {
-    IP_CTX_(11000);
-    int ret = 1;
-    IP_CTX_(11001);
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    IP_CTX_(11002);
-    cJSON* changes_report = ag_db_get_changes_report();
-    IP_CTX_(11003);
-    if(changes_report) {
-        IP_CTX_(11004);
-        if(ao_ws_params(changes_report, buf, sizeof(buf))) {
-            IP_CTX_(11005);
-            ret = send_to_ws(buf);
-            IP_CTX_(11006);
-        }
-        IP_CTX_(11007);
-        cJSON_Delete(changes_report);
-        IP_CTX_(11008);
-    }
-    IP_CTX_(11009);
     return ret;
+}
+static void stop_ws() {
+    ac_stop_video();
+    ac_disconnect_video();
+    ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
+}
+static void restart_events_monitor() {
+    IP_CTX_(22000);
+    at_stop_cam_alerts_reader();
+    if(!at_start_cam_alerts_reader()) {
+        pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
+        send_reboot();
+    }
 }
 /*
  * Agent actions: agent->WS->streaming
  * snapshot
  * cam parameters change + change report 2 WS
  */
-static void run_agent_actions() {
-    IP_CTX_(12000);
-    int variant = ag_db_get_int_property(AG_DB_STATE_AGENT_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_AGENT);
-    switch(variant) {
-        case 0:     /* state: disconnected, no command for connection */
-            break;
-        case 1:     /* state: disconnected, got command for connect */
-            pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
-            send_startup_report();
-            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* request WS connect */
-            ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);        /* set Agent as connected */
-            ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
-            break;
-        case 10:     /* state: connected, no command -> Process Agent actions */
-            if(ag_db_get_flag(AG_DB_CMD_SEND_WD_AGENT)) {       /* Send Watch Dog to WUD */
-                send_wd();
-                ag_db_set_flag_off(AG_DB_CMD_SEND_WD_AGENT);
-                pu_log(LL_INFO, "%s: Watchdog sent to WUD", __FUNCTION__);
-            }
-            break;
-        case 11:     /* state: connected, got command for connect: reconnection! */
-            pu_log(LL_INFO, "%s: Got connection info. Reconnect case", __FUNCTION__);
-            ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);        /* Ask for WS (re)connect */
-            ag_db_store_int_property(AG_DB_STATE_AGENT_ON, 1);  /* set Agent as connected */
-            ag_db_set_flag_off(AG_DB_CMD_CONNECT_AGENT);    /* clear Agent connect command */
-            break;
-        default:
-            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
-            break;
-    }
-}
-static void run_ws_actions() {
-    IP_CTX_(13000);
-    int variant = ag_db_get_int_property(AG_DB_STATE_WS_ON)*10+ag_db_get_flag(AG_DB_CMD_CONNECT_WS);
-    switch(variant) {
-        case 0: /* Disconnected, no command */
-            break;
-        case 1: /* Disconnected, got connect command */
-            pu_log(LL_DEBUG, "%s: WS is OFF. Connect requested", __FUNCTION__);
-            if(!ac_connect_video()) {
-                if(ag_db_get_int_property(AG_DB_STATE_RW_ON)) /* Stop streaming if it is */
-                    ag_db_set_flag_on(AG_DB_CMD_DISCONNECT_RW);
-                pu_log(LL_ERROR, "%s: Error WS interface start. WS inactive.", __FUNCTION__);
-            }
-            else {
-                ag_db_store_int_property(AG_DB_STATE_WS_ON, 1);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);   /* Clear command as executed */
-                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1); /* To warm-up streaming unconditionally*/
-                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-            }
-            break;
-        case 10: /* Connected, no command -> execute own actions if any */
-            if(ac_is_stream_error()) {                          /* sent stream error to WS if any */
-                pu_log(LL_DEBUG, "%s: Got streaming error!", __FUNCTION__);
-                send_stream_errror();
-                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);    /* Ask for stream reconnection */
-                break;
-            }
-            if(ag_db_get_flag(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Send viewers requset if requested */
-                send_active_viewers_reqiest();
-                pu_log(LL_INFO, "%s: Active viewers request sent to WS", __FUNCTION__);
-                ag_db_set_flag_off(AG_DB_CMD_ASK_4_VIEWERS_WS);
-            }
-            if(ag_db_get_flag(AG_DB_CMD_PONG_REQUEST)) {        /* Send pong to WS if requested */
-                send_to_ws(ao_answer_to_ws_ping());
-                ag_db_set_flag_off(AG_DB_CMD_PONG_REQUEST);
-                pu_log(LL_INFO, "%s: Pong answer sent to ws", __FUNCTION__);
-            }
-            break;
-        case 11: /* Connected, got command for connect: Reconnect case. NB! WS & RW stop; WS start again, but RW NOT! */
-            pu_log(LL_DEBUG, "%s WS: WS is ON. Reconnect requested", __FUNCTION__);
-            ac_stop_video();
-            ac_disconnect_video();
-            ag_db_store_int_property(AG_DB_STATE_WS_ON, 0);
-            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0); /* We stop already streaming thread in ac_stop_video*/
-
-            if (!ac_connect_video()) {
-                pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
-            }
-            else {
-                ag_db_store_int_property(AG_DB_STATE_WS_ON, 1);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_WS);           /* Clear command as executed */
-                ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);            /* Start streaming anyway here */
-            }
-            break;
-        default:
-            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
-            break;
-    }
-}
-static void run_streaming_actions() {
-    IP_CTX_(14000);
-    int variant = ag_db_get_int_property(AG_DB_STATE_RW_ON)*100+ag_db_get_flag(AG_DB_CMD_CONNECT_RW)*10+ag_db_get_flag(AG_DB_CMD_DISCONNECT_RW);
-    switch(variant) {
-        case 0:     /* all is off */
-            if(ag_db_get_flag(AG_DB_STATE_STREAM_STATUS) && ag_db_get_int_property(AG_DB_STATE_STREAM_STATUS)) {
-                pu_log(LL_INFO, "%s: Got streamStatus set to 1", __FUNCTION__);
-                if (!ac_start_video()) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
-                    pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
-                } 
-                else {
-                    ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
-                    ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS);
-                    ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1); /* On case WS is late */
-                }
-            }
-            else if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) {    /* alternative to ppc.streamStatus */
-                pu_log(LL_INFO, "%s: Viewers amout > 0 -> start streaming", __FUNCTION__);
-                if (!ac_start_video()) {
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
-                    pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
-                }
-                else {
-                    ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
-                    ag_db_set_flag_off(AG_DB_STATE_STREAM_STATUS);
-                }
-            }
-            break;
-        case 1:     /* cam disconnected, no conn request, got disconnect request */
-            ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
-            pu_log(LL_WARNING, "%s: Disconnect command for disconnected streamer. No action", __FUNCTION__);
-            break;
-        case 10: /* Disconnected, Got command to connect */
-            pu_log(LL_INFO, "%s: No streaming. Got stream start request", __FUNCTION__);
-            if (!ac_start_video()) {
-                ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS);    /* 99% - got old sesion ID */
-                pu_log(LL_ERROR, "%s: Error RW start. RW inactive. WS reconnect required.", __FUNCTION__);
-            } else {
-                ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
-            }
-            break;
-        case 100: /* Connected, no commands: Place for some routine actions during the streaming if any */
-            if(!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) {
-                ac_stop_video();
-                ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
-                pu_log(LL_INFO, "%s: No active viewers found. Stop stream.", __FUNCTION__);
-            }
-            break;
-        case 101: /* Connected, got disconnect command */
-            pu_log(LL_INFO, "%s: Streaming. Got Stop Stream request", __FUNCTION__);
-            ac_stop_video();
-            ag_db_set_flag_off(AG_DB_CMD_DISCONNECT_RW);
-            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
-            break;
-        case 110: /* Connected, got connect request -> reconnect! */
-            pu_log(LL_INFO, "%s: Streaming. Got Restart Stream request", __FUNCTION__);
-            ac_stop_video();
-            ag_db_store_int_property(AG_DB_STATE_RW_ON, 0);
-            if(!ac_start_video()) {
-                pu_log(LL_ERROR, "%s: Can't start streaming during reconnect", __FUNCTION__);
-            }
-            else {
-                ag_db_store_int_property(AG_DB_STATE_RW_ON, 1);
-                ag_db_set_flag_off(AG_DB_CMD_CONNECT_RW);
-                pu_log(LL_INFO, "%s: Streaming restarted Ok", __FUNCTION__);
-            }
-            break;
-        default:
-            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
-            break;
-    }
-}
-static void run_cam_actions() {
-/* Switch On/Off MD */
-/* Switch On/Off SD */
-/* Change Audio sensitivity */
-/* Change Video sensitivity */
-    IP_CTX_(15000);
-    ag_db_update_changed_cam_parameters();
-
-    if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
-        send_answers_to_ws();       /* Send changes report & clear change_flag */
-    }
-}
-static void run_snapshot_actions() {
+static void make_snapshot() {
     IP_CTX_(16000);
     int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
     if (snapshot_command < 1) return;
@@ -421,10 +243,164 @@ static void run_snapshot_actions() {
         return;
     }
     send_snapshot(path);
-    ag_db_store_property(AG_DB_STATE_SNAPSHOT, "0");
-/*
- * if snapshot_command == 1 the alert should be sent. Was removed as unnecessary
- */
+    ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
+    IP_CTX_(16001);
+}
+static void run_agent_actions() {
+    IP_CTX_(12000);
+    ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_AGENT_ON);
+    switch(variant) {
+        case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
+        case AG_DB_BIN_OFF_OFF:     /* nothing to do */
+        case AG_DB_BIN_ON_OFF:      /* nothing to do */
+            break;
+        case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
+        case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
+            pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
+            send_startup_report();                                  /* send cam's initial settings to the cloud */
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
+    }
+
+    if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
+        if (ag_db_get_int_property(AG_DB_CMD_SEND_WD_AGENT)) {  /* PING processing */
+            send_wd();
+            ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 0);
+        }
+        if(!ag_db_get_int_property(AG_DB_STATE_WS_ON)) {        /* Kick the WS to start if it is not started! */
+            ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);
+        }
+    }
+    IP_CTX_(12001);
+}
+static void run_ws_actions() {
+    IP_CTX_(13000);
+    ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_WS_ON);
+    switch(variant) {
+        case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
+        case AG_DB_BIN_OFF_OFF:     /* nothing to do */
+            break;
+        case AG_DB_BIN_ON_OFF:      /* Was connected - disconnect required */
+            pu_log(LL_DEBUG, "%s: 1->0: Disconnect required", __FUNCTION__);
+            stop_ws();
+            break;
+        case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
+            pu_log(LL_DEBUG, "%s: 0->1: Connect required", __FUNCTION__);
+            if (!ac_connect_video()) {
+                pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
+                ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
+            } else {
+                ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+            }
+            break;
+        case AG_DB_BIN_ON_ON:       /* 1->1: reconnection request */
+            pu_log(LL_DEBUG, "%s: 1->1: Reconnect required", __FUNCTION__);
+            stop_ws();
+            if (!ac_connect_video()) {
+                pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
+                ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
+            }
+            else {
+                ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+            }
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
+    }
+    if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) { /* Now actions if connected */
+        if (ag_db_get_int_property(AG_DB_CMD_ASK_4_VIEWERS_WS)) {    /* Ask cloud for viewers total amount */
+            if(!send_active_viewers_reqiest())
+                stop_ws();
+            else
+                ag_db_set_int_property(AG_DB_CMD_ASK_4_VIEWERS_WS, 0);
+        }
+        if (ag_db_get_int_property(AG_DB_CMD_PONG_REQUEST)) {        /* Answer by pong to WS's ping */
+            if(!send_to_ws(ao_answer_to_ws_ping()))
+                stop_ws();
+            else
+                ag_db_set_int_property(AG_DB_CMD_PONG_REQUEST, 0);
+        }
+        if (ac_is_stream_error()) {
+            if(!send_stream_error()) stop_ws();
+        }
+    }
+    else {  /* And actions if disconnected */
+        if(ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
+            ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);   /* Ask for streaming disconnect */
+        }
+    }
+    IP_CTX_(13000);
+}
+static void run_streaming_actions() {
+    IP_CTX_(14000);
+    ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_RW_ON);
+    switch (variant) {
+        case AG_DB_BIN_NO_CHANGE:    /* no changes */
+        case AG_DB_BIN_OFF_OFF:      /* 0->0*/
+        case AG_DB_BIN_ON_ON:         /* 1->1 */
+            break;
+        case AG_DB_BIN_OFF_ON:       /* 0->1*/
+            pu_log(LL_INFO, "%s: 0->1 - connection case!", __FUNCTION__);
+            if (!ac_start_video()) {
+                pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
+                ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
+            }
+            break;
+        case AG_DB_BIN_ON_OFF:       /* 1->0 */
+            pu_log(LL_DEBUG, "%s: 1->0 - Stop video", __FUNCTION__);
+            ac_stop_video();
+            break;
+        default:
+            pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            break;
+    }
+    if (ag_db_get_int_property(AG_DB_STATE_RW_ON)) { /* Actions for active syteaming */
+        if (!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* No active viwers - stop show */
+            pu_log(LL_DEBUG, "%s: Stop streaming because of zero active viewers.", __FUNCTION__);
+            ac_stop_video();
+            ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
+        }
+    } else {      /* Actions for inactive streaming */
+        if (ag_db_get_int_property(AG_DB_STATE_WS_ON) && ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers - start show */
+            if (!ac_start_video()) {
+                pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
+                ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
+            }
+            else {
+                pu_log(LL_DEBUG, "%s: Start streaming because of acvive viewers = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
+                ag_db_set_int_property(AG_DB_STATE_RW_ON, 1);
+            }
+        }
+    }
+    IP_CTX_(14001);
+}
+static void run_cam_actions() {
+/* Switch On/Off MD */
+/* Switch On/Off SD */
+/* Change Audio sensitivity */
+/* Change Video sensitivity */
+/* Make snapshit */
+    IP_CTX_(15000);
+    ag_db_update_changed_cam_parameters();
+    make_snapshot();
+    IP_CTX_(15001);
+}
+static void send_reports() {
+/* Make changes report */
+    char buf[LIB_HTTP_MAX_MSG_SIZE];
+    cJSON* changes_report = ag_db_get_changes_report();
+    if(changes_report && cJSON_GetArraySize(changes_report)) {
+         /* Send it to the cloud */
+        ao_cloud_msg(ag_getProxyID(), "155", NULL, NULL, ao_cloud_measures(changes_report, ag_getProxyID()), buf, sizeof(buf));
+        pu_queue_push(to_proxy, buf, strlen(buf)+1);
+        /* Send it to WS */
+        send_to_ws(ao_ws_params(changes_report, buf, sizeof(buf)));
+    }
+    if(changes_report) cJSON_Delete(changes_report);
+
 }
 
 static void run_actions() {
@@ -432,22 +408,23 @@ static void run_actions() {
     run_agent_actions();        /* Agent connet/reconnect */
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
-    run_snapshot_actions();     /* make a photo */
-    run_cam_actions();          /* MD/SD on-off; update cam's channges, senr report, clear change flag */
+    run_cam_actions();          /* MD/SD on-off; update cam's channges, make snapshot,...*/
+    send_reports();             /* Send changes report to the cloud and to WS */
+    ag_db_save_persistent();    /* Save persistent data on disk */
+    ag_clear_flags();           /* clear change flags to be prepared to the next cycle */
+    IP_CTX_(17001);
 }
-/*
- * 0 - ERROR
- * 1 - own      "gw_cloudConnection", "filesSent" (from WUD)
- * 2 - cloud    "commands"
- * 3 - WS       "params"
- */
-static int get_protocol_number(msg_obj_t* obj) {
+
+static protocol_type_t get_protocol_number(pu_queue_event_t ev, msg_obj_t* obj) {
     IP_CTX_(18000);
-    if(!obj) return 0;
-    if((cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) || (cJSON_GetObjectItem(obj, "filesSent") != NULL))return 1;
-    if(cJSON_GetObjectItem(obj, "commands") != NULL) return 2;
-    if((cJSON_GetObjectItem(obj, "pingInterval")!=NULL)||(cJSON_GetObjectItem(obj, "params")!=NULL)||(cJSON_GetObjectItem(obj, "viewersCount")!=NULL)) return 3;
-    return 0;
+    if(!obj) return MT_PROTO_UNDEF;
+    if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return MT_PROTO_OWN;
+    if(cJSON_GetObjectItem(obj, "commands") != NULL) return MT_PROTO_CLOUD;
+    if(ev == AQ_FromWS) return MT_PROTO_WS;
+    if(ev == AQ_FromRW) return MT_PROTO_STREAMING;
+    if(ev == AQ_FromCam) return MT_PROTO_EM;
+
+    return MT_PROTO_UNDEF;
 }
 /*
  * TODO Change to common ag_db staff
@@ -484,227 +461,109 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
 /* If we got conn data - Proxy lost connection. So it is possible we could not send files... */
                 send_remaining_files();
             }
-            if(info_changed) ag_db_set_flag_on(AG_DB_CMD_CONNECT_AGENT);
+            if(info_changed) ag_db_set_int_property(AG_DB_STATE_AGENT_ON, 1);
         }
             break;
         default:
             pu_log(LL_INFO, "%s: Message type = %d. Message ignored", AT_THREAD_NAME, data.command_type);
     }
 }
-/*
- * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
- */
-static void process_message(char* msg) {
-    IP_CTX_(20000);
-    msg_obj_t *obj_msg = pr_parse_msg(msg);
-    if (obj_msg == NULL) {
-        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
-        return;
-    }
-    int protocol_number = get_protocol_number(obj_msg);
-    IP_CTX_(20001);
-    if(!protocol_number) {
-        IP_CTX_(20002);
-        pu_log(LL_ERROR, "%s: protocol for %s unrecognized. Message ignored.", __FUNCTION__, msg);
-        IP_CTX_(20003);
-        pr_erase_msg(obj_msg);
-        IP_CTX_(20004);
-        return;
-    }
-    switch (protocol_number) {
-        case 1:     /* Local message from Proxy to Agent */
-            IP_CTX_(20005);
-            process_own_proxy_message(obj_msg);
-            IP_CTX_(20006);
-            break;
-        case 2: {     /* Cloud case */
-            IP_CTX_(20007);
-            int is_ack = ao_proxy_ack_required(obj_msg);
-            IP_CTX_(20008);
-            msg_obj_t* commands = pr_get_cmd_array(obj_msg);
-            IP_CTX_(20009);
-            size_t i;
-            IP_CTX_(20010);
-            for (i = 0; i < pr_get_array_size(commands); i++) {
-                IP_CTX_(20011);
-                msg_obj_t* cmd = pr_get_arr_item(commands, i);
-                IP_CTX_(20012);
-                if(is_ack) send_ACK_to_Proxy(ao_proxy_get_cmd_no(cmd));
-                IP_CTX_(20013);
-                msg_obj_t* params = ao_proxy_get_cloud_params_array(cmd);
-                IP_CTX_(20014);
-                size_t j;
-                IP_CTX_(20015);
-                for(j = 0; j < pr_get_array_size(params); j++) {
-                    IP_CTX_(20016);
-                    msg_obj_t* param = pr_get_arr_item(params, j);
-                    IP_CTX_(20017);
-                    const char* param_name = ao_proxy_get_cloud_param_name(param);
-                    IP_CTX_(20018);
-                    const char* param_value = ao_proxy_get_cloud_param_value(param);
-                    IP_CTX_(20019);
-                    ag_db_store_property(param_name, param_value);
-                    IP_CTX_(20020);
-                }
-            }
+static void process_cloud_message(msg_obj_t* obj_msg) {
+    IP_CTX_(20007);
+    int is_ack = ao_proxy_ack_required(obj_msg);
+    msg_obj_t* commands = pr_get_cmd_array(obj_msg);
+    size_t i;
+    for (i = 0; i < pr_get_array_size(commands); i++) {
+        msg_obj_t* cmd = pr_get_arr_item(commands, i);
+        if(is_ack) send_ACK_to_Proxy(ao_proxy_get_cmd_no(cmd));
+        msg_obj_t* params = ao_proxy_get_cloud_params_array(cmd);
+        size_t j;
+        for(j = 0; j < pr_get_array_size(params); j++) {
+            msg_obj_t* param = pr_get_arr_item(params, j);
+            const char* param_name = ao_proxy_get_cloud_param_name(param);
+            const char* param_value = ao_proxy_get_cloud_param_value(param);
+            ag_db_set_property(param_name, param_value);
         }
-            break;
-        case 3: {   /* WS case */
-            IP_CTX_(20021);
-            msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
-            IP_CTX_(20022);
-            if(result_code) {
-                IP_CTX_(20023);
-                if(result_code->valueint == AO_WS_PING_RC) {
-                    IP_CTX_(20024);
-                    ag_db_set_flag_on(AG_DB_CMD_PONG_REQUEST); /* Ping received - Pong should be sent */
-                    IP_CTX_(20025);
-                }
-                else if((result_code->valueint == AO_WS_THREAD_ERROR)||(result_code->valueint == AO_WS_TO_ERROR)) {
-                    IP_CTX_(20026);
-                    ag_db_set_flag_on(AG_DB_CMD_CONNECT_WS); /* WS thread error - reconnect required */
-                    IP_CTX_(20027);
-                }
-            }
-
+    }
+    IP_CTX_(20008);
+}
+static void process_ws_message(msg_obj_t* obj_msg) {
+    IP_CTX_(20021);
+    msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
+    if(result_code) {
+        if(result_code->valueint == AO_WS_PING_RC) {
+            ag_db_set_int_property(AG_DB_CMD_PONG_REQUEST, 1); /* Ping received - Pong should be sent */
+        }
+        else if((result_code->valueint == AO_WS_THREAD_ERROR)||(result_code->valueint == AO_WS_TO_ERROR)) {
+            ag_db_set_int_property(AG_DB_STATE_WS_ON, 1); /* WS thread error - reconnect required */
+        }
+    }
 /* First, lets store change on viewersCount and  pingInterval (if any). */
-            IP_CTX_(20028);
-            msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
-            IP_CTX_(20029);
-            if(viewers_count) {
-                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
-                IP_CTX_(20030);
-            }
-            IP_CTX_(20031);
-            msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
-            IP_CTX_(20032);
-            if(ping_interval) ag_db_store_int_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valueint);
-            IP_CTX_(20033);
-            msg_obj_t* params = ao_proxy_get_ws_array(obj_msg, "params");
-            IP_CTX_(20034);
-            if(params) {
-                IP_CTX_(20035);
-                size_t i;
-                IP_CTX_(20036);
-                for (i = 0; i < pr_get_array_size(params); i++) {
-                    IP_CTX_(20037);
-                    msg_obj_t *param = pr_get_arr_item(params, i);
-                    IP_CTX_(20038);
-                    const char *param_name = ao_proxy_get_ws_param_name(param);
-                    IP_CTX_(20039);
-                    const char *param_value = ao_proxy_get_ws_param_value(param);
-                    IP_CTX_(20040);
-                    ag_db_store_property(param_name, param_value);
-                    IP_CTX_(20041);
-                }
-            }
-            IP_CTX_(20042);
-            msg_obj_t* viewers = ao_proxy_get_ws_array(obj_msg, "viewers");
-            IP_CTX_(20043);
-            if(viewers) {
-                IP_CTX_(20044);
-                size_t i;
-                IP_CTX_(20045);
-                for (i = 0; i < pr_get_array_size(viewers); i++) {
-                    IP_CTX_(20046);
-                    cJSON* v = cJSON_GetArrayItem(viewers, i);
-                    IP_CTX_(20047);
-                    cJSON* status = cJSON_GetObjectItem(v, "status");
-                    IP_CTX_(20048);
-                    int vc = ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT);
-                    IP_CTX_(20049);
-                    if((status) && (status->type == cJSON_Number)) {
-                        IP_CTX_(20050);
-                        switch (status->valueint) {
-                            case -1:
-                                IP_CTX_(20051);
-                                if(vc--) ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, vc);
-                                IP_CTX_(20052);
-                                break;
-                            case 0:
-                                IP_CTX_(20053);
-                                if(!vc) ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);
-                                IP_CTX_(20054);
-                                break;
-                            case 1:
-                                IP_CTX_(20055);
-                                ag_db_store_int_property(AG_DB_STATE_VIEWERS_COUNT, vc+1);
-                                IP_CTX_(20056);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
-            } /* Work with viewers */
+    msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
+    if(viewers_count) {
+        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
+    }
+    msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
+    if(ping_interval) ag_db_set_int_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valueint);
+    msg_obj_t* params = ao_proxy_get_ws_array(obj_msg, "params");
+    if(params) {
+        size_t i;
+        for (i = 0; i < pr_get_array_size(params); i++) {
+            msg_obj_t *param = pr_get_arr_item(params, i);
+            const char *param_name = ao_proxy_get_ws_param_name(param);
+            const char *param_value = ao_proxy_get_ws_param_value(param);
+            ag_db_set_property(param_name, param_value);
         }
-            IP_CTX_(20057);
-            break;
-        default:
-            IP_CTX_(20058);
-            pu_log(LL_ERROR, "%s: Protocol # %d: unrecognized  message %s. Ignored.", __FUNCTION__, protocol_number, msg);
-            IP_CTX_(20059);
-            break;
     }
-    IP_CTX_(20060);
-    pr_erase_msg(obj_msg);
-    IP_CTX_(20061);
+    msg_obj_t* viewers = ao_proxy_get_ws_array(obj_msg, "viewers");
+    if(viewers) {
+        size_t i;
+        for (i = 0; i < pr_get_array_size(viewers); i++) {
+            cJSON* v = cJSON_GetArrayItem(viewers, (int)i);
+            cJSON* status = cJSON_GetObjectItem(v, "status");
+            int vc = ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT);
+            if((status) && (status->type == cJSON_Number)) {
+                switch (status->valueint) {
+                    case -1:
+                        if(vc--) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, vc);
+                        break;
+                    case 0:
+                        if(!vc) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);
+                        break;
+                    case 1:
+                        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, vc+1);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    } /* Work with viewers */
+    IP_CTX_(20022);
 }
-static void process_rw_message(char* msg) {
-    IP_CTX_(21000);
-  char error_code[10] = {0};
-    char err_message[256] = {0};
-    msg_obj_t *obj_msg = pr_parse_msg(msg);
-    if (obj_msg == NULL) {
-        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
-        return;
-    }
-    msg_obj_t* rc = cJSON_GetObjectItem(obj_msg, "resultCode");
-    if(!rc) {
-        pu_log(LL_ERROR, "%s: Can't process message %s from streaming thread", __FUNCTION__, msg);
-        strncpy(error_code, "internal", sizeof(error_code)-1);
-    }
-    else
-        snprintf(error_code, sizeof(error_code)-1, "%d", rc->valueint);
-
-    snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
-    ac_set_stream_error(err_message);
-/* Set the reconnect flag for streamer */
-    ag_db_set_flag_on(AG_DB_CMD_CONNECT_RW);
-    pr_erase_msg(obj_msg);
-}
-
-static void restart_events_monitor() {
-    IP_CTX_(22000);
-    at_stop_cam_alerts_reader();
-    if(!at_start_cam_alerts_reader()) {
-        pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
-        send_reboot();
-    }
-}
-static void process_alert(char* msg) {
+static void process_em_message(msg_obj_t* obj_msg) {
     IP_CTX_(23000);
-    t_ao_cam_alert data = ao_cam_decode_alert(msg);
+    t_ao_cam_alert data = ao_cam_decode_alert(obj_msg);
     pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            ag_db_store_int_property(AG_DB_STATE_MD_ON, 1);
-            ag_db_store_int_property(AG_DB_STATE_RECORDING, 1);
+            ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_START_SD:
-            ag_db_store_int_property(AG_DB_STATE_SD_ON, 1);
-            ag_db_store_int_property(AG_DB_STATE_RECORDING, 1);
+            ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_STOP_MD:
-            ag_db_store_int_property(AG_DB_STATE_MD_ON, 0);
-            ag_db_store_int_property(AG_DB_STATE_RECORDING, 0);
+            ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
             send_send_file(data);
             break;
         case AC_CAM_STOP_SD:
-            ag_db_store_int_property(AG_DB_STATE_SD_ON, 0);
-            ag_db_store_int_property(AG_DB_STATE_RECORDING, 0);
+            ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
             send_send_file(data);
             break;
@@ -722,6 +581,59 @@ static void process_alert(char* msg) {
             pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Ignored", data.cam_event);
             break;
     }
+}
+static void process_streaming_message(msg_obj_t* obj_msg) {
+    IP_CTX_(21000);
+    char error_code[10] = {0};
+    char err_message[256] = {0};
+    msg_obj_t* rc = cJSON_GetObjectItem(obj_msg, "resultCode");
+    if(!rc) {
+        char* txt = cJSON_PrintUnformatted(obj_msg);
+        pu_log(LL_ERROR, "%s: Can't process message %s from streaming thread", __FUNCTION__, (txt)?txt:"Can't convert it to text");
+        if(txt)free(txt);
+        strncpy(error_code, "internal", sizeof(error_code)-1);
+    }
+    else
+        snprintf(error_code, sizeof(error_code)-1, "%d", rc->valueint);
+
+    snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
+    ac_set_stream_error(err_message);
+/* Set the reconnect flag for streamer */
+    ag_db_set_int_property(AG_DB_CMD_CONNECT_RW, 1);
+    IP_CTX_(21001);
+}
+/*
+ * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
+ */
+static void process_message(pu_queue_event_t ev, char* msg) {
+    IP_CTX_(20000);
+    msg_obj_t *obj_msg = pr_parse_msg(msg);
+    if (obj_msg == NULL) {
+        pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
+        return;
+    }
+    protocol_type_t protocol_number = get_protocol_number(ev, obj_msg);
+    switch (protocol_number) {
+        case MT_PROTO_OWN:
+            process_own_proxy_message(obj_msg);
+            break;
+        case MT_PROTO_CLOUD:
+            process_cloud_message(obj_msg);
+            break;
+        case MT_PROTO_WS:
+            process_ws_message(obj_msg);
+            break;
+        case MT_PROTO_EM:
+            process_em_message(obj_msg);
+            break;
+        case MT_PROTO_STREAMING:
+            process_streaming_message(obj_msg);
+            break;
+        default:
+            pu_log(LL_ERROR, "%s: Unsupported protocol type %d", __FUNCTION__, protocol_number);
+            break;
+    }
+    pr_erase_msg(obj_msg);
 }
 
 static int main_thread_startup() {
@@ -823,108 +735,57 @@ void at_main_thread() {
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
     while(!main_finish) {
-        IP_CTX_(26001);
         size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
-        IP_CTX_(26002);
         pu_queue_event_t ev;
-        IP_CTX_(26003);
+        pu_queue_t** q=NULL;
          switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
-                IP_CTX_(26004);
-                while(pu_queue_pop(from_poxy, mt_msg, &len)) {
-                    IP_CTX_(26005);
-                    pu_log(LL_DEBUG, "%s: got message from the Proxy %s", AT_THREAD_NAME, mt_msg);
-                    IP_CTX_(26006);
-                    process_message(mt_msg);
-                    IP_CTX_(26007);
-                    len = sizeof(mt_msg);
-                    IP_CTX_(26008);
-                 }
-                 IP_CTX_(26009);
-                 break;
+                q = &from_poxy;
+                break;
             case AQ_FromWS:
-                IP_CTX_(26010);
-                while(pu_queue_pop(from_ws, mt_msg, &len)) {
-                    IP_CTX_(26011);
-                    pu_log(LL_DEBUG, "%s: got message from the Web Socket interface %s, len = %d", AT_THREAD_NAME, mt_msg, len);
-                    IP_CTX_(26012);
-                    process_message(mt_msg);
-                    IP_CTX_(26013);
-                    len = sizeof(mt_msg);
-                    IP_CTX_(26014);
-                }
-                 IP_CTX_(26015);
+                q = &from_ws;
                 break;
             case AQ_FromRW:
-                IP_CTX_(26016);
-                while(pu_queue_pop(from_stream_rw, mt_msg, &len)) {
-                    IP_CTX_(26017);
-                    pu_log(LL_DEBUG, "%s: got message from the streaming threads %s", AT_THREAD_NAME, mt_msg);
-                    IP_CTX_(26018);
-                    process_rw_message(mt_msg);
-                    IP_CTX_(26019);
-                    len = sizeof(mt_msg);
-                    IP_CTX_(26020);
-                }
-                 IP_CTX_(26021);
+                q = &from_stream_rw;
                 break;
             case AQ_FromCam:
-                IP_CTX_(26022);
-                while(pu_queue_pop(from_cam, mt_msg, &len)) {
-                    IP_CTX_(26023);
-                    pu_log(LL_DEBUG, "%s: got message from the Cam async interface %s", AT_THREAD_NAME, mt_msg);
-                    IP_CTX_(26024);
-                    process_alert(mt_msg);
-                    IP_CTX_(26025);
-                    len = sizeof(mt_msg);
-                    IP_CTX_(26026);
-                }
-                 IP_CTX_(26027);
+                q = &from_cam;
                 break;
-            case AQ_Timeout:
-                IP_CTX_(26028);
-/*                pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME); */
-                break;
-            case AQ_STOP:
-                IP_CTX_(26029);
-                main_finish = 1;
-                 IP_CTX_(26030);
-                pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
-                 IP_CTX_(26031);
-                break;
-            default:
-                IP_CTX_(26032);
-                pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
-                 IP_CTX_(26033);
+             case AQ_Timeout:
+                 q = NULL;
                  break;
-        }
+             case AQ_STOP:
+                 q = NULL;
+                 main_finish = 1;
+                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
+                 break;
+             default:
+                 q = NULL;
+                 pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
+                 break;
+         }
+         if(q) {
+             while(pu_queue_pop(*q, mt_msg, &len)) {
+                 pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);
+                 process_message(ev, mt_msg);
+                 len = sizeof(mt_msg);
+              }
+         }
          /* Place for own periodic actions */
         /*1. Wathchdog */
-        IP_CTX_(26034);
         if(lib_timer_alarm(wd_clock)) {
-            IP_CTX_(26035);
-            ag_db_set_flag_on(AG_DB_CMD_SEND_WD_AGENT);
-            IP_CTX_(26036);
+            ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 1);
             lib_timer_init(&wd_clock, ag_getAgentWDTO());
-            IP_CTX_(26037);
         }
         /*2. Ask viewer about active viewers */
         if(lib_timer_alarm(va_clock)) {
-            IP_CTX_(26038);
-            ag_db_set_flag_on(AG_DB_CMD_ASK_4_VIEWERS_WS);
-            IP_CTX_(26039);
+            ag_db_set_int_property(AG_DB_CMD_ASK_4_VIEWERS_WS, 1);
             lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
-            IP_CTX_(26040);
         }
 /* Interpret changes made in properties */
-        IP_CTX_(26041);
         run_actions();
-        IP_CTX_(26042);
     }
-    IP_CTX_(26043);
     main_thread_shutdown();
-    IP_CTX_(26044);
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
-    IP_CTX_(26045);
     pthread_exit(NULL);
 }

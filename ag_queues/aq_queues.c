@@ -28,6 +28,12 @@
 static pu_queue_t* qu_arr[AQ_MAX_QUEUE-AQ_MIN_QUEUE+1];         /* Proxy queues pool */
 static pthread_mutex_t  own_mutex=PTHREAD_MUTEX_INITIALIZER;    /* Pool concurrent use protection */
 
+static const char* EV_ARR[sizeof(pu_queue_event_t)*8] = {
+        "Timeout", "FromProxy", "ToProxy", "FromCam", "FromWS", "ToWUD", "FromStreaming", "ToFilesSender",
+        "08", "09", "10", "11", "12", "13", "14",
+        "Stop"
+};
+
 /******************************************************************************
  * Public functions implementation
 */
@@ -62,5 +68,10 @@ pu_queue_t* aq_get_gueue(int que_number) {
     pu_queue_t* ret = qu_arr[que_number-AQ_MIN_QUEUE];
     pthread_mutex_unlock(&own_mutex);
     return ret;
+}
+
+const char* aq_event_2_char(pu_queue_event_t ev) {
+    if((ev < 0) || (ev >= sizeof(pu_queue_event_t)*8)) return "Undefined";
+    return EV_ARR[ev];
 }
 

@@ -20,6 +20,13 @@
  Module contains all interfaces and datatypes for properties dB
  This is common data & mapping for the cloud & the cam properties
  All functions except load/unload are thread-protected!
+ Rule of use in outer space:
+    1. Set/update values
+    2. Make actions accordingly to dB values
+    3. Set new values to the camera (if any) (cam_method is not NULL && changed == 1)
+    4. Save new persistently kept data (if any) (persistent == 1 && changed == 1)
+    3. Make reports to the cloud/WS (in_changes_report == 1 && change_flag == 1)
+    4. Clear flags (change_flag=changed=0;)
 */
 
 #ifndef IPCAMTENVIS_AG_DB_MGR_H
@@ -52,12 +59,6 @@ cJSON* ag_db_get_changes_report();
  * Create JSON report same format as above for all properties has to be reported at startup phase
  */
 cJSON* ag_db_get_startup_report();
-
-/* Work with property's flags */
-/* property's flag value set to 1 */
-void ag_db_set_flag_on(const char* property_name);
-/* property's flag value set to 0 */
-void ag_db_set_flag_off(const char* property_name);
 /*
  * return property's flag value
  */
@@ -67,30 +68,52 @@ int ag_db_get_flag(const char* property_name);
  * Return 0 if no change; return 1 if proprrty changed
  * !Set the property's flag ON in any case!.
  */
-int ag_db_store_property(const char* property_name, const char* property_value);
-int ag_db_store_int_property(const char* property_name, int property_value);
+int ag_db_set_property(const char* property_name, const char* property_value);
+int ag_db_set_int_property(const char* property_name, int property_value);
 
 int ag_db_get_int_property(const char* property_name);
 /* Cloud-Cam parameter set: set on cam, re-read and store into DB
  * If re-read value differs - change_flag On if same after update - Off
  */
 int ag_db_update_changed_cam_parameters();
+/*
+ * Save persistent chabges
+ */
+void ag_db_save_persistent();
+/*
+ * Reset all flags at the end of cycle
+*/
+void ag_clear_flags();
+/*
+ * Binary properties analysis
+ */
+typedef enum {
+    AG_DB_BIN_UNDEF,
+    AG_DB_BIN_NO_CHANGE,    /* no changes */
+    AG_DB_BIN_OFF_OFF,      /* 0->0*/
+    AG_DB_BIN_OFF_ON,       /* 0->1*/
+    AG_DB_BIN_ON_OFF,       /* 1->0 */
+    AG_DB_BIN_ON_ON         /* 1->1 */
+} ag_db_bin_state_t;
+
+ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
+
 
 
 /**************** Property names definitions */
 /* AG_DB_OWN */
 #define AG_DB_STATE_AGENT_ON        "state_agent_on"
-#define AG_DB_CMD_CONNECT_AGENT     "connect_agent_cmd"
+#define AG_DB_CMD_CONNECT_AGENT     "connect_agent_cmd"     /* obsolete */
 #define AG_DB_CMD_SEND_WD_AGENT     "send_wd_agent_cmd"
 
 #define AG_DB_STATE_WS_ON           "state_ws_on"
-#define AG_DB_CMD_CONNECT_WS        "connect_ws_cmd"
+#define AG_DB_CMD_CONNECT_WS        "connect_ws_cmd"        /* obsolete */
 #define AG_DB_CMD_ASK_4_VIEWERS_WS  "ask_4_viewers_cmd"
 #define AG_DB_CMD_PONG_REQUEST      "send_pong_ws_cmd"
 
 #define AG_DB_STATE_RW_ON           "state_rw_on"
-#define AG_DB_CMD_CONNECT_RW        "connect_rw_cmd"
-#define AG_DB_CMD_DISCONNECT_RW     "disconnect_rw_cmd"
+#define AG_DB_CMD_CONNECT_RW        "connect_rw_cmd"        /* obsolete */
+#define AG_DB_CMD_DISCONNECT_RW     "disconnect_rw_cmd"     /* obsolete */
 
 /* AG_DB_CAM */
 #define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"

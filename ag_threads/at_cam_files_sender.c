@@ -588,7 +588,6 @@ on_error:
  * In ultimate case all this crap will be deleted after DEFAULT_TO_FOR_DIR_CLEANUP timeout
  */
 static ac_cam_resend_queue_t* resend(ac_cam_resend_queue_t* q) {
-    pu_log(LL_INFO, "%s: Resend files", __FUNCTION__);
     if(!q) {
         pu_log(LL_ERROR, "%s: Internal error: Resend Queue is NULL!", __FUNCTION__);
         return q;

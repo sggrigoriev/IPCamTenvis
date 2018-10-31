@@ -20,6 +20,7 @@
 */
 
 #include <memory.h>
+#include <pthread.h>
 #include <curl/curl.h>
 #include <ctype.h>
 
@@ -37,6 +38,8 @@
 #define AC_HI_RES           "11"
 #define AC_HDR_ONLY         1
 #define AC_HDR_WITH_BODY    0
+
+static pthread_mutex_t ac_alfapro_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
     CURL* h;
@@ -138,45 +141,6 @@ static const char* make_il_transport_string(char* buf, size_t size, int media_ty
 
     return buf;
 }
-static const char* make_rt_transport_string(char* buf, size_t size, int port) {
-    char s_port1[20];
-    char s_port2[20];
-
-    sprintf(s_port1, "%d", port);
-    sprintf(s_port2, "%d", port+1);
-
-    buf[0] = '\0';
-
-    if(!au_strcpy(buf, "RTP/AVP/UDP;unicast;client_port=", size)) return NULL;
-    if(!au_strcat(buf, s_port1, size)) return NULL;
-    if(!au_strcat(buf, "-", size)) return NULL;
-    if(!au_strcat(buf, s_port2, size)) return NULL;
-
-    return buf;
-}
-
-static int get_media_port(const char* msg) {
-    int pos =  au_findSubstr(msg, AC_RTSP_SERVER_PORT, AU_NOCASE);
-    if(pos < 0) return 0;
-    char num[20] = {0};
-    au_getNumber(num, sizeof(num), msg+pos+strlen(AC_RTSP_SERVER_PORT));
-    if(!strlen(num)) return 0;
-
-    return atoi(num);
-}
-static const char* get_source_ip(char* ip, size_t size, const char* msg) {
-    int pos = au_findSubstr(msg, AC_RTSP_SOURCE_IP, AU_NOCASE);
-    ip[0] = '\0';
-    if (pos < 0) return ip;
-    int start = pos + strlen(AC_RTSP_SOURCE_IP);
-    int finish = au_findFirstOutOfSet(msg + start, "0123456789.") + start;
-    if (finish < 0) return ip;
-    if ((finish - start + 1) > size) return ip;
-    memcpy(ip, msg + start, finish - start);
-    ip[finish - start] = '\0';
-    return ip;
-}
-
 /*************************************************************************/
 int ac_alfaProInit(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_CAMERA, 0);
@@ -214,7 +178,7 @@ int ac_alfaProInit(t_at_rtsp_session* sess) {
 #endif
     if(res = curl_easy_setopt(cs->h, CURLOPT_URL, sess->url), res != CURLE_OK) goto on_error;
 
-    if(res = curl_easy_setopt(cs->h, CURLOPT_VERBOSE, 1L), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(cs->h, CURLOPT_VERBOSE, 0L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(cs->h, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;
     if (res = curl_easy_setopt(cs->h, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
@@ -265,6 +229,7 @@ void ac_alfaProDown(t_at_rtsp_session* sess) {
 
 int ac_alfaProOptions(t_at_rtsp_session* sess, int suppress_info) {
     CURLcode res = CURLE_OK;
+    pthread_mutex_lock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
@@ -279,14 +244,17 @@ int ac_alfaProOptions(t_at_rtsp_session* sess, int suppress_info) {
         pu_log(LL_INFO, "%s: Result = \n%s", __FUNCTION__, cs->header_buf.buf);
     reset_curl_buffers(cs);
 
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 1;
 on_error:
     err_report(res);
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 0;
 }
 
 int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
+    pthread_mutex_lock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
     CURLcode res = CURLE_OK;
 
@@ -310,25 +278,25 @@ int ac_alfaProDescribe(t_at_rtsp_session* sess, char* descr, size_t size) {
     if(!ac_rtsp_set_setup_urls(descr, sess, AT_RTSP_REPLACE)) goto on_error;
     if(sess->audio_url) pu_log(LL_DEBUG, "%s: audio URL = %s", __FUNCTION__, sess->audio_url);
     if(sess->video_url) pu_log(LL_DEBUG, "%s: video URL = %s", __FUNCTION__, sess->video_url);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 1;
 on_error:
     err_report(res);
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 0;
 }
 
 int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
     CURLcode res = CURLE_OK;
+    pthread_mutex_lock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
     char transport[AC_RTSP_TRANSPORT_SIZE];
 
-    if(ag_isCamInterleavedMode())
-        make_il_transport_string(transport, sizeof(transport), media_type);
-    else
-        make_rt_transport_string(transport, sizeof(transport), (media_type == AC_RTSP_VIDEO_SETUP)?sess->media.rt_media.video.dst.port.rtp:sess->media.rt_media.audio.dst.port.rtp);
+    make_il_transport_string(transport, sizeof(transport), media_type);
 
     if(media_type == AC_RTSP_VIDEO_SETUP) {
         if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_STREAM_URI, sess->video_url), res != CURLE_OK) goto on_error;
@@ -345,41 +313,19 @@ int ac_alfaProSetup(t_at_rtsp_session* sess, int media_type) {
 
     pu_log(LL_INFO, "%s: Header = \n%s", __FUNCTION__, cs->header_buf.buf);
 
-    if(!ag_isCamInterleavedMode()) {
-        int port = get_media_port(cs->header_buf.buf);
-        if (!port) {
-            pu_log(LL_ERROR, "%s: Can not get media port from camera transport string", __FUNCTION__);
-            return 0;
-        }
-
-        char lip[20] = {0};
-        get_source_ip(lip, sizeof(lip), cs->header_buf.buf);
-
-        char *ipd = au_strdup(strlen(lip) ? lip : ag_getCamIP());
-        if (!ipd) {
-             pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
-            return 0;
-        }
-        if (media_type == AC_RTSP_VIDEO_SETUP) {
-            sess->media.rt_media.video.src.port.rtp = port;
-            sess->media.rt_media.video.src.port.rtcp = port + 1;
-            sess->media.rt_media.video.src.ip = ipd;
-        } else {  /* AC_ALFA_AUDIO_SETUP */
-            sess->media.rt_media.audio.src.port.rtp = port;
-            sess->media.rt_media.audio.src.port.rtcp = port + 1;
-            sess->media.rt_media.audio.src.ip = ipd;
-        }
-    }
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 1;
 on_error:
     err_report(res);
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 0;
 }
 
 int ac_alfaProPlay(t_at_rtsp_session* sess) {
     CURLcode res = CURLE_OK;
+    pthread_mutex_lock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
@@ -395,42 +341,54 @@ int ac_alfaProPlay(t_at_rtsp_session* sess) {
     curl_easy_setopt(cs->h, CURLOPT_RANGE, NULL);
 
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 1;
 on_error:
     err_report(res);
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 0;
 }
 
 int ac_alfaProTeardown(t_at_rtsp_session* sess) {
     CURLcode res = CURLE_OK;
+    pthread_mutex_lock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
 
     AT_DT_RT(sess->device, AC_CAMERA, 0);
 
-    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_TEARDOWN), res != CURLE_OK) return err_report(res);
+    if (res = curl_easy_setopt(cs->h, CURLOPT_RTSP_REQUEST, (long)CURL_RTSPREQ_TEARDOWN), res != CURLE_OK) goto on_error;
 
     reset_curl_buffers(cs);
     res = curl_easy_perform(cs->h);
 
 
-    if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) return err_report(res);
+    if(ac_http_analyze_perform(res, cs->h, __FUNCTION__) != CURLE_OK) goto on_error;
 
     reset_curl_buffers(cs);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return 1;
+on_error:
+    reset_curl_buffers(cs);
+    err_report(res);
+    pthread_mutex_unlock(&ac_alfapro_mutex);
+    return 0;
 }
 
 int getAlfaProConnSocket(t_at_rtsp_session* sess) {
     AT_DT_RT(sess->device, AC_CAMERA, -1);
 
     CURLcode res = CURLE_OK;
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     t_curl_session* cs = sess->session;
 
     curl_socket_t sockfd;
 /* Extract the socket from the curl handle */
     if(res = curl_easy_getinfo(cs->h, CURLINFO_ACTIVESOCKET, &sockfd), res != CURLE_OK) {
         err_report(res);
+        pthread_mutex_unlock(&ac_alfapro_mutex);
         return -1;
     }
+    pthread_mutex_unlock(&ac_alfapro_mutex);
     return sockfd;
 }

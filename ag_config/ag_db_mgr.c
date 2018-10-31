@@ -111,63 +111,64 @@ static int MS_cam_2_cloud(int cam_value) {
 
 typedef struct {
 /*01*/  char* name;             /*Cloud or own name */
-/*02*/  int value;            /* Could not be used if flag only. For OWN flags(commands) */
-/*03*/  int change_flag;          /* Changed by store_property(), by update_cam_aparams() for camera parameters only, by own logic using set_flag_on/off */
+/*02*/  int value;              /* Value */
+/*03*/  int change_flag;        /* Value was updated. Maybe to the same value. */
 
 /*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
-/*05*/  int changed;            /* 1 if value changed and included in changes report. Set to 0 in ag_db_get_startup_report() call */
-/*06*/  int in_changes_report;  /* 1: Should be taken for changes report to WS if "change_flag == 1*/
+/*05*/  int changed;            /* Value was changed, i.e. new value <> old one */
+/*06*/  int in_changes_report;  /* Value sohuld be included into WS/cloud report */
 
-/*07*/  int updated;            /* 1 if updated and persistent == 1 Set to 0 after ag_save_cam_properties() call */
-/*08*/  int persistent;         /* 1 if has to be stored on disk */
+/*07*/  int persistent;         /* Should be persistently kept */
 
-/*09*/  int default_value;
+/*08*/  int default_value;
 
-/*10*/  out_t cloud_cam_converter;  /* Converts value to cam_value Could be NULL */
-/*11*/  out_t cam_cloud_converter;  /* Converts cam_value to value Could be NULL */
-/*12*/  out_t cam_method;           /* Function to take param from camera and return back after re-read(see ac_cam.h) */
+/*09*/  out_t cloud_cam_converter;  /* Converts value to cam_value Could be NULL */
+/*10*/  out_t cam_cloud_converter;  /* Converts cam_value to value Could be NULL */
+/*11*/  out_t cam_method;           /* Function to take param from camera and return back after re-read(see ac_cam.h) */
 } ag_db_record_t;
 
 #define AG_FIRST_CAM_PAR_IDX 10 /* AG_DB_STATE_VIEWERS_COUNT */
 
 static const ag_db_record_t SCHEME[] = {
-/*  1                       2   3   4   5   6   7   8   9   10                   11                  12  */
-/*  name                    val chf str chd chr upd prs dfv clcam               camcl               camm */
-{AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+/*  1                       2   3   4   5   6    8   9   10                   11                  12  */
+/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
+{AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 
-{AG_DB_STATE_WS_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_WS,      0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_ASK_4_VIEWERS_WS,0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_PONG_REQUEST,    0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_WS_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_CONNECT_WS,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_ASK_4_VIEWERS_WS,0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_PONG_REQUEST,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 
-{AG_DB_STATE_RW_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RW_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 /* Cam-related properties start from here */
-{AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
-{AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  0,  1,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD,            0,  0,  1,  0,  0,  0,  1,  0,  NULL,               NULL,               ac_set_md},
-{AG_DB_STATE_SD,            0,  0,  1,  0,  0,  0,  1,  0,  NULL,               NULL,               ac_set_sd},
-{AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  0,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
-{AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  0,  1,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  0,  1,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
-{AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  0,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  0,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity}
-/*  name                    val chf str chd chr upd prs dfv clcam               camcl               camm */
-/*  1                       2   3   4   5   6   7   8   9   10                  11                  12   */
+/*  1                       2   3   4   5   6    8   9   10                   11                  12  */
+/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
+{AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
+{AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_md},
+{AG_DB_STATE_SD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_sd},
+{AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
+{AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
+{AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity}
+/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
+/*  1                       2   3   4   5   6   8   9   10                  11                  12   */
 };
 
 static ag_db_record_t *IMDB = 0;
@@ -252,10 +253,12 @@ static int find_param(const char* name) {
 /*
  * Set change_flag & updated flags unconditionally!
  */
-static void replace_int_param_value(int idx, int value) {
-    IMDB[idx].value = value;
-    if(IMDB[idx].in_changes_report) IMDB[idx].changed = 1;
-    if(IMDB[idx].persistent) IMDB[idx].updated = 1;
+static void replace_int_param_value(int idx, int new_value) {
+    if(IMDB[idx].value != new_value) {
+        IMDB[idx].value = new_value;
+        IMDB[idx].changed = 1;
+    }
+    IMDB[idx].change_flag = 1;
 }
 static void replace_param_value(int idx, const char* value) {
     if(!value) return;
@@ -369,13 +372,14 @@ static int update_persistent_store() {
  */
 static int sync_camera_param(int idx) {
     if(!IMDB[idx].cam_method) return 0; /* Not a cam parameter */
-
+/* Get stored in dB */
     int cam_value = (IMDB[idx].cloud_cam_converter)?IMDB[idx].cloud_cam_converter(IMDB[idx].value):IMDB[idx].value;
-
+/* Set value on camera and get back the result. Could be different from expected  */
     cam_value = IMDB[idx].cam_method(cam_value);
-
+/* Convert Cam's one to the coud (IMDB) one */
     int new_cloud_value =(IMDB[idx].cam_cloud_converter)?IMDB[idx].cam_cloud_converter(cam_value):cam_value;
-    if(new_cloud_value != IMDB[idx].value) {
+/* Set it back to IMDB */
+    if(new_cloud_value != IMDB[idx].value) {            /* To avoid the change_flag raise */
         replace_int_param_value(idx, new_cloud_value);
     }
     return new_cloud_value;
@@ -457,19 +461,18 @@ static void add_version(cJSON* report) {
 }
 /*
  * return cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
- * NB! Clear change_flag!
 */
 cJSON* ag_db_get_changes_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
     pthread_mutex_lock(&local_mutex);
         for(i = 0; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].in_changes_report && IMDB[i].changed) {
+            if(IMDB[i].in_changes_report && IMDB[i].change_flag) {
                 add_reported_property(rep, IMDB[i].name, IMDB[i].value);
-                IMDB[i].changed = 0;
             }
         }
     pthread_mutex_unlock(&local_mutex);
+
     if(cJSON_GetArraySize(rep)) return rep;
 on_error:
     if(rep)cJSON_Delete(rep);
@@ -489,31 +492,13 @@ cJSON* ag_db_get_startup_report() {
             free(msg);
         }
     pthread_mutex_unlock(&local_mutex);
+
     if(cJSON_GetArraySize(rep)) return rep;
 on_error:
     if(rep) cJSON_Delete(rep);
     return NULL;
 }
 
-
-static void set_flag(const char* property_name, int value) {
-    int pos = find_param(property_name);
-    if(pos < 0) return;
-    IMDB[pos].change_flag = value;
-}
-/* Work with property's flags */
-/* property's flag value set to 1 */
-void ag_db_set_flag_on(const char* property_name) {
-    pthread_mutex_lock(&local_mutex);
-        set_flag(property_name, 1);
-    pthread_mutex_unlock(&local_mutex);
-}
-/* property's flag value set to 0 */
-void ag_db_set_flag_off(const char* property_name) {
-    pthread_mutex_lock(&local_mutex);
-        set_flag(property_name, 0);
-    pthread_mutex_unlock(&local_mutex);
-}
 /*
  * return property's flag value
  */
@@ -527,27 +512,25 @@ int ag_db_get_flag(const char* property_name) {
     return ret;
 }
 /*
- * Return 0 if no change; return 1 if proprrty changed
+ * Return 0 if no change; return 1 if property changed
  * !Set the property's flag ON anyway.
  */
-int ag_db_store_int_property(const char* property_name, int property_value) {
+int ag_db_set_int_property(const char* property_name, int property_value) {
     int ret = 0;
     pthread_mutex_lock(&local_mutex);
         int pos = find_param(property_name);
         if(pos < 0)
             ret = 0;
-        else if(property_value != IMDB[pos].value) {
+        else {
             replace_int_param_value(pos, property_value);
-            IMDB[pos].change_flag = 1;
-            if(IMDB[pos].persistent) update_persistent_store();
-            ret = 1;
+            ret = IMDB[pos].changed;
         }
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }
-int ag_db_store_property(const char* property_name, const char* property_value) {
+int ag_db_set_property(const char* property_name, const char* property_value) {
     int val = char2int(property_value);
-    return ag_db_store_int_property(property_name, val);
+    return ag_db_set_int_property(property_name, val);
 
 }
 int ag_db_get_int_property(const char* property_name) {
@@ -570,13 +553,58 @@ int ag_db_update_changed_cam_parameters() {
     int i;
     pthread_mutex_lock(&local_mutex);
         for(i = AG_FIRST_CAM_PAR_IDX; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].change_flag) {
+            if(IMDB[i].changed) {
                 sync_camera_param(i);
-                IMDB[i].change_flag = 0;    /* Flag could be cleared - these are camera parameters only! */
             }
         }
     pthread_mutex_unlock(&local_mutex);
     return 1;
+}
+
+/*
+ * Save persistent chabges
+ */
+void ag_db_save_persistent() {
+    int i;
+    pthread_mutex_lock(&local_mutex);
+        for(i = 0; i < NELEMS(SCHEME); i++) {
+            if(IMDB[i].persistent && IMDB[i].changed) {
+                update_persistent_store();
+                break;
+            }
+        }
+    pthread_mutex_unlock(&local_mutex);
+}
+/*
+ * Reset all flags at the end of cycle
+*/
+void ag_clear_flags() {
+    int i;
+    pthread_mutex_lock(&local_mutex);
+        for(i = 0; i < NELEMS(SCHEME); i++) {
+            IMDB[i].changed = 0;
+            IMDB[i].change_flag = 0;
+        }
+    pthread_mutex_unlock(&local_mutex);
+}
+
+ag_db_bin_state_t ag_db_bin_anal(const char* property_name) {
+    ag_db_bin_state_t ret = AG_DB_BIN_UNDEF;
+    pthread_mutex_lock(&local_mutex);
+    int i = find_param(property_name);
+    if(i < 0) goto on_exit;
+    int value = IMDB[i].value;
+    int changed = IMDB[i].changed;
+    int change_flag = IMDB[i].change_flag;
+    if(!changed && !change_flag) {ret = AG_DB_BIN_NO_CHANGE; goto on_exit;}
+    if(!value && change_flag) {ret = AG_DB_BIN_OFF_OFF; goto on_exit;}      /* 0->0 */
+    if(value && changed) {ret = AG_DB_BIN_OFF_ON; goto on_exit;}            /* 0->1 */
+    if(!value && changed) {ret = AG_DB_BIN_ON_OFF; goto on_exit;}           /* 1->0 */
+    if(value && change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}         /* 1->1 */
+
+on_exit:
+    pthread_mutex_unlock(&local_mutex);
+    return ret;
 }
 
 

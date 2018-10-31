@@ -46,4 +46,6 @@ void aq_erase_queues();
  */
 pu_queue_t* aq_get_gueue(int que_number);
 
+const char* aq_event_2_char(pu_queue_event_t ev);
+
 #endif /* IPCAMTENVIS_AQ_QUEUES_H */

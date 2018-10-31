@@ -90,7 +90,7 @@
 #define DEFAULT_TO_FOR_FILES_RESEND 30
 #define DEFAULT_TO_AR_PING  30                      /* Alerts reader TO */
 
-#define DEFAULT_DB_PATH     "./ipcam_db_stor.txt"
+#define DEFAULT_DB_PATH     "/mnt/mtd/cfg/ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
 #define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
