@@ -291,7 +291,8 @@ static void run_ws_actions() {
             if (!ac_connect_video()) {
                 pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
                 ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
-            } else {
+            }
+            else {
                 ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
             }
             break;
@@ -334,6 +335,17 @@ static void run_ws_actions() {
     }
     IP_CTX_(13000);
 }
+static void switch_streaming_on() {
+    if (!ac_start_video()) {
+        pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
+        ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
+    }
+    else {
+        pu_log(LL_DEBUG, "%s: Start streaming because of acvive viewers = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
+        ag_db_set_int_property(AG_DB_STATE_RW_ON, 1);
+        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+    }
+}
 static void run_streaming_actions() {
     IP_CTX_(14000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_RW_ON);
@@ -365,14 +377,15 @@ static void run_streaming_actions() {
         }
     } else {      /* Actions for inactive streaming */
         if (ag_db_get_int_property(AG_DB_STATE_WS_ON) && ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers - start show */
-            if (!ac_start_video()) {
-                pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
-                ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
-            }
-            else {
-                pu_log(LL_DEBUG, "%s: Start streaming because of acvive viewers = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
-                ag_db_set_int_property(AG_DB_STATE_RW_ON, 1);
-            }
+            switch_streaming_on();
+        }
+        switch(ag_db_bin_anal(AG_DB_STATE_STREAM_STATUS)) {
+            case AG_DB_BIN_ON_ON:
+            case AG_DB_BIN_OFF_ON:
+                switch_streaming_on();
+                break;
+            default:
+                break;
         }
     }
     IP_CTX_(14001);
