@@ -159,7 +159,7 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               ac_set_audio},
 {AG_DB_STATE_VIDEO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */

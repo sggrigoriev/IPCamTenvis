@@ -44,11 +44,13 @@ const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t e
 #define AO_CAM_CMD_MD       2
 #define AO_CAM_CMD_SD       3
 #define AO_CAM_CMD_TIME     4
+#define AO_CAM_CMD_CFGREC   5
 
 typedef enum {
     AO_CAM_PAR_UNDEF,
     AO_CAM_PAR_MD_SENS, AO_CAM_PAR_MD_ON,
     AO_CAM_PAR_SD_SENS, AO_CAM_PAR_SD_ON,
+    AO_CAM_PAR_CFGREC_AUDIO_ON,
     AO_CAM_PAR_SIZE
 } user_par_t;
 
@@ -58,6 +60,8 @@ typedef enum {EP_UNDEFINED,
     EP_DEALMODE, EP_ENABLE, EP_SESETIVITY,
     EP_RECT0, EP_RECT1, EP_RECT2, EP_RECT3,
     EP_CHN,
+/* CFGREC */
+    EP_SIZELMT, EP_TIMELMT, EP_VSTRM, EP_ALRMTRGREC, EP_SNAP_INSTEAD, EP_RECORD_AUDIO, EP_SNAP_INTERVAL,
     EP_SIZE
 } par_t;
 

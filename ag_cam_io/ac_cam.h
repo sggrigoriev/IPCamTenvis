@@ -103,6 +103,7 @@ int ac_cam_make_snapshot(const char* full_path);
 /* on = 1 set On, set = 0 set Off */
 int ac_set_md(int on);
 int ac_set_sd(int on);
+int ac_set_audio(int on);
 
 
 /*
@@ -110,6 +111,7 @@ int ac_set_sd(int on);
  */
 int ac_set_sd_sensitivity(int value);
 int ac_set_md_sensitivity(int value);
+
 
 
 #endif /* IPCAMTENVIS_AC_CAM_H */

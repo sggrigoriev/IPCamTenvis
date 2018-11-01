@@ -38,25 +38,11 @@
 #define CMD_MD_NAME     "cfgalertmd"
 #define CMD_TIME_NAME   "timecfg"
 #define CMD_SNAP_NAME   "snapshot?&strm=0&q=0"
+#define CMD_CFGREC_NAME "cfgrec"
 
 #define PAR_READ    "?list=1"
 /* Cam's parameters names */
-#define PAR_SD_ENABLE_NAME      "enable"
-#define PAR_SENSITIVITY_NAME    "sensitivity"
-#define TAPE_CH_NAME            "tapech"
-#define REC_CH_NAME             "recch"
-#define DEAL_MODE_NAME          "dealmode"
-#define TS0_NAME                "ts0"
-#define TS1_NAME                "ts1"
-#define TS2_NAME                "ts2"
-#define TS3_NAME                "ts3"
-#define CH_NAME                 "chn"
-#define RECT0_NAME              "rect0"
-
 #define PAR_MDSD_ON         "+ 0; 00:00:00-23:59:59"
-#define PAR_MDSD_OFF        "ts0="
-#define PAR_MD_RECT0        "rect0=0,0,999,999, 5"
-#define PAR_SD_SENSITIVITY  PAR_SENSITIVITY_NAME "=5"
 
 static const char* PAR_ARRAY[EP_SIZE] = {
     "???",
@@ -64,7 +50,9 @@ static const char* PAR_ARRAY[EP_SIZE] = {
     "ts0", "ts1", "ts2", "ts3",
     "dealmode", "enable", "sensitivity",
     "rect0", "rect1", "rect2", "rect3",
-    "chn"
+    "chn",
+/* CFGREC */
+    "sizelmt", "timelmt", "vstrm", "alrmtrgrec", "snap_instead", "record_audio", "snap_interval"
 };
 
 typedef struct {
@@ -87,9 +75,18 @@ typedef struct {
     int enable;
     int sensitivity;
 } sd_par_t;
-
+typedef struct {
+    int sizelmt;
+    int timelmt;
+    int vstrm;
+    int alrmtrgrec;
+    int snap_instead;
+    int record_audio;
+    int snap_interval;
+} cfgrec_par_t;
 static md_par_t MD_PARAMS = {0};
 static sd_par_t SD_PARAMS = {0};
+static cfgrec_par_t CFGREC_PARAMS = {0};
 
 
 /*
@@ -269,6 +266,28 @@ static void store_int(int cmd, par_t par_id, const char* buf) {
         case EP_CHN:
             if(cmd == AO_CAM_CMD_MD) MD_PARAMS.chn = val;
             break;
+/* CFGREC */
+        case EP_SIZELMT:
+            CFGREC_PARAMS.sizelmt = val;
+            break;
+        case EP_TIMELMT:
+            CFGREC_PARAMS.timelmt = val;
+            break;
+        case EP_VSTRM:
+            CFGREC_PARAMS.vstrm = val;
+            break;
+        case EP_ALRMTRGREC:
+            CFGREC_PARAMS.alrmtrgrec = val;
+            break;
+        case EP_SNAP_INSTEAD:
+            CFGREC_PARAMS.snap_instead = val;
+            break;
+        case EP_RECORD_AUDIO:
+            CFGREC_PARAMS.record_audio = val;
+            break;
+        case EP_SNAP_INTERVAL:
+            CFGREC_PARAMS.snap_interval = val;
+            break;
         default:
             pu_log(LL_ERROR, "%s: cmd_id %d and para_id %d from %s not found. Value not stored", __FUNCTION__, cmd, par_id, buf);
             break;
@@ -316,6 +335,18 @@ static char* make_sd_params() {
     );
     return strdup(buf);
 }
+static char* make_cfgrec_params() { /* Each (almost) command got it's own unique interface... Warm lamp sound from China :-( */
+    char buf[256]={0};
+    const char* cfgrec_fmt=
+            "-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n\r\n";
+    snprintf(buf, sizeof(buf), cfgrec_fmt,
+            PAR_ARRAY[EP_SIZELMT],CFGREC_PARAMS.sizelmt,            PAR_ARRAY[EP_TIMELMT],CFGREC_PARAMS.timelmt,
+            PAR_ARRAY[EP_VSTRM],CFGREC_PARAMS.vstrm,                PAR_ARRAY[EP_ALRMTRGREC],CFGREC_PARAMS.alrmtrgrec,
+            PAR_ARRAY[EP_SNAP_INSTEAD],CFGREC_PARAMS.snap_instead,  PAR_ARRAY[EP_RECORD_AUDIO],CFGREC_PARAMS.record_audio,
+            PAR_ARRAY[EP_SNAP_INTERVAL],CFGREC_PARAMS.snap_interval
+    );
+    return strdup(buf);
+}
 
 
 /****************************************************************************/
@@ -337,6 +368,9 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
             break;
         case AO_CAM_CMD_TIME:
             name = (read_pars)?CMD_TIME_NAME PAR_READ:CMD_TIME_NAME;
+            break;
+        case AO_CAM_CMD_CFGREC:
+            name = (read_pars)?CMD_CFGREC_NAME PAR_READ:CMD_CFGREC_NAME;
             break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized cmd_id = %d", __FUNCTION__, cmd_id);
@@ -390,7 +424,9 @@ void ao_save_parameter(int cmd_id, user_par_t par_id, int par_value) {
                 SD_PARAMS.ts[0] = NULL;
             }
             break;
-
+        case AO_CAM_PAR_CFGREC_AUDIO_ON:
+            CFGREC_PARAMS.record_audio = par_value;
+            break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized user parameter type %d. Not saved", __FUNCTION__, par_id);
             break;
@@ -427,6 +463,8 @@ char* ao_make_params(int cmd_id) {
             return make_md_params();
         case AO_CAM_CMD_SD:
             return make_sd_params();
+        case AO_CAM_CMD_CFGREC:
+            return make_cfgrec_params();
         default:
             pu_log(LL_ERROR, "%s: Command id %d not served.", __FUNCTION__, cmd_id);
             break;
@@ -448,6 +486,8 @@ int ao_get_param_value(int cmd_id, user_par_t par_id) {
             return SD_PARAMS.sensitivity;
         case AO_CAM_PAR_SD_ON:
             return (SD_PARAMS.ts[0] != NULL);
+        case AO_CAM_PAR_CFGREC_AUDIO_ON:
+            return CFGREC_PARAMS.record_audio;
         default:
             pu_log(LL_ERROR, "%s: Unknown user parameter type %d. 0 returned", __FUNCTION__, par_id);
             break;
