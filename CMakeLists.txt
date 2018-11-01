@@ -15,6 +15,49 @@ set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
 
 message("path = $ENV{SDK_PATH}")
 
+
+execute_process(
+        COMMAND  bash "-c" "git rev-parse --verify HEAD | tr -d '\n'"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE commit_hash)
+
+execute_process(
+        COMMAND bash "-c" "git rev-parse --abbrev-ref HEAD | tr -d '\n'"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE branch)
+
+execute_process(
+        COMMAND bash "-c" "date '+%Y-%m-%d.%H:%M:%S' | tr -d '\n'"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE build_date)
+
+execute_process(
+        COMMAND bash "-c" "git diff --exit-code"
+        RESULT_VARIABLE git_diff
+        OUTPUT_VARIABLE git_diff_output)
+
+execute_process(
+        COMMAND bash "-c" "git config --get remote.origin.url | tr -d '\n'"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE git_url)
+
+
+if (git_diff STREQUAL "0")
+    message("No changes '${git_diff}'")
+else()
+    message("!!!! Uncommited changes '${git_diff}' !!!!!!!!")
+endif()
+
+
+add_definitions(-DGIT_COMMIT="${commit_hash}")
+add_definitions(-DGIT_BRANCH="${branch}")
+add_definitions(-DGIT_URL="${git_url}")
+add_definitions(-DBUILD_DATE="${build_date}")
+add_definitions(-DUNCOMMITED_CHANGES=${git_diff})
+
+
+message("value is  'Commit:${commit_hash} Branch:${branch}: Date:${build_date}' URL: ${git_url}")
+
 if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     #add_definitions(-DNOPOLL_TRACE)            # Enabling nopoll ()Web Socket connection) logging to stdout
@@ -81,7 +124,6 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions( -DGST_EXT)
     add_definitions(-D__LINUX__)
     add_definitions(-DEXTERN=)
-#    file(MAKE_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
 
 #    set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -91,12 +133,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     set(COMPILER_PREFIX arm-hisiv500-linux-uclibcgnueabi-)
     set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
     set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}g++)
-#    set(CMAKE_SYSROOT ${TOOLCHAIN_PATH}/target/usr)
     set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
-#    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-#    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-#    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-#    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O3 -Wall -s -ldl -lz")
 
     set(REQUIRED_LIBRARIES
@@ -174,10 +211,14 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
+
             add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
-            install(TARGETS ipcam ARCHIVE DESTINATION ${SYSROOT_PATH}usr/lib)
+            install(TARGETS ipcam ARCHIVE DESTINATION ${SYSROOT_PATH}/usr/lib
+                    LIBRARY DESTINATION ${SYSROOT_PATH}/usr/lib)
+
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
             target_link_libraries(jq m)
+
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
             ${SYSROOT_PATH}/usr/lib/libipcam.a
@@ -211,7 +252,6 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             ${SYSROOT_PATH}/usr/lib/libintl.a
             ${SYSROOT_PATH}/usr/lib/libffi.a
             ${SYSROOT_PATH}/usr/lib/libcurl.a
-#            ${SYSROOT_PATH}/usr/lib/libdl.so.0
 
 
             )
