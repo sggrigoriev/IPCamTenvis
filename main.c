@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
                 printf("Git branch: %s\n", GIT_BRANCH);
                 printf("\tUncommited: %s\n", (UNCOMMITED_CHANGES == 0 ? "NO": " !!!!! YES !!!!!!"));
                 printf("*** To repeat this build use:\n");
-                printf("\tgit clone --single-branch -b  %s %s\n", GIT_BRANCH, GIT_URL);
+                printf("\tgit clone --single-branch -b  %s %s .\n", GIT_BRANCH, GIT_URL);
                 printf("\tgit fetch origin %s\n", GIT_COMMIT);
                 printf("\tgit reset --hard FETCH_HEAD\n");
 
