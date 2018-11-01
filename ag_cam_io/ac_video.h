@@ -37,7 +37,7 @@ void ac_disconnect_video();
 /*
  * Rus video streaming (and audio - later)
  */
-int ac_start_video();
+int ac_start_video(int is_video, int is_audio);
 
 /*
  * Stops videostreaming

@@ -206,18 +206,18 @@ int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description) {
 /* video & audio urls are made there as well */
     return ac_WowzaAnnounce(sess, dev_description);
 }
-int ac_req_setup(t_at_rtsp_session* sess) {
+int ac_req_setup(t_at_rtsp_session* sess, int is_video, int is_audio) {
     assert(sess);
-    int ret;
+    int ret, ret_v;
 
     switch(sess->device) {
         case AC_CAMERA:
-            if(ret = ac_alfaProSetup(sess, AC_RTSP_VIDEO_SETUP), ret)
-                ret = ac_alfaProSetup(sess, AC_RTSP_AUDIO_SETUP);
+            ret_v = (is_video)?ac_alfaProSetup(sess, AC_RTSP_VIDEO_SETUP):1;
+            ret = (ret_v && is_audio)?ac_alfaProSetup(sess, AC_RTSP_AUDIO_SETUP):ret_v;
             break;
         case AC_WOWZA:
-            if(ret = ac_WowzaSetup(sess, AC_RTSP_VIDEO_SETUP), ret)
-                ret = ac_WowzaSetup(sess, AC_RTSP_AUDIO_SETUP);
+            ret_v = (is_video)?ac_WowzaSetup(sess, AC_RTSP_VIDEO_SETUP):1;
+            ret = (ret_v && is_audio)?ac_WowzaSetup(sess, AC_RTSP_AUDIO_SETUP):ret_v;
             break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);

@@ -115,9 +115,9 @@ static int process_describe() {
 on_exit:
     return rc;
 }
-static int process_setup() {
-    if(!ac_req_setup(CAM_SESSION)) return 0;
-    if(!ac_req_setup(PLAYER_SESSION)) return 0;
+static int process_setup(int is_video, int is_audio) {
+    if(!ac_req_setup(CAM_SESSION, is_video, is_audio)) return 0;
+    if(!ac_req_setup(PLAYER_SESSION, is_video, is_audio)) return 0;
 
     return 1;
 }
@@ -163,7 +163,7 @@ void ac_disconnect_video() {
  *  3. Send to WS Stream confirmation request
 */
 static int video_on = 0;
-int ac_start_video() {
+int ac_start_video(int is_video, int is_audio) {
     if(video_on) {
         pu_log(LL_WARNING, "%s: Video already on! Suspicious call", __FUNCTION__);
         return 0;
@@ -184,7 +184,7 @@ int ac_start_video() {
         pu_log(LL_ERROR, "%s: process describe error", __FUNCTION__);
         goto on_error;
     }
-    if(!process_setup()) {
+    if(!process_setup(is_video, is_audio)) {
         pu_log(LL_ERROR, "%s: process setup error", __FUNCTION__);
         goto on_error;
     }

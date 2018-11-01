@@ -116,25 +116,25 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
 #define AG_DB_CMD_DISCONNECT_RW     "disconnect_rw_cmd"     /* obsolete */
 
 /* AG_DB_CAM */
-#define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"
-#define AG_DB_STATE_PING_INTERVAL   "pingInterval"
-#define AG_DB_STATE_STREAM_STATUS   "ppc.streamStatus"
-#define AG_DB_STATE_RAPID_MOTION    "ppc.rapidMotionStatus"
-#define AG_DB_STATE_MD              "motionStatus"
-#define AG_DB_STATE_SD              "audioStatus"
-#define AG_DB_STATE_RECORDING       "recordStatus"
-#define AG_DB_STATE_RECORD_SECS     "ppc.recordSeconds"
-#define AG_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"
-#define AG_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"
-#define AG_DB_STATE_MD_ON           "ppc.motionActivity"
-#define AG_DB_STATE_SD_ON           "ppc.audioActivity"
-#define AG_DB_STATE_AUDIO           "audioStreaming"
-#define AG_DB_STATE_VIDEO           "videoStreaming"
-#define AG_DB_STATE_VIDEOCALL       "supportsVideoCall"
-#define AG_DB_STATE_SW_VERSION      "version"
-#define AG_DB_STATE_MEM_AVAILABLE   "availableBytes"
-#define AG_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"
-#define AG_DB_STATE_SNAPSHOT        "ppc.captureImage"
-#define AG_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"
+#define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"              /* Active Viewers amoint total */
+#define AG_DB_STATE_PING_INTERVAL   "pingInterval"              /* WS ping interval  */
+#define AG_DB_STATE_STREAM_STATUS   "ppc.streamStatus"          /* Command to initiate streaming */
+#define AG_DB_STATE_RAPID_MOTION    "ppc.rapidMotionStatus"     /* ? */
+#define AG_DB_STATE_MD              "motionStatus"              /* 1 if MD now */
+#define AG_DB_STATE_SD              "audioStatus"               /* 1 if SD now */
+#define AG_DB_STATE_RECORDING       "recordStatus"              /* Set by cam to 1 of recording */
+#define AG_DB_STATE_RECORD_SECS     "ppc.recordSeconds"         /* ? */
+#define AG_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"     /* Set the cam's sensitivity for MD */
+#define AG_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"   /* ? */
+#define AG_DB_STATE_MD_ON           "ppc.motionActivity"        /* Sen MD on/off */
+#define AG_DB_STATE_SD_ON           "ppc.audioActivity"         /* Set SD on/off */
+#define AG_DB_STATE_AUDIO           "audioStreaming"            /* allow audio streaming&recording */
+#define AG_DB_STATE_VIDEO           "videoStreaming"            /* allow video streaming&recording */
+#define AG_DB_STATE_VIDEOCALL       "supportsVideoCall"         /* ? */
+#define AG_DB_STATE_SW_VERSION      "version"                   /* SW version */
+#define AG_DB_STATE_MEM_AVAILABLE   "availableBytes"            /* ? */
+#define AG_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"    /* ? */
+#define AG_DB_STATE_SNAPSHOT        "ppc.captureImage"          /* 1 - make snapshot */
+#define AG_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"      /* set the cam's sensitivity for SD */
 
 #endif /* IPCAMTENVIS_AG_DB_MGR_H */

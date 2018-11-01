@@ -336,14 +336,25 @@ static void run_ws_actions() {
     IP_CTX_(13000);
 }
 static void switch_streaming_on() {
-    if (!ac_start_video()) {
+    if (!ac_start_video(ag_db_get_int_property(AG_DB_STATE_VIDEO), ag_db_get_int_property(AG_DB_STATE_AUDIO))) {
         pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
     }
     else {
-        pu_log(LL_DEBUG, "%s: Start streaming because of acvive viewers = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
+        pu_log(LL_DEBUG, "%s: Start streaming", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_RW_ON, 1);
-        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+    }
+}
+/* on/off audio/video */
+static void switch_control_streams() {
+    ag_db_bin_state_t video_state = ag_db_bin_anal(AG_DB_STATE_VIDEO);
+    ag_db_bin_state_t audio_state = ag_db_bin_anal(AG_DB_STATE_AUDIO);
+
+    if((video_state == AG_DB_BIN_OFF_ON) || (video_state == AG_DB_BIN_ON_OFF) ||
+        (audio_state == AG_DB_BIN_OFF_ON) || (audio_state == AG_DB_BIN_ON_OFF)) {
+        pu_log(LL_DEBUG, "%s: Streams change: video = %d, Audio = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIDEO), ag_db_get_int_property(AG_DB_STATE_AUDIO));
+        ac_stop_video();
+        switch_streaming_on();
     }
 }
 static void run_streaming_actions() {
@@ -356,10 +367,7 @@ static void run_streaming_actions() {
             break;
         case AG_DB_BIN_OFF_ON:       /* 0->1*/
             pu_log(LL_INFO, "%s: 0->1 - connection case!", __FUNCTION__);
-            if (!ac_start_video()) {
-                pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
-                ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
-            }
+            switch_streaming_on();
             break;
         case AG_DB_BIN_ON_OFF:       /* 1->0 */
             pu_log(LL_DEBUG, "%s: 1->0 - Stop video", __FUNCTION__);
@@ -369,20 +377,23 @@ static void run_streaming_actions() {
             pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
             break;
     }
-    if (ag_db_get_int_property(AG_DB_STATE_RW_ON)) { /* Actions for active syteaming */
+    if (ag_db_get_int_property(AG_DB_STATE_RW_ON)) { /* Actions for active streaming */
+        switch_control_streams();
         if (!ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* No active viwers - stop show */
             pu_log(LL_DEBUG, "%s: Stop streaming because of zero active viewers.", __FUNCTION__);
             ac_stop_video();
             ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
         }
-    } else {      /* Actions for inactive streaming */
-        if (ag_db_get_int_property(AG_DB_STATE_WS_ON) && ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers - start show */
+    } else
+        {      /* Actions for inactive streaming */
+        if(ag_db_get_int_property(AG_DB_STATE_WS_ON) && ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers - start show */
             switch_streaming_on();
         }
         switch(ag_db_bin_anal(AG_DB_STATE_STREAM_STATUS)) {
             case AG_DB_BIN_ON_ON:
             case AG_DB_BIN_OFF_ON:
                 switch_streaming_on();
+                ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
                 break;
             default:
                 break;

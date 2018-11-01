@@ -28,7 +28,7 @@
 #include <curl/curl.h>  /* for global init/deinit */
 #include <gst/gst.h>    /* for gloal init/deinit */
 
-
+#include "pc_config.h"
 #include "pu_logger.h"
 
 #include "ag_settings.h"
@@ -61,6 +61,8 @@ on_error:
 }
 
 static void print_Agent_start_params() {
+    char buf[1024]={0};
+    pu_log(LL_INFO, "\n%s", get_version_printout(AGENT_FIRMWARE_VERSION, buf, sizeof(buf)));
     pu_log(LL_INFO, "Agent start parameters:");
     pu_log(LL_INFO, "\tConfiguration file name: %s", ag_getCfgFileName());
 
@@ -119,18 +121,11 @@ int main(int argc, char* argv[]) {
             case 'p':
                 config = optarg;
                 break;
-            case 'v':
-                printf("Built on %s at %s\n", __DATE__, __TIME__);
-                printf("Git repository version %s\n", AGENT_FIRMWARE_VERSION);
-                printf("Git commit: %s\n", GIT_COMMIT);
-                printf("Git branch: %s\n", GIT_BRANCH);
-                printf("\tUncommited: %s\n", (UNCOMMITED_CHANGES == 0 ? "NO": " !!!!! YES !!!!!!"));
-                printf("*** To repeat this build use:\n");
-                printf("\tgit clone --single-branch -b  %s %s .\n", GIT_BRANCH, GIT_URL);
-                printf("\tgit fetch origin %s\n", GIT_COMMIT);
-                printf("\tgit reset --hard FETCH_HEAD\n");
-
+            case 'v': {
+                char buf[1024]={0};
+                printf("%s", get_version_printout(AGENT_FIRMWARE_VERSION, buf, sizeof(buf)));
                 exit(0);
+            }
             default:
                 fprintf(stderr, "Wrong start parameter. Only -p<config_file_path_and_name> or -v allowed");
                 exit(-1);

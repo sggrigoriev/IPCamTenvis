@@ -35,7 +35,7 @@ int ac_req_options(t_at_rtsp_session* sess);
 int ac_req_cam_describe(t_at_rtsp_session* sess, char* dev_description, size_t size);
 int ac_req_vs_announce(t_at_rtsp_session* sess, const char* dev_description);
 
-int ac_req_setup(t_at_rtsp_session* sess);
+int ac_req_setup(t_at_rtsp_session* sess, int is_video, int is_audio);
 int ac_req_play(t_at_rtsp_session* sess);
 int ac_req_teardown(t_at_rtsp_session* sess);
 

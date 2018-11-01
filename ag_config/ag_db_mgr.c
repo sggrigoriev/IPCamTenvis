@@ -159,8 +159,8 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  0,  1,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  0,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
+{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
 {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -596,11 +596,11 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name) {
     int value = IMDB[i].value;
     int changed = IMDB[i].changed;
     int change_flag = IMDB[i].change_flag;
-    if(!changed && !change_flag) {ret = AG_DB_BIN_NO_CHANGE; goto on_exit;}
-    if(!value && change_flag) {ret = AG_DB_BIN_OFF_OFF; goto on_exit;}      /* 0->0 */
-    if(value && changed) {ret = AG_DB_BIN_OFF_ON; goto on_exit;}            /* 0->1 */
-    if(!value && changed) {ret = AG_DB_BIN_ON_OFF; goto on_exit;}           /* 1->0 */
-    if(value && change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}         /* 1->1 */
+    if(          !changed && !change_flag) {ret = AG_DB_BIN_NO_CHANGE; goto on_exit;}   /* No change */
+    if(!value && !changed &&  change_flag) {ret = AG_DB_BIN_OFF_OFF; goto on_exit;}     /* 0->0 */
+    if( value &&  changed &&  change_flag) {ret = AG_DB_BIN_OFF_ON; goto on_exit;}      /* 0->1 */
+    if(!value &&  changed &&  change_flag) {ret = AG_DB_BIN_ON_OFF; goto on_exit;}      /* 1->0 */
+    if( value && !changed &&  change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}       /* 1->1 */
 
 on_exit:
     pthread_mutex_unlock(&local_mutex);

@@ -295,16 +295,6 @@ int ac_WowzaSetup(t_at_rtsp_session* sess, int media_type) {
         transport->interleaved.max = (media_type == AC_RTSP_VIDEO_SETUP)?1:3;
         transport->lower_transport = GST_RTSP_LOWER_TRANS_TCP;
     }
-    else {
-        if (media_type == AC_RTSP_VIDEO_SETUP) {
-            transport->client_port.min = sess->media.rt_media.video.src.port.rtp;
-            transport->client_port.max = sess->media.rt_media.video.src.port.rtcp;
-        } else {
-            transport->client_port.min = sess->media.rt_media.audio.src.port.rtp;
-            transport->client_port.max = sess->media.rt_media.audio.src.port.rtcp;
-        }
-        transport->lower_transport = GST_RTSP_LOWER_TRANS_UDP;
-    }
     transport->mode_play = FALSE;
     transport->mode_record = TRUE;
 //    gs->transport->mode_record = TRUE;
