@@ -56,6 +56,7 @@ typedef struct {
     char ft;
     int idx;
     int total;
+    time_t timestamp;
 } fld_t;
 
 typedef struct {
@@ -63,42 +64,24 @@ typedef struct {
     const char* ext;
     char type;
     size_t size;
+    time_t timestamp;
+/******/
+    char upl_url[1024];
+    char headers[1024];
+    unsigned long fileRef;
 } fd_t;
+
+typedef enum {
+    SF_RC_SENT_OK,  /* File sent */
+    SF_RC_EARLY,    /* Should wait until sending */
+    SF_RC_1_FAIL,   /* Get URL step failed */
+    SF_RC_2_FAIL,   /* File upload failed */
+    SF_RC_3_FAIL,   /* File attr update failed */
+    SF_RC_NOT_FOUND /* No such file or directory */
+} sf_rc_t;
 
 /******************************************************************/
 /*         Send files functions                                   */
-typedef struct {
-    char url[512];
-    const char* device_id;
-    const char* auth_token;
-    const char* ext;
-    unsigned long f_size;
-    int f_type;             /* 0 - any, 1- video, 2 - image, 3 - audio */
-} sf_url_in_t;
-/* TODO Make inline all this char <-> char* staff*/
-static void fill_sf_url_in(const fd_t fd, sf_url_in_t* ip) {
-    snprintf(ip->url, sizeof(ip->url), "%s/%s", ag_getMainURL(), DEFAULT_FILES_UPL_PATH);
-    ip->device_id = ag_getProxyID();
-    ip->auth_token = ag_getProxyAuthToken();
-    ip->ext = fd.ext;
-    ip->f_size = fd.size;
-    switch(fd.type) {
-        case 'M':
-            ip->f_type = 1;
-            break;
-        case 'S':
-            ip->f_type = 3;
-            break;
-        case 'P':
-            ip->f_type = 2;
-            break;
-        default:
-            ip->f_type = 0;
-            pu_log(LL_ERROR, "%s: Unrecognized file type %c", __FUNCTION__, fd.type);
-            break;
-    }
-}
-
 static CURL* init(){
     CURL *curl;
     if(curl = curl_easy_init(), !curl) {
@@ -119,10 +102,10 @@ static CURL* init(){
     return curl;
 }
 
-static struct curl_slist* make_getSF_header(const sf_url_in_t* in_par, struct curl_slist* sl) {
+static struct curl_slist* make_getSF_header(const fd_t* in_par, struct curl_slist* sl) {
     char buf[512]={0};
     const char* content;
-    switch (in_par->f_type) {
+    switch (in_par->type) {
         case 1:
             content = "video/";
             break;
@@ -140,7 +123,7 @@ static struct curl_slist* make_getSF_header(const sf_url_in_t* in_par, struct cu
     snprintf(buf, sizeof(buf)-1, "Content-Type: %s%s", content, in_par->ext);
     if(sl = curl_slist_append(sl, buf), !sl) return NULL;
 
-    snprintf(buf, sizeof(buf)-1, "PPCAuthorization: esp token=%s", in_par->auth_token);
+    snprintf(buf, sizeof(buf)-1, "PPCAuthorization: esp token=%s", ag_getProxyAuthToken());
     sl = curl_slist_append(sl, buf);
     return sl;
 }
@@ -181,27 +164,29 @@ static struct curl_slist* make_SFupdate_header(struct curl_slist* sl, const char
     return sl;
 }
 
-static const char* make_getSF_url(const sf_url_in_t* in_par, char *url, size_t size) {
-    snprintf(url, size-1,
-             "%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%lu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
-             in_par->url,
-             in_par->device_id,
-             in_par->device_id,
+static const char* make_getSF_url(fd_t* in_par) {
+    snprintf(in_par->upl_url, sizeof(in_par->upl_url),
+             "%s/%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%lu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
+             ag_getMainURL(),
+             DEFAULT_FILES_UPL_PATH,
+             ag_getProxyID(),
+             ag_getProxyID(),
              in_par->ext,
-             in_par->f_size,
-             (in_par->f_type==2)?180:0,       /* Turn on 180 if image */
-             in_par->f_type
+             in_par->size,
+             (in_par->type==2)?180:0,       /* Turn on 180 if image */
+             in_par->type
     );
-    return url;
+    return in_par->upl_url;
 }
-static const char* make_updSF_url(const sf_url_in_t* in_par, unsigned long fid, char* url, size_t size) {
-    snprintf(url, size-1,
+static const char* make_updSF_url(fd_t* in_par) {
+    snprintf(in_par->url, sizeof(in_par->url),
              "%s/%lu?proxyId=%s&incomplete=false",
-             in_par->url,
-             fid,
-             in_par->device_id
+             ag_getMainURL(),
+             DEFAULT_FILES_UPL_PATH,
+             in_par->fileRef,
+             ag_getProxyID()
     );
-    return url;
+    return in_par->url;
 }
 /*
  * NB! answer should be freed after use!
@@ -309,7 +294,7 @@ on_error:
     return ret;
 }
 
-static int parse_cloud_answer(const char* ptr, char* sf_url, size_t sf_size, char* upl_hdrs, size_t upl_size, unsigned long *fid) {
+static int parse_cloud_answer(const char* ptr, fd_t* in_par) {
     int ret = 0;
     cJSON* obj = cJSON_Parse(ptr);
     if(!obj) {
@@ -322,8 +307,8 @@ static int parse_cloud_answer(const char* ptr, char* sf_url, size_t sf_size, cha
         goto on_error;
     }
     pu_log(LL_DEBUG, "%s: content url = %s", __FUNCTION__, url->valuestring);
-    strncpy(sf_url, url->valuestring, sf_size);
-    sf_url[sf_size-1] = '\0';
+    strncpy(in_par->upl_url, url->valuestring, sizeof(in_par->upl_url));
+
     cJSON* hdrs = cJSON_GetObjectItem(obj, "uploadHeaders");
     if(!hdrs) {
         pu_log(LL_ERROR, "%s: \"uploadHeaders\" field not found", __FUNCTION__);
@@ -331,16 +316,16 @@ static int parse_cloud_answer(const char* ptr, char* sf_url, size_t sf_size, cha
     }
     char *hd = cJSON_PrintUnformatted(hdrs);
     pu_log(LL_DEBUG, "%s: upload headers = %s", __FUNCTION__, hd);
-    strncpy(upl_hdrs, hd, upl_size);
-    upl_hdrs[upl_size-1] = '\0';
+    strncpy(in_par->headers, hd, sizeof(in_par->headers));
     free(hd);
+
     cJSON* file_id = cJSON_GetObjectItem(obj, "fileRef");
     if(!file_id) {
         pu_log(LL_ERROR, "%s: \"fileRef\" field not foind", __FUNCTION__);
         goto on_error;
     }
-    *fid = (unsigned long)(file_id->valueint);
-    pu_log(LL_DEBUG, "%s: fileId = %lu", __FUNCTION__, *fid);
+    in_par->fileRef = (unsigned long)(file_id->valueint);
+    pu_log(LL_DEBUG, "%s: fileId = %lu", __FUNCTION__, in_par->fileRef);
     ret = 1;
 
     on_error:
@@ -376,16 +361,16 @@ static int is_cloud_answerOK(const char* answer) {
 }
 
 
-static int getSF_URL(const sf_url_in_t* in_par, const struct curl_slist *hs, unsigned long *fid, char* sf_url, size_t sf_size, char* upl_hdrs, size_t upl_size) {
+static int getSF_URL(fd_t* in_par, const struct curl_slist *hs) {
     int ret = 0;
 
     char url_cmd[1024]={0};
-    make_getSF_url(in_par, url_cmd, sizeof(url_cmd));
+    make_getSF_url(in_par);
 
     char* ptr = post_n_reply(hs, url_cmd);
     if(!ptr) goto on_error;
 
-    if(!parse_cloud_answer(ptr, sf_url, sf_size, upl_hdrs, upl_size, fid)) {
+    if(!parse_cloud_answer(ptr, in_par)) {
         pu_log(LL_ERROR, "%s: Error parsing answer from cloud %s", __FUNCTION__, ptr);
         goto on_error;
     }
@@ -450,7 +435,7 @@ on_error:
     curl_easy_cleanup(curl);
     return ret;
 }
-static int sendSF_update(const sf_url_in_t* in_par, struct curl_slist *hs, unsigned long fid) {
+static int sendSF_update(fd_t* in_par, struct curl_slist *hs) {
     int ret = 0;
 
     char* ptr = NULL;
@@ -483,6 +468,7 @@ static void clean_snap_n_video() {
 
 static fld_t* open_flist(const char* msg) {
     fld_t* ret = NULL;
+    time_t timestamp;
 
     cJSON* obj = cJSON_Parse(msg);
     if(!obj) return NULL;
@@ -490,6 +476,8 @@ static fld_t* open_flist(const char* msg) {
     if(!type || (type->type != cJSON_String)) goto err;
     cJSON* arr = cJSON_GetObjectItem(obj, "filesList");
     if(!arr || (arr->type != cJSON_Array)) goto err;
+    cJSON* ts = cJSON_GetObjectItem(obj, "timestamp");
+    timestamp = (ts)?ts->valueint:0;
 
     ret = calloc(sizeof(fld_t), 1);
     if(!ret) {
@@ -501,6 +489,7 @@ static fld_t* open_flist(const char* msg) {
     ret->idx = 0;
     ret->total = cJSON_GetArraySize(arr);
     ret->ft = type->valuestring[0];
+    ret->timestamp = timestamp;
     return ret;
 err:
     cJSON_Delete(obj);
@@ -512,6 +501,11 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
         fd->type = fld->ft;
         fd->ext = ac_cam_get_file_ext(fd->name);
         fd->size = ac_get_file_size(fd->name);
+        fd->timestamp = fld->timestamp;
+        fd->fileRef = 0;
+        fd->url[0]='\0';
+        fd->headers[0]='\0';
+        fd->fileRef = 0;
         fld->idx++;
         return 1;
     }
@@ -524,60 +518,59 @@ static void close_flist(fld_t* fld) {
 }
 /*
  * Sending file to cloud
- * Return 0 if error and fileID if Ok
- * Return -1 if no file
- *
+ * Return sf_src_t; Fills last pat of fd structure (url, headers, ...)
+ * SF_RC_SENT_OK    - file sent - take fileRef to send with alert to proxy
+ * SF_RC_RESEND     - file was not sent due to several reasons: to early, error... anyway - shouild go to resend queue
+ * SF_RC_NOT_FOUND  - no such file found. It is possible if the file was already sent
  */
-static const unsigned long send_file(fd_t fd) {
-    unsigned long ret = 0;
+static const sf_rc_t send_file(fd_t* fd) {
+    unsigned long ret;
 
-    char sf_url[1024]={0};
-    char upl_hdrs[1024]={0};
     unsigned long file_id;
 
     struct curl_slist *hs1=NULL;
     struct curl_slist *hs2=NULL;
+/* Time analysis - maybe it is too early to send the file */
+    ??????????
+    if(hs1 = make_getSF_header(fd, hs1), !hs1) goto on_error;
 
-    sf_url_in_t ip;
-    fill_sf_url_in(fd, &ip);
-
-    if(hs1 = make_getSF_header(&ip, hs1), !hs1) goto on_error;
-
-    if(!getSF_URL(&ip, hs1, &file_id, sf_url, sizeof(sf_url)-1, upl_hdrs, sizeof(upl_hdrs)-1)) {
+    if(!getSF_URL(fd, hs1)) {
         pu_log(LL_ERROR, "%s: error getting URL, no upload", __FUNCTION__);
+        ret = SF_RC_1_FAIL;
         goto on_error;
     }
-    pu_log(LL_DEBUG, "%s: URL = %s, UPL_HDRS = %s", __FUNCTION__, sf_url, upl_hdrs);
+    pu_log(LL_DEBUG, "%s: URL = %s, UPL_HDRS = %s", __FUNCTION__, fd->upl_url, fd->headers);
 
-    hs1 = make_SF_header(upl_hdrs, hs1);    /* Add header to exisning for file upload */
-    int rc = sendFile(sf_url, hs1, fd.name, ip.f_size);
+    hs1 = make_SF_header(fd->headers, hs1);    /* Add header to exisning for file upload */
+    int rc = sendFile(fd->upl_url, hs1, fd.name, fd->size);
     if(!rc) {
-        pu_log(LL_ERROR, "%s: error file %s upload", __FUNCTION__, fd.name);
+        pu_log(LL_ERROR, "%s: error file %s upload", __FUNCTION__, fd->name);
+        ret = SF_RC_2_FAIL;
         goto on_error;
     }
     else if(rc == 2) { /* file not found */
-        ret = -1;
+        ret = SF_RC_NOT_FOUND;
         goto on_error;
     }
 
     pu_log(LL_DEBUG, "%s: file %s sent OK", "make_SF_header", fd.name);
 
-    hs2 = make_SFupdate_header(hs2, ip.auth_token);
-    if(!sendSF_update(&ip, hs2, file_id)) {
+    hs2 = make_SFupdate_header(hs2, ag_getProxyAuthToken());
+    if(!sendSF_update(fd, hs2)) {
         pu_log(LL_ERROR, "%s: error sending completion update for file %s", __FUNCTION__, fd.name);
         goto on_error;
     }
     pu_log(LL_DEBUG, "%s: file %s uploaded OK", __FUNCTION__, fd.name);
 
 /* Delete file if sent */
-    if(!unlink(fd.name)) {
+    if(!unlink(fd->name)) {
         pu_log(LL_DEBUG, "%s: File %s deleted", __FUNCTION__, fd.name);
     }
     else {
         pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, fd.name, errno, strerror(errno));
     }
 
-    ret = file_id;
+    ret = SF_RC_SENT_OK;
 on_error:
     if(hs2) curl_slist_free_all(hs2);
     if(hs1) curl_slist_free_all(hs1);
@@ -692,13 +685,24 @@ static void* thread_function(void* params) {
                     fld_t* fld = open_flist(q_msg);
                     if(fld) {
                         fd_t fd;
+                        sf_rc_t rc;
                         while(get_next_f(fld, &fd)) {
-                            unsigned long f_id = send_file(fd);
-                            if(f_id >= 0) { /* id < 0 - file not found. nothing to do*/
-                                if(!f_id) ac_cam_add_not_sent(resend_queue, fd.type, fd.name);
-                                send_alert_to_proxy(fd.type, f_id);
+                            switch (rc=send_file(&fd)) {
+                                case SF_RC_SENT_OK:
+                                    send_alert_to_proxy(fd.type, fd.fileRef);
+                                    break;
+                                case SF_RC_EARLY:
+                                case SF_RC_1_FAIL:
+                                case SF_RC_2_FAIL:
+                                case SF_RC_3_FAIL:
+                                    ac_cam_add_not_sent(resend_queue, fd, rc);
+                                    break;
+                                case SF_RC_NOT_FOUND:
+                                    /* Nothing to do */
+                                default:
+                                    break;
                             }
-                        }
+                         }
                         close_flist(fld);
                     }
                     else {

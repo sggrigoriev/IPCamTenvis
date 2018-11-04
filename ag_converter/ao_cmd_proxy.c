@@ -224,15 +224,21 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
  * Send file to cloud - internal Agent-SF command.
  * buf         - buffer to store the message
  * size        - buffer size
+ * end_date     - event end_date - needs to send the file not earliar than now-end_date > timeout. Not use if 0
  * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
  * files_list   - JSON array of files with full path: "name1",..."nameN"
  * device_id   - gateway device_id
  *
  * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
+ *                      or
+ * {"name": "sendFiles", "type": <fileTypeString", "timestamp": <end_date>, "filesList": ["<filename>", ..., "<filename>"]}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, const char* files_type, const char* files_list) {
-    snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": [%s]}", files_type, files_list);
+const char* ao_make_send_files(char* buf, size_t size, time_t end_date, const char* files_type, const char* files_list) {
+    if(!end_date)
+        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": [%s]}", files_type, files_list);
+    else
+        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"timestamp\": %lu\"filesList\": [%s]}", files_type, end_date, files_list);
     buf[size-1] = '\0';
     return buf;
 }

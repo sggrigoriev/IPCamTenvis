@@ -36,6 +36,7 @@ const char* ac_cam_event2string(t_ac_cam_events e) {
 }
 t_ac_cam_events ac_cam_string2event(const char* string) {
     t_ac_cam_events i;
+    if(!string) return AC_CAM_EVENT_UNDEF;
     for(i = AC_CAM_EVENT_UNDEF; i < AC_CAM_EVENTS_SIZE; i++) {
         if(!strcmp(string, CAM_EVENTS_NAMES[i])) return i;
     }

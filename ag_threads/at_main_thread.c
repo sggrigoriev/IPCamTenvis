@@ -148,7 +148,7 @@ static void send_send_file(t_ao_cam_alert data) {
         pu_log(LL_WARNING, "%s: no alarm files where found - no data set to SF", AT_THREAD_NAME);
     }
     else {
-        ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(data.cam_event), f_list);
+        ao_make_send_files(buf, sizeof(buf), data.end_date, ac_get_event2file_type(data.cam_event), f_list);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         free(f_list);
     }
@@ -166,19 +166,19 @@ static void send_remaining_files() {
     char* snap;
     ac_get_all_files(&md, &sd, &snap);
     if(md) {
-        ao_make_send_files(buf, sizeof(buf), DEFAULT_MD_FILE_POSTFIX, md);
+        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_MD_FILE_POSTFIX, md);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         pu_log(LL_DEBUG, "%s: remaining MD files %s sent to SF_thread", __FUNCTION__, md);
         free(md);
     }
     if(sd) {
-        ao_make_send_files(buf, sizeof(buf), DEFAULT_SD_FILE_POSTFIX, sd);
+        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_SD_FILE_POSTFIX, sd);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         pu_log(LL_DEBUG, "%s: remaining files %s sent to SF_thread", __FUNCTION__, sd);
         free(sd);
     }
     if(snap) {
-        ao_make_send_files(buf, sizeof(buf), DEFAULT_SNAP_FILE_POSTFIX, snap);
+        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_SNAP_FILE_POSTFIX, snap);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         pu_log(LL_DEBUG, "%s: remaining SNAP files %s sent to SF_thread", __FUNCTION__, snap);
         free(snap);
