@@ -134,7 +134,7 @@ static void send_snapshot(const char* full_path) {
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char path[1024]={0};
     snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
-    ao_make_send_files(buf, sizeof(buf), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path);
+    ao_make_send_files(buf, sizeof(buf), 0, ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path);
     pu_log(LL_DEBUG, "%s: Sending to SF thread: %s", __FUNCTION__, buf);
     pu_queue_push(to_sf, buf, strlen(buf) + 1);
     IP_CTX_(5001);

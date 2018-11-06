@@ -26,19 +26,6 @@
 #include "ao_cmd_data.h"
 
 /*
- * [name, ..., name] for all 3 types
- */
-typedef struct {
-    cJSON* md_arr;
-    cJSON* sd_arr;
-    cJSON* snap_arr;
-} ac_cam_resend_queue_t;
-
-ac_cam_resend_queue_t* ac_cam_create_not_sent();
-int ac_cam_add_not_sent(ac_cam_resend_queue_t* q, char type, const char* name);
-void ac_cam_delete_not_sent(ac_cam_resend_queue_t* q);
-
-/*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
  * AC_CAM_STOP_SD -> DEFAULT_SD_FILE_POSTFIX
  * AC_CAM_MADE_SNAPSHOT -> DEFAULT_SNAP_FILE_POSTFIX

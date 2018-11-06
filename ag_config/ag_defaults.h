@@ -89,6 +89,8 @@
 #define DEFAULT_TO_FOR_DIR_CLEANUP  24*5*3600
 #define DEFAULT_TO_FOR_FILES_RESEND 30
 #define DEFAULT_TO_AR_PING  30                      /* Alerts reader TO */
+#define DEFAULT_TO_URL_DEAD 15*60                   /* URL for send files getting ald after 15 minutes */
+#define DEFAULT_TO_FILE_DEAD    24*3600
 
 #define DEFAULT_DB_PATH     "/mnt/mtd/cfg/ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */

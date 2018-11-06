@@ -185,7 +185,7 @@ int ac_WowzaAnnounce(t_at_rtsp_session* sess, const char* description) {
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CSEQ, num); AC_GST_ANAL(rc);
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_USER_AGENT, AC_RTSP_CLIENT_NAME); AC_GST_ANAL(rc);
 
-    snprintf(num, sizeof(num)-1, "%lu", strlen(new_description));
+    snprintf(num, sizeof(num)-1, "%zu", strlen(new_description));
     rc = gst_rtsp_message_add_header(&req, GST_RTSP_HDR_CONTENT_LENGTH, num); AC_GST_ANAL(rc);
 
 // Body

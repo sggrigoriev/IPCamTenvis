@@ -252,47 +252,6 @@ static char* get_dt_files(const char* ft) {
     return au_drop_last_symbol(ret);
 }
 /***************************************************************************************************************/
-ac_cam_resend_queue_t* ac_cam_create_not_sent() {
-    ac_cam_resend_queue_t* ret = calloc(sizeof(ac_cam_resend_queue_t), 1);
-    if(!ret) {
-        pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
-    }
-    return ret;
-}
-int ac_cam_add_not_sent(ac_cam_resend_queue_t* q, char type, const char* name) {
-    pu_log(LL_DEBUG, "%s: Going to add file %s type %c", __FUNCTION__, name, type);
-    if(!q || !name) {
-        pu_log(LL_ERROR, "%s: queue or name is NULL. No candy - no Masha!", __FUNCTION__);
-        return 0;
-    }
-    cJSON** arr;
-    switch (type) {
-        case 'M':
-            arr = &q->md_arr;
-            break;
-        case 'S':
-            arr = &q->sd_arr;
-            break;
-        case 'P':
-            arr = &q->snap_arr;
-            break;
-        default:
-            pu_log(LL_ERROR, "%s: wrong file type %c", __FUNCTION__, type);
-            return 0;
-    }
-    if(!*arr) *arr = cJSON_CreateArray();
-    cJSON_AddItemToArray(*arr, cJSON_CreateString(name));
-    char* txt = cJSON_PrintUnformatted(*arr);
-    pu_log(LL_DEBUG, "%s: resend_queue = %s", __FUNCTION__, txt);
-    free(txt);
-    return 1;
-}
-void ac_cam_delete_not_sent(ac_cam_resend_queue_t* q) {
-    if(!q) return;
-    if(q->md_arr) cJSON_Delete(q->md_arr);
-    if(q->sd_arr) cJSON_Delete(q->sd_arr);
-    if(q->snap_arr) cJSON_Delete(q->snap_arr);
-}
 
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
