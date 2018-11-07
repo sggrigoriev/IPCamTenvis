@@ -440,10 +440,15 @@ static void send_reports() {
     cJSON* changes_report = ag_db_get_changes_report();
     if(changes_report && cJSON_GetArraySize(changes_report)) {
          /* Send it to the cloud */
-        ao_cloud_msg(ag_getProxyID(), "155", NULL, NULL, ao_cloud_measures(changes_report, ag_getProxyID()), buf, sizeof(buf));
-        pu_queue_push(to_proxy, buf, strlen(buf)+1);
+        if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
+            ao_cloud_msg(ag_getProxyID(), "155", NULL, NULL, ao_cloud_measures(changes_report, ag_getProxyID()), buf,
+                         sizeof(buf));
+            pu_queue_push(to_proxy, buf, strlen(buf) + 1);
+        }
         /* Send it to WS */
-        send_to_ws(ao_ws_params(changes_report, buf, sizeof(buf)));
+        if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
+            send_to_ws(ao_ws_params(changes_report, buf, sizeof(buf)));
+        }
     }
     if(changes_report) cJSON_Delete(changes_report);
     IP_CTX_(30001);
@@ -742,7 +747,7 @@ static int main_thread_startup() {
         IP_CTX_(24005);
         return 0;
     }
-    pu_log(LL_INFO, "%s: %s started", "FILES_SENDER", __FUNCTION__);
+    pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
 
     if(!at_start_cam_alerts_reader()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));

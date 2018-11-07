@@ -238,7 +238,7 @@ const char* ao_make_send_files(char* buf, size_t size, time_t end_date, const ch
     if(!end_date)
         snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": [%s]}", files_type, files_list);
     else
-        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"timestamp\": %lu\"filesList\": [%s]}", files_type, end_date, files_list);
+        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"timestamp\": %lu, \"filesList\": [%s]}", files_type, end_date, files_list);
     buf[size-1] = '\0';
     return buf;
 }

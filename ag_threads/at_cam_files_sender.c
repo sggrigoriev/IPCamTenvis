@@ -90,21 +90,23 @@ static void print_fd(const fd_t* fd) {
             __FUNCTION__, sf_action_name[fd->action], fd->name, fd->ext, fd->type, fd->size, fd->event_time, fd->upl_url, fd->headers, fd->fileRef, fd->url_creation_time, fd->file_creation_time);
 }
 typedef enum {
-    SF_RC_SENT_OK,      /* File sent */
-    SF_RC_EARLY,        /* Should wait until sending */
-    SF_RC_1_FAIL,       /* Get URL step failed */
-    SF_RC_2_FAIL,       /* File upload failed */
-    SF_RC_3_FAIL,       /* File attr update failed */
-    SF_RC_NOT_FOUND,    /* No such file or directory */
-    SF_RC_NO_SPACE,     /* No space to load */
-    SF_RC_URL_TOO_OLD,  /* URL was created more than DEFAULT_TO_URL_DEAD ago */
-    SF_RC_FREF_TOO_OLD  /* File was erased after DEFAULT_TO_FILE_DEAD time on file server */
+    SF_RC_SENT_OK,      /* 0        File sent */
+    SF_RC_EARLY,        /* 1    Should wait until sending */
+    SF_RC_1_FAIL,       /* 2    Get URL step failed */
+    SF_RC_2_FAIL,       /* 3    File upload failed */
+    SF_RC_3_FAIL,       /* 4    File attr update failed */
+    SF_RC_NOT_FOUND,    /* 5    No such file or directory */
+    SF_RC_NO_SPACE,     /* 6    No space to load */
+    SF_RC_URL_TOO_OLD,  /* 7    URL was created more than DEFAULT_TO_URL_DEAD ago */
+    SF_RC_FREF_TOO_OLD, /* 8    File was erased after DEFAULT_TO_FILE_DEAD time on file server */
+    SF_RC_BAD_FILE      /* 9    Currently - zero size. */
 } sf_rc_t;
 static sf_action_t calc_action(sf_rc_t rc) {
     switch (rc) {
         case SF_RC_SENT_OK:      /* File sent */
         case SF_RC_NOT_FOUND:    /* No such file or directory */
         case SF_RC_NO_SPACE:     /* No space to load */
+        case SF_RC_BAD_FILE:     /* 9    Currently - zero size. */
             return SF_UNDEF;
         case SF_RC_EARLY:        /* Should wait until sending */
             return SF_ACT_SEND_IF_TIME;
@@ -120,6 +122,20 @@ static sf_action_t calc_action(sf_rc_t rc) {
             break;
     }
     return SF_UNDEF;
+}
+static int type2cloud(char t) {
+    switch (t) {
+        case 'M':
+            return 1;
+        case 'P':
+            return 2;
+        case 'S':
+            return 3;
+        default:
+            pu_log(LL_ERROR, "%s: Unknown media type %c", t);
+            break;
+    }
+    return 0;
 }
 /******************************************************************/
 /*         Send files functions                                   */
@@ -155,7 +171,7 @@ static void file_delete(const char* name) {
 static struct curl_slist* make_getSF_header(const fd_t* in_par, struct curl_slist* sl) {
     char buf[512]={0};
     const char* content;
-    switch (in_par->type) {
+    switch (type2cloud(in_par->type)) {
         case 1:
             content = "video/";
             break;
@@ -214,8 +230,8 @@ static struct curl_slist* make_SFupdate_header(struct curl_slist* sl, const char
     return sl;
 }
 
-static const char* make_getSF_url(fd_t* in_par) {
-    snprintf(in_par->upl_url, sizeof(in_par->upl_url),
+static const char* make_getSF_url(char* buf, size_t size, fd_t* in_par) {
+    snprintf(buf, size,
              "%s/%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%zu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
              ag_getMainURL(),
              DEFAULT_FILES_UPL_PATH,
@@ -223,15 +239,16 @@ static const char* make_getSF_url(fd_t* in_par) {
              ag_getProxyID(),
              in_par->ext,
              in_par->size,
-             (in_par->type==2)?180:0,       /* Turn on 180 if image */
-             in_par->type
+             (type2cloud(in_par->type)==2)?180:0,       /* Turn on 180 if image */
+             type2cloud(in_par->type)
     );
-    return in_par->upl_url;
+    return buf;
 }
-static const char* make_updSF_url(fd_t* in_par, char* buf, size_t size) {
+static const char* make_updSF_url(char* buf, size_t size, fd_t* in_par) {
     snprintf(buf, size,
-             "%s/%lu?proxyId=%s&incomplete=false",
-             in_par->upl_url,
+             "%s/%s/%lu?proxyId=%s&incomplete=false",
+             ag_getMainURL(),
+             DEFAULT_FILES_UPL_PATH,
              in_par->fileRef,
              ag_getProxyID()
     );
@@ -428,7 +445,8 @@ static int getSF_URL(fd_t* in_par) {
     char* ptr = NULL;
 
 
-    make_getSF_url(in_par);
+    make_getSF_url(url_cmd, sizeof(url_cmd), in_par);
+    pu_log(LL_DEBUG, "%s: URL for request= %s", __FUNCTION__, url_cmd);
 
     if(hs = make_getSF_header(in_par, hs), !hs) goto on_exit;
     if(ptr = post_n_reply(hs, url_cmd), !ptr) goto on_exit;
@@ -444,6 +462,11 @@ static int getSF_URL(fd_t* in_par) {
 on_exit:
     if(ptr)free(ptr);
     if(hs) curl_slist_free_all(hs);
+    if(ret!=1) {
+        in_par->upl_url[0] = '\0';
+        in_par->headers[0] = '\0';
+        in_par->fileRef = 0;
+    }
     return ret;
 }
 /*
@@ -468,7 +491,7 @@ static int sendFile(fd_t* in_par) {
     if(hs = make_getSF_header(in_par, hs), !hs) goto on_exit;
     if(hs = make_SF_header(in_par->headers, hs), !hs) goto on_exit; /* Add file server headers to the common one */
 
-    if(fd = fopen(in_par->name, "rb"), !fp) { /* open file to upload */
+    if(fd = fopen(in_par->name, "rb"), !fd) { /* open file to upload */
         pu_log(LL_ERROR, "%s: Open %s file error %d-%s", __FUNCTION__, in_par->name, errno, strerror(errno));
         if(errno == ENOENT) ret = 2;   /* No such file. It was sent already */
         goto on_exit;
@@ -515,7 +538,7 @@ static int sendSF_update(fd_t* in_par) {
     char* ptr = NULL;
     char url_cmd[1024]={0};
 
-    make_updSF_url(in_par, url_cmd, sizeof(url_cmd));
+    make_updSF_url(url_cmd, sizeof(url_cmd), in_par);
     pu_log(LL_DEBUG, "%s: URL = %s", __FUNCTION__, url_cmd);
 
     if(hs = make_SFupdate_header(hs, ag_getProxyAuthToken()), !hs) goto on_exit;
@@ -549,7 +572,9 @@ static void clean_snap_n_video() {
  * {"name": "sendFiles", "type": <fileTypeString", "timestamp": <end_date>, "filesList": ["<filename>", ..., "<filename>"]}
  * Mesage sent from resend queue
  * [e1,..., eN]
- * ei is {"action":<string>, "file_name":<string>, "file_type":<string>"url":<string>, "headers":<string>, "fileRef":<number>}
+ * ei is
+ * {"action":<string>, "file_name":<string>, "file_type":<string>, "file_time":<number>,
+ * "url":<string>, "headers":<string>, "url_time":<number>,"fileRef":<number>, "fileRef_time":<number>}
  */
 static fld_t* open_flist(const char* msg) {
     fld_t* ret = NULL;
@@ -593,11 +618,11 @@ err:
 }
 /*
  * Array element could contain or just <string> as file name
- * {"action":<string>, "file_name":<string>, "file_type":<string>"url":<string>, "headers":<string>, "fileRef":<number>}
+ * {"action":<string>, "file_name":<string>, "file_type":<string>, "file_time":<number>,
+ * "url":<string>, "headers":<string>, "url_time":<number>,"fileRef":<number>, "fileRef_time":<number>}
  */
 static int get_next_f(fld_t* fld, fd_t* fd) {
     if(fld->idx < fld->total) {
-        fd->event_time = fld->event_time;
         cJSON* item = cJSON_GetArrayItem(fld->arr, fld->idx);
 
         if(item->type == cJSON_String) {                            /* Got simple case */
@@ -607,6 +632,7 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
             fd->upl_url[0] = '\0';
             fd->headers[0] = '\0';
             fd->fileRef = 0;
+            fd->event_time = fld->event_time;
             fd->file_creation_time = 0;
             fd->url_creation_time = 0;
         }
@@ -614,11 +640,8 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
             fd->action = string2sfa(cJSON_GetObjectItem(item, "action")->valuestring);
             fd->name = cJSON_GetObjectItem(item, "file_name")->valuestring;
             fd->type = cJSON_GetObjectItem(item, "file_type")->valuestring[0];
-            const char* url = (cJSON_GetObjectItem(item, "url"))?cJSON_GetObjectItem(item, "url")->valuestring:NULL;
-            if(url)
-                snprintf(fd->upl_url, sizeof(fd->upl_url), "%s",url);
-            else
-                fd->upl_url[0] = '\0';
+            fd->event_time = cJSON_GetObjectItem(item, "file_time")->valueint;
+            snprintf(fd->upl_url, sizeof(fd->upl_url), "%s",cJSON_GetObjectItem(item, "url")->valuestring);
             char* hdr = (cJSON_GetObjectItem(item, "headers"))?cJSON_PrintUnformatted(cJSON_GetObjectItem(item, "headers")):NULL;
             if(hdr) {
                 snprintf(fd->headers, sizeof(fd->headers), "%s", hdr);
@@ -627,10 +650,9 @@ static int get_next_f(fld_t* fld, fd_t* fd) {
             else {
                 fd->headers[0] = '\0';
             }
-
-            fd->fileRef = (cJSON_GetObjectItem(item, "fileRef"))?
-                    (unsigned long)(cJSON_GetObjectItem(item, "fileRef")->valueint):
-                    0LU;
+            fd->url_creation_time = cJSON_GetObjectItem(item, "url_time")->valueint;
+            fd->fileRef = (unsigned long)(cJSON_GetObjectItem(item, "fileRef")->valueint);
+            fd->file_creation_time = cJSON_GetObjectItem(item, "fileRef_time")->valueint;
         }
         fd->ext = ac_cam_get_file_ext(fd->name);
         fd->size = ac_get_file_size(fd->name);
@@ -653,6 +675,10 @@ static const sf_rc_t send_file(fd_t* fd) {
     sf_rc_t ret = SF_RC_SENT_OK;
     int rc;
     print_fd(fd);
+    if(!fd->size) {
+        pu_log(LL_ERROR, "%s: File %s got zero size! Will be deleted", __FUNCTION__, fd->name);
+        return SF_RC_BAD_FILE;
+    }
     switch (fd->action) {
         case SF_ACT_SEND_IF_TIME:
             if ((time(NULL) - fd->event_time) < ag_db_get_int_property(AG_DB_STATE_MD_COUNTDOWN)) {
@@ -688,7 +714,6 @@ static const sf_rc_t send_file(fd_t* fd) {
                 ret = SF_RC_NOT_FOUND;
                 break;
             }
-
             fd->file_creation_time = time(NULL);
             pu_log(LL_DEBUG, "%s: file %s sent OK", __FUNCTION__, fd->name);
         case SF_ACT_UPDATE:
@@ -713,7 +738,8 @@ static const sf_rc_t send_file(fd_t* fd) {
  * return queue with all not sent files
  * In ultimate case all this crap will be deleted after DEFAULT_TO_FOR_DIR_CLEANUP timeout
  * array contains object:
- * {"action":<string>, "file_name":<string>, "file_type":<string>, "url":<string>, "headers":<string>, "fileRef":<number>}
+ * {"action":<string>, "file_name":<string>, "file_type":<string>, "file_time":<number>,
+ * "url":<string>, "headers":<string>, "url_time":<number>,"fileRef":<number>, "fileRef_time":<number>}
  */
 static cJSON* ac_cam_create_not_sent() {
     cJSON* ret = cJSON_CreateArray();
@@ -731,12 +757,16 @@ static int ac_cam_add_not_sent(cJSON* q, fd_t* fd, sf_rc_t rc) {
     cJSON* item = cJSON_CreateObject();
     cJSON_AddItemToObject(item, "action", cJSON_CreateString(sf_action_name[calc_action(rc)]));
     cJSON_AddItemToObject(item, "file_name", cJSON_CreateString(fd->name));
-    char buf[20]={0}; buf[0] = fd->type;
+    char buf[2]={0}; buf[0] = fd->type;
     cJSON_AddItemToObject(item, "file_type", cJSON_CreateString(buf));
+    cJSON_AddItemToObject(item, "file_time", cJSON_CreateNumber(fd->event_time));
     cJSON_AddItemToObject(item, "url", cJSON_CreateString(fd->upl_url));
-    cJSON_AddItemToObject(item, "headers", cJSON_CreateString(fd->headers));
-    snprintf(buf, sizeof(buf), "%lu", fd->fileRef);
-    cJSON_AddItemToObject(item, "fileRef", cJSON_CreateString(buf));
+    if(fd->headers[0] != '\0') {
+        cJSON_AddItemToObject(item, "headers", cJSON_Parse(fd->headers));
+    }
+    cJSON_AddItemToObject(item, "url_time", cJSON_CreateNumber(fd->url_creation_time));
+    cJSON_AddItemToObject(item, "fileRef", cJSON_CreateNumber(fd->fileRef));
+    cJSON_AddItemToObject(item, "fileRef_time", cJSON_CreateNumber(fd->file_creation_time));
 
     cJSON_AddItemToArray(q, item);
     char* txt = cJSON_PrintUnformatted(q);
@@ -753,14 +783,12 @@ static cJSON* resend(cJSON* q) {
         pu_log(LL_ERROR, "%s: Internal error: Resend Queue is NULL!", __FUNCTION__);
         return q;
     }
-    char buf[LIB_HTTP_MAX_MSG_SIZE]={0};
-    char* txt;
+    if(!cJSON_GetArraySize(q)) return q;
 
-    txt = cJSON_PrintUnformatted(q);
+    char* txt = cJSON_PrintUnformatted(q);
     if(txt) {
-        snprintf(buf, sizeof(buf)-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": %s}", DEFAULT_MD_FILE_POSTFIX, txt);
-        pu_queue_push(from_main, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: SF resends", __FUNCTION__, txt);
+        pu_queue_push(from_main, txt, strlen(txt) + 1);
+        pu_log(LL_DEBUG, "%s: SF resends %s", __FUNCTION__, txt);
         free(txt);
     }
     cJSON_Delete(q);
@@ -838,6 +866,7 @@ static void* thread_function(void* params) {
                                 case SF_RC_SENT_OK:
                                     send_alert_to_proxy(fd.type, fd.fileRef);
                                 case SF_RC_NO_SPACE:
+                                case SF_RC_BAD_FILE:
                                     file_delete(fd.name);
                                     break;
                                 case SF_RC_EARLY:
