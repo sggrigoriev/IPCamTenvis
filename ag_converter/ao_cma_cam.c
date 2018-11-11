@@ -45,14 +45,14 @@
 #define PAR_MDSD_ON         "+ 0; 00:00:00-23:59:59"
 
 static const char* PAR_ARRAY[EP_SIZE] = {
-    "???",
-    "recch", "tapech",
-    "ts0", "ts1", "ts2", "ts3",
-    "dealmode", "enable", "sensitivity",
-    "rect0", "rect1", "rect2", "rect3",
-    "chn",
+        "???",
+        "recch", "tapech",
+        "ts0", "ts1", "ts2", "ts3",
+        "dealmode", "enable", "sensitivity",
+        "rect0", "rect1", "rect2", "rect3",
+        "chn",
 /* CFGREC */
-    "sizelmt", "timelmt", "vstrm", "alrmtrgrec", "snap_instead", "record_audio", "snap_interval"
+        "sizelmt", "timelmt", "vstrm", "alrmtrgrec", "snap_instead", "record_audio", "snap_interval"
 };
 
 typedef struct {
@@ -310,11 +310,11 @@ static char* make_md_params() {
         pu_log(LL_DEBUG, "%s: ts0 value is %s", __FUNCTION__, ts0_buf);
     }
     snprintf(buf, sizeof(buf)-1, md_fmt,
-        PAR_ARRAY[EP_RECCH], MD_PARAMS.recch,PAR_ARRAY[EP_TAPECH], MD_PARAMS.tapech,
-        PAR_ARRAY[EP_TS0], ts0_buf, PAR_ARRAY[EP_TS1], PAR_ARRAY[EP_TS2], PAR_ARRAY[EP_TS3],
-        PAR_ARRAY[EP_DEALMODE], MD_PARAMS.dealmode,
-        PAR_ARRAY[EP_RECT0], rect_buf0, PAR_ARRAY[EP_RECT1], PAR_ARRAY[EP_RECT2], PAR_ARRAY[EP_RECT3],
-        PAR_ARRAY[EP_CHN], MD_PARAMS.chn
+             PAR_ARRAY[EP_RECCH], MD_PARAMS.recch,PAR_ARRAY[EP_TAPECH], MD_PARAMS.tapech,
+             PAR_ARRAY[EP_TS0], ts0_buf, PAR_ARRAY[EP_TS1], PAR_ARRAY[EP_TS2], PAR_ARRAY[EP_TS3],
+             PAR_ARRAY[EP_DEALMODE], MD_PARAMS.dealmode,
+             PAR_ARRAY[EP_RECT0], rect_buf0, PAR_ARRAY[EP_RECT1], PAR_ARRAY[EP_RECT2], PAR_ARRAY[EP_RECT3],
+             PAR_ARRAY[EP_CHN], MD_PARAMS.chn
     );
     return strdup(buf);
 }
@@ -340,10 +340,10 @@ static char* make_cfgrec_params() { /* Each (almost) command got it's own unique
     const char* cfgrec_fmt=
             "-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n-%s %d\r\n\r\n";
     snprintf(buf, sizeof(buf), cfgrec_fmt,
-            PAR_ARRAY[EP_SIZELMT],CFGREC_PARAMS.sizelmt,            PAR_ARRAY[EP_TIMELMT],CFGREC_PARAMS.timelmt,
-            PAR_ARRAY[EP_VSTRM],CFGREC_PARAMS.vstrm,                PAR_ARRAY[EP_ALRMTRGREC],CFGREC_PARAMS.alrmtrgrec,
-            PAR_ARRAY[EP_SNAP_INSTEAD],CFGREC_PARAMS.snap_instead,  PAR_ARRAY[EP_RECORD_AUDIO],CFGREC_PARAMS.record_audio,
-            PAR_ARRAY[EP_SNAP_INTERVAL],CFGREC_PARAMS.snap_interval
+             PAR_ARRAY[EP_SIZELMT],CFGREC_PARAMS.sizelmt,            PAR_ARRAY[EP_TIMELMT],CFGREC_PARAMS.timelmt,
+             PAR_ARRAY[EP_VSTRM],CFGREC_PARAMS.vstrm,                PAR_ARRAY[EP_ALRMTRGREC],CFGREC_PARAMS.alrmtrgrec,
+             PAR_ARRAY[EP_SNAP_INSTEAD],CFGREC_PARAMS.snap_instead,  PAR_ARRAY[EP_RECORD_AUDIO],CFGREC_PARAMS.record_audio,
+             PAR_ARRAY[EP_SNAP_INTERVAL],CFGREC_PARAMS.snap_interval
     );
     return strdup(buf);
 }
@@ -447,7 +447,7 @@ void ao_save_params(int cmd_id, const char* lst) {
             continue;
         }
         if((par_id == EP_RECT0)|| (par_id == EP_RECT1)||
-            (par_id == EP_RECT2)||(par_id == EP_RECT3)) store_rect(cmd_id, par_id, buf);
+           (par_id == EP_RECT2)||(par_id == EP_RECT3)) store_rect(cmd_id, par_id, buf);
         else if((par_id == EP_TS0)|| (par_id == EP_TS1)||
                 (par_id == EP_TS2) ||(par_id == EP_TS3)) store_str(cmd_id, par_id, buf);
         else store_int(cmd_id, par_id, buf);
@@ -494,4 +494,3 @@ int ao_get_param_value(int cmd_id, user_par_t par_id) {
     }
     return ret;
 }
-

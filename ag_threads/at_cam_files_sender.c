@@ -49,7 +49,7 @@ static pthread_attr_t attr;
 
 static pu_queue_t* from_main;
 static pu_queue_t* to_proxy;
-static pu_queue_msg_t q_msg[1024];    /* Buffer for messages received */
+static pu_queue_msg_t q_msg[LIB_HTTP_MAX_MSG_SIZE];    /* Buffer for messages received */
 
 typedef struct {
     cJSON* root;
@@ -777,19 +777,39 @@ static int ac_cam_add_not_sent(cJSON* q, fd_t* fd, sf_rc_t rc) {
 static void ac_cam_delete_not_sent(cJSON* q) {
     if(q) cJSON_Delete(q);
 }
+/*
+ * Move to returned queue elements amout less than max_size
+ */
+static cJSON* split_q(cJSON* q, size_t max_size) {
+    size_t len = 0;
+    cJSON* ret = ac_cam_create_not_sent();
 
-static cJSON* resend(cJSON* q) {
+    while(cJSON_GetArraySize(q)) {
+        cJSON* item = cJSON_GetArrayItem(q, 0);
+        char* txt = cJSON_PrintUnformatted(item);
+        if(!txt) return ret;    /* Memory problems */
+        len += strlen(txt);
+        free(txt);
+        if(len > max_size) return ret;
+        cJSON_AddItemToArray(ret, cJSON_DetachItemFromArray(q,0));
+    }
+    return ret;
+}
+static cJSON* resend(cJSON* q, size_t max_size) {
     if(!q) {
         pu_log(LL_ERROR, "%s: Internal error: Resend Queue is NULL!", __FUNCTION__);
         return q;
     }
-    if(!cJSON_GetArraySize(q)) return q;
 
-    char* txt = cJSON_PrintUnformatted(q);
-    if(txt) {
-        pu_queue_push(from_main, txt, strlen(txt) + 1);
-        pu_log(LL_DEBUG, "%s: SF resends %s", __FUNCTION__, txt);
-        free(txt);
+    while(cJSON_GetArraySize(q)) {
+        cJSON* to_send = split_q(q, max_size);  /* Cut off part <= max_size in text representation */
+        char* txt = cJSON_PrintUnformatted(to_send);
+        if(txt) {
+            pu_queue_push(from_main, txt, strlen(txt) + 1);
+            pu_log(LL_DEBUG, "%s: SF resends %s", __FUNCTION__, txt);
+            free(txt);
+        }
+        cJSON_Delete(to_send);
     }
     cJSON_Delete(q);
     return ac_cam_create_not_sent();
@@ -904,12 +924,12 @@ static void* thread_function(void* params) {
         }
 /*1. Try to resend not sent files */
         if(lib_timer_alarm(files_resend_clock)) {
-            resend_queue = resend(resend_queue);
+            resend_queue = resend(resend_queue, LIB_HTTP_MAX_MSG_SIZE-1);
             lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
         }
 /*2. MD/SD directories cleanup */
         if(lib_timer_alarm(dir_clean_clock)) {
-            ac_delete_old_dirs();
+            ac_delete_old_dirs(DEFAULT_TO_DIR_LIFE);
             clean_snap_n_video();
             lib_timer_init(&dir_clean_clock, DEFAULT_TO_FOR_DIR_CLEANUP);
         }

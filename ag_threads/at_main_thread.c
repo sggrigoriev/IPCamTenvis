@@ -127,32 +127,36 @@ static void send_ACK_to_Proxy(int command_number) {
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
     IP_CTX_(4001);
 }
-
+/*
+ * Take files with the postfix placing between start-end
+ * if start == 0 - take all before end
+ * if end == 0 - take all after start
+ * if start == end == 0 - take all
+ */
+static void send_files_2SF(const char* postfix, time_t start_date, time_t end_date) {
+    ac_cam_fl_t fl;
+    const char* flist;
+    if(!ac_cam_fl_open(&fl, postfix, start_date, end_date)) return; /* Nothing ti send */
+    while(flist = ac_cam_fl_get_next(&fl, LIB_HTTP_MAX_MSG_SIZE-100), !flist) {
+        char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
+        ao_make_send_files(buf, sizeof(buf), 0, postfix, flist);
+        pu_queue_push(to_sf, buf, strlen(buf) + 1);
+        pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
+    }
+    ac_cam_fl_close(&fl);
+}
 
 static void send_snapshot(const char* full_path) {
     IP_CTX_(5000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     char path[1024]={0};
     snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
-    ao_make_send_files(buf, sizeof(buf), 0, ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path);
-    pu_log(LL_DEBUG, "%s: Sending to SF thread: %s", __FUNCTION__, buf);
-    pu_queue_push(to_sf, buf, strlen(buf) + 1);
-    IP_CTX_(5001);
-}
-static void send_send_file(t_ao_cam_alert data) {
-    IP_CTX_(6000);
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char* f_list = ac_cam_get_files_name(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
 
-    if(!f_list) {
-        pu_log(LL_WARNING, "%s: no alarm files where found - no data set to SF", AT_THREAD_NAME);
-    }
-    else {
-        ao_make_send_files(buf, sizeof(buf), data.end_date, ac_get_event2file_type(data.cam_event), f_list);
+    if(ao_make_send_files(buf, sizeof(buf), 0, ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path)) {
+        pu_log(LL_DEBUG, "%s: Sending to SF thread: %s", __FUNCTION__, buf);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        free(f_list);
     }
-    IP_CTX_(6001);
+    IP_CTX_(5001);
 }
 /*
  * Send SD/MD/SNAPHOT files which wasn't sent before
@@ -160,29 +164,10 @@ static void send_send_file(t_ao_cam_alert data) {
  */
 static void send_remaining_files() {
     IP_CTX_(7000);
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char* md;
-    char* sd;
-    char* snap;
-    ac_get_all_files(&md, &sd, &snap);
-    if(md) {
-        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_MD_FILE_POSTFIX, md);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: remaining MD files %s sent to SF_thread", __FUNCTION__, md);
-        free(md);
-    }
-    if(sd) {
-        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_SD_FILE_POSTFIX, sd);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: remaining files %s sent to SF_thread", __FUNCTION__, sd);
-        free(sd);
-    }
-    if(snap) {
-        ao_make_send_files(buf, sizeof(buf), 0, DEFAULT_SNAP_FILE_POSTFIX, snap);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: remaining SNAP files %s sent to SF_thread", __FUNCTION__, snap);
-        free(snap);
-    }
+    send_files_2SF(DEFAULT_MD_FILE_POSTFIX, 0, 0);
+    send_files_2SF(DEFAULT_SD_FILE_POSTFIX, 0, 0);
+    send_files_2SF(DEFAULT_SNAP_FILE_POSTFIX, 0, 0);
+
     IP_CTX_(7001);
 }
 /*
@@ -616,13 +601,13 @@ static void process_em_message(msg_obj_t* obj_msg) {
             ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_send_file(data);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
             break;
         case AC_CAM_STOP_SD:
             ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_send_file(data);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
             break;
         case AC_CAM_START_IO:
         case AC_CAM_STOP_IO:
@@ -806,38 +791,46 @@ void at_main_thread() {
         pu_queue_t** q=NULL;
          switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
+                IP_CTX_(26002);
                 q = &from_poxy;
                 break;
             case AQ_FromWS:
+                IP_CTX_(26003);
                 q = &from_ws;
                 break;
             case AQ_FromRW:
+                IP_CTX_(26004);
                 q = &from_stream_rw;
                 break;
             case AQ_FromCam:
+                IP_CTX_(26005);
                 q = &from_cam;
                 break;
              case AQ_Timeout:
+                 IP_CTX_(26006);
                  q = NULL;
                  break;
              case AQ_STOP:
+                 IP_CTX_(26007);
                  q = NULL;
                  main_finish = 1;
                  pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
                  break;
              default:
+                 IP_CTX_(26008);
                  q = NULL;
                  pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
                  break;
          }
          if(q) {
-             IP_CTX_(26002);
+             IP_CTX_(26009);
              while(pu_queue_pop(*q, mt_msg, &len)) {
+                 IP_CTX_(26010);
                  pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);
                  process_message(ev, mt_msg);
                  len = sizeof(mt_msg);
               }
-             IP_CTX_(26003);
+             IP_CTX_(26011);
          }
          /* Place for own periodic actions */
         /*1. Wathchdog */

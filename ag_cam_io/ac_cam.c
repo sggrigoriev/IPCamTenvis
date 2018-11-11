@@ -45,14 +45,18 @@
  * NB! returned memory should be freed afetr use!
  */
 static char* get_full_name(const char* path, const char* name) {
-    char buf[256]={0};
+    char buf[PATH_MAX]={0};
     snprintf(buf, sizeof(buf)-1, "%s/%s", path, name);
-    buf[sizeof(buf)-1] = '\0';
+
     char* ret = strdup(buf);
     if(!ret) {
         pu_log(LL_ERROR, "%s: Not enugh memory", __FUNCTION__);
     }
     return ret;
+}
+static const char* get_sfull_name(const char* path, const char* name, char* dir_buf) {
+    snprintf(dir_buf, PATH_MAX, "%s/%s", path, name);
+    return dir_buf;
 }
 /*
  * rmdir <name> -r
@@ -106,22 +110,6 @@ static const char* add_dir_from_date(time_t timestamp, char* buf, size_t size) {
     return buf;
 }
 /*
- * Return 1 if the file name is preffix%%%%%%postfix...
- */
-static int is_right_name(const char* name, const char*prefix, const char* postfix) {
-    char pr[10]={0}, nm[10]={0}, ps[10]={0};
-
-    int rc = sscanf(name, "%2s%6s%[^.]", pr, nm, ps);
-    if(rc != 3) return 0;
-
-    pu_log(LL_DEBUG, "%s: File name is %s, parsed name is =%s=%s=%s=", __FUNCTION__, name, pr,nm, ps);
-
-    if(strcmp(pr, prefix) != 0) return 0;
-    if(strcmp(ps, postfix) != 0) return 0;
-
-    return 1;
-}
-/*
  * return 1 if the name is YYYY-MM-DD
  * if old == 1 -> the date represented by name sohuld be less than today
  */
@@ -139,120 +127,75 @@ static int is_right_dir(const char* name, int old) {
     return 1;
 }
 /*
- * convert hrs, mins, seconds from struct tm to the number hhmmss
+ * check if t between start_date and end_date
  */
-static unsigned long tm2dig(int h, int m, int s) {
-    return (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
-}
-/*
- * return 1 if str conferted as hhmmss to long is between start and end
- */
-static unsigned long strHHMMSS_to_dig(const char* str) {
-    int h, m, s;
+static int in_dates(time_t t, time_t start_date, time_t end_date) {
+    if(!start_date && !end_date) return 1;
+    if(!start_date) return t <= end_date;
+    if(!end_date) return t >= start_date;
 
-    int i = sscanf(str, "%2d%2d%2d", &h, &m, &s);
-    if(i != 3) {
-        pu_log(LL_ERROR, "%s: Error name scan: %d %s\n", errno, strerror(errno));
-        return 0;
-    }
-    return (unsigned long)s+(unsigned long)m*100+(unsigned long)h*10000;
+    return ((start_date <= t) && (t <= end_date));
 }
 /*
- * Return 1 if name is between start & stop and got rignt postfix (S) or (M) or (P) for stapshot
+ * Convert year, month, day, hour, minute, second to time_t
  */
-static int got_name(const char* name, time_t start, time_t end, const char* postfix) {
-    struct tm tm_s, tm_e;
-    if(!is_right_name(name, DEFAULT_DT_FILES_PREFIX, postfix)) return 0;
-    gmtime_r(&start, &tm_s);
-    gmtime_r(&end, &tm_e);
-    unsigned long start_time = tm2dig(tm_s.tm_hour, tm_s.tm_min, tm_s.tm_sec);
-    unsigned long end_time = tm2dig(tm_e.tm_hour, tm_e.tm_min, tm_e.tm_sec);
-    unsigned long event_time = strHHMMSS_to_dig(name+strlen(DEFAULT_DT_FILES_PREFIX));
+static time_t make_date(int y, int m, int d, int hr, int min, int sec) {
+    y = (y)?y-1900:1900;
+    m = (m)?m-1:0;
+    struct tm time_struct = {sec, min, hr, d, m, y, 0, 0, 0};
+    return mktime(&time_struct);
+}
 
-    return ((start_time <= event_time) && (event_time <= end_time));
+static int useful_file(const struct dirent* ent, const char* postfix, time_t start_date, time_t end_date) {
+    if(ent->d_type != DT_REG) return 0;
+    if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) return 0;
+
+    char pr[10]={0},t[10]={0},dot[10]={0},ext[10]={0};
+    int h,m,s;
+
+    int f = sscanf(ent->d_name, "%2s%2i%2i%2i%1s%1s%s", pr, &h, &m, &s, t, dot, ext);
+    if(f != 7) return 0;
+
+    pu_log(LL_DEBUG, "%s: File name is %s, parsed name is =%s=%i=%i=%i=%s=%s=%s", __FUNCTION__, ent->d_name, pr,h,m,s,t,dot,ext);
+
+    if(strcmp(pr, DEFAULT_DT_FILES_PREFIX) != 0) return 0;
+    if(strcmp(t, postfix) != 0) return 0;
+
+    return in_dates(make_date(0,0,0,h,m,s), start_date, end_date);
 }
 /*
- * Provides all appropriate filenames from directory dir_name
- * return name, name, ... name,
- * NB! returned memory should be freed!
-*/
-static char* get_files_list(const char* dir_name, time_t start, time_t end, const char* postfix) {
-    DIR *dir = opendir(dir_name);
-    if (dir == NULL) {       /* Not a directory or doesn't exist */
-        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, dir_name);
-        return NULL;
-    }
+ * Return 1 if we need files from the directory
+ */
+static int useful_dir(const struct dirent* ent, const char* postfix, time_t start_date, time_t end_date) {
+    if (!ent) return 0;
+    if (ent->d_type != DT_DIR) return 0;
+    if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) return 0;
+    if (!strcmp(ent->d_name, DEFAULT_SNAP_DIR) && !strcmp(postfix, DEFAULT_SNAP_FILE_POSTFIX)) return 1;
+
+    if(strlen(ent->d_name)!=strlen("YYYY-MM-DD")) return 0;
+    if(strcmp(postfix, DEFAULT_MD_FILE_POSTFIX) && strcmp(postfix, DEFAULT_SD_FILE_POSTFIX)) return 0;
+    int f, y, m, d;
+    char c1, c2;
+    f = sscanf(ent->d_name, "%4d%[-]%2d%[-]%2d", &y, &c1, &m, &c2, &d);
+    if(f != 5) return 0;
+
+    return in_dates(make_date(y,m,d,0,0,0), start_date, end_date);
+}
+/*
+ * add ,"fnmame" to the fl->list if list length will be less than tot_len
+ * return 1 of OK, return 0 if name wasn't added
+ */
+static int add_name_to_list(char** list, const char* fname, size_t tot_len) {
+    size_t list_len = (*list)?strlen(*list):0;
+    if((list_len+strlen(fname)+3) >= tot_len) return 0; /* We can't add ',"fname"' */
 
     char buf[512] = {0};
-    char* ret = NULL;
-    struct dirent* dir_ent;
+    snprintf(buf, sizeof(buf), "\",%s,\"", fname);
 
-    while((dir_ent = readdir(dir)), dir_ent != NULL) {
-        if(got_name(dir_ent->d_name, start, end, postfix)) {
-            snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", dir_name, dir_ent->d_name);
-            ret = au_append_str(ret, buf);
-            pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
-        }
-    }
-    closedir(dir);
-    return ret;
-}
-/*
-* Return {"filesList":[]} for snaphots
-* Return NULL if no files found
-* NB! Returned string should be freed!
-*/
-static char* get_files_from_dir(const char* path) {
-    DIR *dir = opendir(path);
-    if (dir == NULL) {       /* Not a directory or doesn't exist */
-        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, path);
-        return NULL;
-    }
-    char* ret = NULL;
-    struct dirent* dir_ent;
-    while((dir_ent = readdir(dir)), dir_ent != NULL) {
-        if(dir_ent->d_type != DT_REG) continue;
-
-        char buf[512] = {0};
-        snprintf(buf, sizeof(buf)-1, "\"%s/%s\",", path, dir_ent->d_name);
-        ret = au_append_str(ret, buf);
-        pu_log(LL_DEBUG, "%s: file %s will be added to the list", __FUNCTION__, buf);
-    }
-    closedir(dir);
-    return au_drop_last_symbol(ret);
-}
-
-/*
-* Return {"filesList":[]} for MD/SD files from all directories with appropriate names (YYYY-MM-DD)
-* Return NULL if no files found
-* NB! Returned string should be freed!
-*/
-static char* get_dt_files(const char* ft) {
-    const time_t start_date = 0;    /* 1970 01 01 00:00:00 */
-    const time_t end_date = 86399;  /* 1970 01 01 23:59:59 */
-    char* ret= NULL;
-    DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
-    if (dir == NULL) {       /* Not a directory or doesn't exist */
-        pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
-        return NULL;
-    }
-    struct dirent *dir_ent;
-    while (dir_ent = readdir(dir), dir_ent != NULL) {
-        char full_path[512]={0};
-        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 0))) continue;
-
-        snprintf(full_path, sizeof(full_path)-1, "%s/%s", DEFAULT_DT_FILES_PATH, dir_ent->d_name);
-        char* flist = get_files_list(full_path, start_date, end_date, ft);
-        if(flist) {
-            ret = au_append_str(ret, flist);
-            free(flist);
-        }
-    }
-    closedir(dir);
-    return au_drop_last_symbol(ret);
+    *list = au_append_str(*list, buf);
+    return *list != NULL;
 }
 /***************************************************************************************************************/
-
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
  * AC_CAM_STOP_SD -> DEFAULT_SD_FILE_POSTFIX
@@ -282,34 +225,67 @@ const char* ac_get_event2file_type(t_ac_cam_events e) {
     return ret;
 }
 /*
- * return "name1",..."nameN" or NULL if no files
- * If no files found - return empty string
- * 1. Find directory "yyyy-mm-dd" in DEFAULT_MD_FILES_PATH
- * 2. find files (S or M type) with filename as DEFAULT_ХХ_FILES_PREFIX+hhmmss+DEFAULT_XX_FILE_POSTFIX.*
- *      where hhmmss is between start and end dates of the alert
+ * Return 0 if error or nothing to send
  */
-char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date) {
-    char dir[256] = {0};
+int ac_cam_fl_open(ac_cam_fl_t* fl, const char* postfix, time_t start_date, time_t end_date) {
+    int ret = 0;
+    fl->postfix = postfix;
+    fl->start_date = start_date;
+    fl->end_date = end_date;
+    fl->root = NULL;
+    fl->root_ent = NULL;
+    fl->files_stor = NULL;
+    fl->files_stor_ent = NULL;
+    fl->list = NULL;
 
-    if(!strcmp(type, DEFAULT_UNDEF_FILE_POSTFIX)) {
-        pu_log(LL_ERROR, "%s: Wrong file type %s. Only %s, %s or %s expected", __FUNCTION__, type, DEFAULT_MD_FILE_POSTFIX, DEFAULT_SD_FILE_POSTFIX, DEFAULT_SNAP_FILE_POSTFIX);
-        return NULL;
+    if(fl->root = opendir(DEFAULT_DT_FILES_PATH), !fl->root) { /* Not a directory or doesn't exist */
+        pu_log(LL_ERROR, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
+        goto on_exit;
     }
-    snprintf(dir, sizeof(dir)-1, "%s/", DEFAULT_DT_FILES_PATH);
-    add_dir_from_date(start_date, dir, sizeof(dir)-strlen(dir));
-
-    return au_drop_last_symbol(get_files_list(dir, start_date, end_date, type));
+    ret = 1;
+on_exit:
+    return ret;
 }
 /*
- * Get all older than today files for all types
- * NB! md, sd, snap should be freed after use! NULL if no files diven type found
+ * return "name", ..., "name" less than size bytes or NULL if no more data
  */
-void ac_get_all_files(char** md, char** sd, char** snap) {
-    *md = get_dt_files(DEFAULT_MD_FILE_POSTFIX);
-    *sd = get_dt_files(DEFAULT_SD_FILE_POSTFIX);
-    char path[256] = {0};
-    snprintf(path, sizeof(path) - 1, "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
-    *snap = get_files_from_dir(path);
+const char* ac_cam_fl_get_next(ac_cam_fl_t* fl, size_t size) {
+    char* ret = NULL;
+
+    if(fl->list) {
+        free(fl->list);
+        fl->list = NULL;
+    }
+    if(fl->root_ent == NULL) goto on_start;
+    goto on_entry;
+on_start:
+    while (fl->root_ent = readdir(fl->root), fl->root != NULL) {
+        if(!useful_dir(fl->root_ent, fl->start_date, fl->end_date)) continue;
+        if(fl->files_stor = opendir(get_sfull_name(DEFAULT_DT_FILES_PATH, fl->root_ent->d_name, fl->dir_name)), !fl->files_stor) goto on_exit;
+
+        while (fl->files_stor_ent = readdir(fl->files_stor), fl->files_stor != NULL) {
+
+            if(!useful_file(fl->files_stor_ent, fl->postfix, fl->start_date, fl->end_date)) continue;
+on_entry:   if(!add_name_to_list(&fl->list, get_sfull_name(fl->dir_name, fl->files_stor_ent->d_name, fl->file_name), size)) {   /* Size is over */
+                ret = fl->list;
+                goto on_exit;
+            }
+        }
+        closedir(fl->files_stor);
+        fl->files_stor_ent = NULL;
+        fl->files_stor = NULL;
+    }
+    fl->root_ent = NULL;
+    return NULL;
+on_exit:
+    if(!fl->files_stor) closedir(fl->files_stor);
+    return ret;
+}
+void ac_cam_fl_close(ac_cam_fl_t* fl) {
+    if(fl->root) closedir(fl->root);
+    fl->root = NULL;
+    if(fl->list) free(fl->list);
+    fl->list = NULL;
 }
 /*
  * Return empty string or all shit after the first '.' in file name
@@ -355,15 +331,16 @@ void ac_cam_clean_dir(const char* path) {
  * Delete all directories which are empty and elder than today
  * Called from ac_cam_init()
  */
-void ac_delete_old_dirs() {
+void ac_delete_old_dirs(time_t life_time) {
     DIR *dir = opendir(DEFAULT_DT_FILES_PATH);
     if (dir == NULL) {       /* Not a directory or doesn't exist */
         pu_log(LL_WARNING, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
         return;
     }
     struct dirent *dir_ent;
+    time_t end_date = time(NULL)-life_time;
     while (dir_ent = readdir(dir), dir_ent != NULL) {
-        if((dir_ent->d_type != DT_DIR) || (!is_right_dir(dir_ent->d_name, 1))) continue;
+        if(!useful_dir(dir_ent, DEFAULT_MD_FILE_POSTFIX, 0, end_date)) continue; /* Doesn't matter SD or MD preffix to use here */
         if(remove_dir(dir_ent->d_name) || errno == ENOENT) {
             pu_log(LL_DEBUG, "%s: Directory %s was deleted", __FUNCTION__, dir_ent->d_name);
         }
@@ -433,7 +410,7 @@ static CURL *open_curl_session(){
     if(res = curl_easy_setopt(curl, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
 /*    if(res = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L), res != CURLE_OK) goto on_error; */
     return curl;
-on_error:
+    on_error:
     curl_easy_cleanup(curl);
     return NULL;
 }
@@ -479,7 +456,7 @@ static int send_command(const char* url_cmd, const char* params) {
     }
 
     ret = 1;
-on_error:
+    on_error:
     if(hs) curl_slist_free_all(hs);
     if(fpw) fclose(fpw);
     if(ptrw) free(ptrw);
@@ -520,7 +497,7 @@ static char* get_current_params(const char* url_cmd) {
     ret = calloc(sz+1, 1);
     memcpy(ret, ptr, sz);
     ret[sz] = '\0';   /* to be sure about NULL-termination */
-on_error:
+    on_error:
     if(fp)fclose(fp);
     if(ptr)free(ptr);
     close_curl_session(crl);
@@ -558,7 +535,7 @@ static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
     free(lst); lst = NULL;
     ret = ao_get_param_value(cmd_id, par_id);
 
-on_error:
+    on_error:
     if(read_uri) free(read_uri);
     if(write_uri) free(write_uri);
     if(lst) free(lst);
@@ -609,7 +586,7 @@ int ac_cam_init() {
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_VIDEO_DIR);
 
     ret = 1;
-on_error:
+    on_error:
     if(md_uri) free(md_uri);
     if(sd_uri) free(sd_uri);
     if(time_uri) free(time_uri);
@@ -649,7 +626,7 @@ int ac_cam_make_snapshot(const char* full_path) {
 
     pu_log(LL_INFO, "%s: Got the picture!\n", __FUNCTION__);
     ret = 1;
-on_error:
+    on_error:
     if(fp)fclose(fp);
     if(uri) free(uri);
     close_curl_session(crl);

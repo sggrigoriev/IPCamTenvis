@@ -24,6 +24,7 @@
 #include "cJSON.h"
 #include "pu_logger.h"
 
+#include "ac_cam.h"
 #include "ao_cmd_data.h"
 
 #include "ao_cmd_proxy.h"

@@ -22,6 +22,7 @@
 #ifndef IPCAMTENVIS_AC_CAM_H
 #define IPCAMTENVIS_AC_CAM_H
 
+#include <dirent.h>
 #include "cJSON.h"
 #include "ao_cmd_data.h"
 
@@ -32,17 +33,27 @@
  * Anything else -> DEFAULT_UNDEF_FILE_POSTFIX
  */
 const char* ac_get_event2file_type(t_ac_cam_events e);
+
+typedef struct {
+    const char* postfix;
+    time_t start_date, end_date;
+    DIR* root;
+    struct dirent* root_ent;
+    DIR* files_stor;
+    struct dirent* files_stor_ent;
+    char dir_name[PATH_MAX];
+    char file_name[PATH_MAX];
+    char* list;
+}ac_cam_fl_t;
 /*
- * Create the JSON array with full file names& path for alert
- * Return NULL if no files found
- * NB! Returned string should be freed!
+ * Return 0 if error or nothing to send
  */
-char* ac_cam_get_files_name(const char* type, time_t start_date, time_t end_date);
+int ac_cam_fl_open(ac_cam_fl_t* fl, const char* postfix, time_t start_date, time_t end_date);
 /*
- * Get all older than today files for all types
- * NB! md, sd, snap should be freed after use! NULL if no files diven type found
+ * return "name", ..., "name" less than size bytes or NULL if no more data
  */
-void ac_get_all_files(char** md, char** sd, char** snap);
+const char* ac_cam_fl_get_next(ac_cam_fl_t* fl, size_t size);
+void ac_cam_fl_close(ac_cam_fl_t* fl);
 /*
  * Return empty string or all shit after the first '.' in file name
  */
@@ -56,10 +67,10 @@ unsigned long ac_get_file_size(const char* name);
  */
 void ac_cam_clean_dir(const char* path);
 /*
- * Delete all directories which are empty and elder than today
+ * Delete all directories YYYY-MM-DD which are empty and elder than life_time
  * Called from ac_cam_init()
  */
-void ac_delete_old_dirs();
+void ac_delete_old_dirs(time_t life_time);
 /*
  * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
  * Return buf

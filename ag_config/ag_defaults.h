@@ -86,7 +86,8 @@
 #define DEFAULT_AM_READ_TO_SEC  1
 #define DEFAULT_AM_ALERT_TO_SEC 10
 #define DEFAULT_AV_ASK_TO_SEC   2*60
-#define DEFAULT_TO_FOR_DIR_CLEANUP  24*5*3600
+#define DEFAULT_TO_FOR_DIR_CLEANUP  24*3600         /* Ones per 24 hours */
+#define DEFAULT_TO_DIR_LIFE 24*3600*7               /* Delete MD/SD files & directories uncoditionally afer aweek */
 #define DEFAULT_TO_FOR_FILES_RESEND 30
 #define DEFAULT_TO_AR_PING  30                      /* Alerts reader TO */
 #define DEFAULT_TO_URL_DEAD 15*60                   /* URL for send files getting ald after 15 minutes */
