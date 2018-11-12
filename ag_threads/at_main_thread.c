@@ -137,7 +137,7 @@ static void send_files_2SF(const char* postfix, time_t start_date, time_t end_da
     ac_cam_fl_t fl;
     const char* flist;
     if(!ac_cam_fl_open(&fl, postfix, start_date, end_date)) return; /* Nothing ti send */
-    while(flist = ac_cam_fl_get_next(&fl, LIB_HTTP_MAX_MSG_SIZE-100), !flist) {
+    while(flist = ac_cam_fl_get_next(&fl, LIB_HTTP_MAX_MSG_SIZE-100), flist != NULL) {
         char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
         ao_make_send_files(buf, sizeof(buf), 0, postfix, flist);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);

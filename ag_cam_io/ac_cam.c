@@ -98,34 +98,6 @@ static int remove_dir(const char* path_n_name) {
 
     return rmdir(path_n_name);
 }
-
-static const char* add_dir_from_date(time_t timestamp, char* buf, size_t size) {
-    struct tm t;
-    char name[11] = {0};
-
-    gmtime_r(&timestamp, &t);
-    strftime(name, sizeof(name), DEFAULT_DT_DIRS_FMT, &t);
-    strncat(buf, name, size-1);
-    buf[size-1] = '\0';
-    return buf;
-}
-/*
- * return 1 if the name is YYYY-MM-DD
- * if old == 1 -> the date represented by name sohuld be less than today
- */
-static int is_right_dir(const char* name, int old) {
-    if((!name) && (strlen(name)!=strlen("YYYY-MM-DD"))) return 0;
-    if(old) {
-        char dir[20]={0};
-        add_dir_from_date(time(NULL), dir, sizeof(dir));
-        if(!strcmp(name, dir)) return 0;
-    }
-    int f, y, m, d;
-    char c1, c2;
-    f = sscanf(name, "%4d%[-]%2d%[-]%2d", &y, &c1, &m, &c2, &d);
-    if(f != 5) return 0;
-    return 1;
-}
 /*
  * check if t between start_date and end_date
  */
@@ -156,8 +128,6 @@ static int useful_file(const struct dirent* ent, const char* postfix, time_t sta
     int f = sscanf(ent->d_name, "%2s%2i%2i%2i%1s%1s%s", pr, &h, &m, &s, t, dot, ext);
     if(f != 7) return 0;
 
-    pu_log(LL_DEBUG, "%s: File name is %s, parsed name is =%s=%i=%i=%i=%s=%s=%s", __FUNCTION__, ent->d_name, pr,h,m,s,t,dot,ext);
-
     if(strcmp(pr, DEFAULT_DT_FILES_PREFIX) != 0) return 0;
     if(strcmp(t, postfix) != 0) return 0;
 
@@ -175,11 +145,11 @@ static int useful_dir(const struct dirent* ent, const char* postfix, time_t star
     if(strlen(ent->d_name)!=strlen("YYYY-MM-DD")) return 0;
     if(strcmp(postfix, DEFAULT_MD_FILE_POSTFIX) && strcmp(postfix, DEFAULT_SD_FILE_POSTFIX)) return 0;
     int f, y, m, d;
-    char c1, c2;
-    f = sscanf(ent->d_name, "%4d%[-]%2d%[-]%2d", &y, &c1, &m, &c2, &d);
-    if(f != 5) return 0;
 
-    return in_dates(make_date(y,m,d,0,0,0), start_date, end_date);
+    f = sscanf(ent->d_name, "%4d%*c%2d%*c%2d", &y, &m, &d);
+    if(f != 3) return 0;
+
+    return in_dates(make_date((int)y,m,d,0,0,0), start_date, end_date);
 }
 /*
  * add ,"fnmame" to the fl->list if list length will be less than tot_len
@@ -187,12 +157,17 @@ static int useful_dir(const struct dirent* ent, const char* postfix, time_t star
  */
 static int add_name_to_list(char** list, const char* fname, size_t tot_len) {
     size_t list_len = (*list)?strlen(*list):0;
+    pu_log(LL_DEBUG, "%s: List len = %d", __FUNCTION__, list_len);
     if((list_len+strlen(fname)+3) >= tot_len) return 0; /* We can't add ',"fname"' */
 
     char buf[512] = {0};
-    snprintf(buf, sizeof(buf), "\",%s,\"", fname);
+    if(!list_len)
+        snprintf(buf, sizeof(buf), "\"%s\"", fname);    /* Its the first element - no comma */
+    else
+        snprintf(buf, sizeof(buf), ",\"%s\"", fname);
 
     *list = au_append_str(*list, buf);
+    pu_log(LL_DEBUG, "%s: List = %s", __FUNCTION__, *list);
     return *list != NULL;
 }
 /***************************************************************************************************************/
@@ -237,6 +212,7 @@ int ac_cam_fl_open(ac_cam_fl_t* fl, const char* postfix, time_t start_date, time
     fl->files_stor = NULL;
     fl->files_stor_ent = NULL;
     fl->list = NULL;
+    fl->no_entry = 1;
 
     if(fl->root = opendir(DEFAULT_DT_FILES_PATH), !fl->root) { /* Not a directory or doesn't exist */
         pu_log(LL_ERROR, "%s: Directory %s wasn't found", __FUNCTION__, DEFAULT_DT_FILES_PATH);
@@ -250,36 +226,33 @@ on_exit:
  * return "name", ..., "name" less than size bytes or NULL if no more data
  */
 const char* ac_cam_fl_get_next(ac_cam_fl_t* fl, size_t size) {
-    char* ret = NULL;
 
     if(fl->list) {
         free(fl->list);
         fl->list = NULL;
     }
-    if(fl->root_ent == NULL) goto on_start;
+    if(fl->no_entry) goto on_start;
+    if(fl->root_ent == NULL) goto on_exit;  /* We were inside but all finished! */
     goto on_entry;
 on_start:
-    while (fl->root_ent = readdir(fl->root), fl->root != NULL) {
-        if(!useful_dir(fl->root_ent, fl->start_date, fl->end_date)) continue;
+    fl->no_entry = 0;
+    while (fl->root_ent = readdir(fl->root), fl->root_ent != NULL) {
+        if(!useful_dir(fl->root_ent, fl->postfix, fl->start_date, fl->end_date)) continue;
         if(fl->files_stor = opendir(get_sfull_name(DEFAULT_DT_FILES_PATH, fl->root_ent->d_name, fl->dir_name)), !fl->files_stor) goto on_exit;
 
-        while (fl->files_stor_ent = readdir(fl->files_stor), fl->files_stor != NULL) {
+        while (fl->files_stor_ent = readdir(fl->files_stor), fl->files_stor_ent != NULL) {
 
             if(!useful_file(fl->files_stor_ent, fl->postfix, fl->start_date, fl->end_date)) continue;
-on_entry:   if(!add_name_to_list(&fl->list, get_sfull_name(fl->dir_name, fl->files_stor_ent->d_name, fl->file_name), size)) {   /* Size is over */
-                ret = fl->list;
-                goto on_exit;
-            }
+on_entry:
+            if(!add_name_to_list(&fl->list, get_sfull_name(fl->dir_name, fl->files_stor_ent->d_name, fl->file_name), size)) goto on_exit;   /* Size is over */
         }
         closedir(fl->files_stor);
         fl->files_stor_ent = NULL;
         fl->files_stor = NULL;
     }
     fl->root_ent = NULL;
-    return NULL;
 on_exit:
-    if(!fl->files_stor) closedir(fl->files_stor);
-    return ret;
+    return fl->list;
 }
 void ac_cam_fl_close(ac_cam_fl_t* fl) {
     if(fl->root) closedir(fl->root);

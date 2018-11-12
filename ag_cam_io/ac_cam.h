@@ -44,6 +44,7 @@ typedef struct {
     char dir_name[PATH_MAX];
     char file_name[PATH_MAX];
     char* list;
+    int no_entry;       /* 1 if we didn't read directories after open */
 }ac_cam_fl_t;
 /*
  * Return 0 if error or nothing to send

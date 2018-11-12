@@ -149,6 +149,7 @@ static CURL* init(){
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 30L);
 
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
+
     curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
 /*    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L); */
 /* CA_INFO & SSL_VERIFYER */
@@ -501,6 +502,8 @@ static int sendFile(fd_t* in_par) {
         pu_log(LL_ERROR, "%s: Error open memstream: %d - %s", __FUNCTION__, errno, strerror(errno));
         goto on_exit;
     }
+
+    if(res = curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, 0L), res != CURLE_OK) goto on_exit;
     if(res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, err_b), res != CURLE_OK) goto on_exit;
     if(res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs), res != CURLE_OK) goto on_exit;
     if(res = curl_easy_setopt(curl, CURLOPT_URL, in_par->upl_url), res != CURLE_OK) goto on_exit;
