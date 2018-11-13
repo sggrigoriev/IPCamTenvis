@@ -39,6 +39,18 @@ static const char* CLOUD_V_STATUS = "status";
 static const char* CLOUD_VIEWERS_COUNT = "viewersCount";
 static const char* CLOUD_PING_TO = "pingInterval";
 
+static volatile unsigned int seq_number=100;
+static pthread_mutex_t sn_mutex = PTHREAD_MUTEX_INITIALIZER; /* To protect the seq_number change */
+static unsigned int get_sn() {
+    unsigned int ret;
+    pthread_mutex_lock(&sn_mutex);
+    ret = seq_number = (seq_number > 999)?100:seq_number+1;
+    pthread_mutex_unlock(&sn_mutex);
+    return ret;
+}
+
+
+
 static cJSON* addArray(cJSON* obj, const char* name, cJSON* array) {
     if(!array)
         cJSON_AddItemToObject(obj, name, cJSON_CreateArray());
@@ -61,7 +73,7 @@ static const char* get_cloud_alert_type(t_ac_cam_events ev) {
 /*
  * [{"commandId": <command_id>, "result": <rc>}]
  */
-cJSON* ao_cloud_responses(int command_id, int rc) {
+cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
   cJSON* ret = cJSON_CreateArray();
     cJSON* elem = cJSON_CreateObject();
     cJSON_AddItemToObject(elem, "commandId", cJSON_CreateNumber(command_id));
@@ -70,7 +82,7 @@ cJSON* ao_cloud_responses(int command_id, int rc) {
     return ret;
 }
 /*
- * Sends after the file was sucesully sent
+ * Sends after the file was successfully sent
  * Return JSON* alert as [
     {
       "alertId": "12345",
@@ -86,7 +98,7 @@ cJSON* ao_cloud_responses(int command_id, int rc) {
     }
   ]
  */
-cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef) {
+cJSON* ao_cmd_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef) {
     const char* alert_type = get_cloud_alert_type(ev);
     if(!alert_type) return NULL;
 
@@ -112,7 +124,7 @@ cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_even
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * [{"params":[<report>], "deviceId":"<deviceID>"}]
  */
-cJSON* ao_cloud_measures(cJSON* report, const char* deviceID) {
+cJSON* ao_cmd_cloud_measures(cJSON* report, const char* deviceID) {
     cJSON* obj = cJSON_CreateArray();
 
     cJSON* mes_item = cJSON_CreateObject();
@@ -127,13 +139,16 @@ cJSON* ao_cloud_measures(cJSON* report, const char* deviceID) {
  * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
  * if JSON is NULL - add empty array
  * Return NULL if message is too long
- * NB! Function frees all JSONs by itself!
+ * NB1! Function frees all JSONs by itself!
+ * NB2! seq calculates here.
  */
-const char* ao_cloud_msg(const char* deviceID, const char* seq_number, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size) {
+const char* ao_cmd_cloud_msg(const char* deviceID, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size) {
     cJSON* obj = cJSON_CreateObject();
 
     cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
-    cJSON_AddItemToObject(obj, "seq", cJSON_CreateString(seq_number));
+    char sn[10]={0};
+    snprintf(sn, sizeof(buf), "%d", get_sn());
+    cJSON_AddItemToObject(obj, "seq", cJSON_CreateString(sn));
     addArray(obj, "alerts", alerts);
     addArray(obj, "responses", responses);
     addArray(obj, "measures", measures);
@@ -238,7 +253,7 @@ static char* error_answer(char* buf, size_t size, int err) {
 /*
  * {"resultCode":0,"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}],"viewers":[{"id":"24","status":1}], "viewersCount":0}
  */
-t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
+t_ao_msg_type ao_cmd_cloud_decode(const char* cloud_message, t_ao_msg* data) {
     cJSON* obj;
     cJSON* item;
 
@@ -290,7 +305,7 @@ t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data) {
 /*
  * Returns {"params":[{"name":"ppc.streamStatus","value":"2dgkaMa8b1RhLlr2cycqStJeU"}]}
  */
-const char* ao_stream_approve(char* buf, size_t size, const char* session_id) {
+const char* ao_cmd_cloud_stream_approve(char* buf, size_t size, const char* session_id) {
     const char* part1 = "{\"params\":[{\"name\":\"ppc.streamStatus\",\"value\":\"";
     const char* part2 = "\"}]}";
     snprintf(buf, size-1, "%s%s%s", part1, session_id, part2);
@@ -300,7 +315,7 @@ const char* ao_stream_approve(char* buf, size_t size, const char* session_id) {
 /*
  * Returns {"sessionId":"<sessionID>", "params":[], "pingType":2}
  */
-const char* ao_connection_request(char* buf, size_t size, const char* session_id) {
+const char* ao_cmd_cloud_connection_request(char* buf, size_t size, const char* session_id) {
     snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"params\":[], \"pingType\":2}", session_id);
     return buf;
 }
@@ -312,7 +327,7 @@ const char* ao_connection_request(char* buf, size_t size, const char* session_id
 /*
  * return {"sessionId":"<sess_id>", "params":[{"name":"streamError","value":"<err_msg>"}]}
  */
-const char* ao_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size) {
+const char* ao_cmd_cloud_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size) {
     const char* msg = "{\"sessionId\":\"%s\", \"params\":[{\"name\":\"streamError\",\"value\":\"%s\"}]}";
     snprintf(buf, size-1, msg, sessId, err_msg);
     buf[size-1] = '\0';
@@ -323,7 +338,7 @@ const char* ao_stream_error_report(const char* err_msg, const char* sessId, char
  * The result should be:
  * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
  */
-const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
+const char* ao_cmd_ws_params(cJSON* report, char* buf, size_t size) {
     char* ret;
     cJSON* obj = cJSON_CreateObject();
     cJSON_AddItemToObject(obj, "sessionId", cJSON_CreateString(ac_get_session_id(buf, size)));
@@ -345,7 +360,7 @@ const char* ao_ws_params(cJSON* report, char* buf, size_t size) {
 /*
  * {"sessionId":"2o7hh2VlxWkdWK9WyizBbhmv0", "requestViewers":true}
  */
-const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t size) {
+const char* ao_cmd_ws_active_viewers_request(const char* sessionID, char* buf, size_t size) {
     snprintf(buf, size-1, "{\"sessionId\":\"%s\", \"requestViewers\":true}", sessionID);
     buf[size-1] = '\0';
     return buf;
@@ -353,20 +368,20 @@ const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t s
 /*
  * Returns "{}"
  */
-const char* ao_answer_to_ws_ping() {
+const char* ao_cmd_ws_answer_to_ping() {
     const char* part1 = "{}";
     return part1;
 }
 /*
  * Creates error answer for WS thread
  */
-const char* ao_ws_error_answer(char* buf, size_t size) {
+const char* ao_cmd_ws_error_answer(char* buf, size_t size) {
     return error_answer(buf, size, AO_WS_THREAD_ERROR);
 }
 /*
  * Creates error answer from streaming thread
  */
-const char* ao_rw_error_answer(char* buf, size_t size) {
+const char* ao_cmd_rw_error_answer(char* buf, size_t size) {
     return error_answer(buf, size, AO_RW_THREAD_ERROR);
 }
 

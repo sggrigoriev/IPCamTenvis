@@ -89,7 +89,7 @@ static void send_startup_report() {
     cJSON* report = ag_db_get_startup_report();
     if(report) {
         char buf[LIB_HTTP_MAX_MSG_SIZE];
-        const char* msg = ao_cloud_msg(ag_getProxyID(), "153", NULL, NULL, ao_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
+        const char* msg = ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
         cJSON_Delete(report);
         if(!msg) {
             pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
@@ -123,7 +123,7 @@ static void send_reboot() {
 static void send_ACK_to_Proxy(int command_number) {
     IP_CTX_(4000);
     char buf[128];
-    ao_cloud_msg(ag_getProxyID(), "154", NULL, ao_cloud_responses(command_number, 0), NULL, buf, sizeof(buf));
+    ao_cmd_cloud_msg(ag_getProxyID(), NULL, ao_cmd_cloud_responses(command_number, 0), NULL, buf, sizeof(buf));
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
     IP_CTX_(4001);
 }
@@ -190,7 +190,7 @@ static int send_active_viewers_reqiest(){
     char buf[256] = {0};
     IP_CTX_(10001);
     return send_to_ws(
-            ao_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
+            ao_cmd_ws_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
             );
 }
 static int send_stream_error() {
@@ -200,7 +200,7 @@ static int send_stream_error() {
     char sess[128] = {0};
 
     int ret = send_to_ws(
-            ao_stream_error_report(ac_get_stream_error(err, sizeof(err)-1),
+            ao_cmd_cloud_stream_error_report(ac_get_stream_error(err, sizeof(err)-1),
                                    ac_get_session_id(sess, sizeof(sess)-1),
                                    buf, sizeof(buf)-1)
     );
@@ -321,7 +321,7 @@ static void run_ws_actions() {
                 ag_db_set_int_property(AG_DB_CMD_ASK_4_VIEWERS_WS, 0);
         }
         if (ag_db_get_int_property(AG_DB_CMD_PONG_REQUEST)) {        /* Answer by pong to WS's ping */
-            if(!send_to_ws(ao_answer_to_ws_ping()))
+            if(!send_to_ws(ao_cmd_ws_answer_to_ping()))
                 stop_ws();
             else
                 ag_db_set_int_property(AG_DB_CMD_PONG_REQUEST, 0);
@@ -426,13 +426,13 @@ static void send_reports() {
     if(changes_report && cJSON_GetArraySize(changes_report)) {
          /* Send it to the cloud */
         if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
-            ao_cloud_msg(ag_getProxyID(), "155", NULL, NULL, ao_cloud_measures(changes_report, ag_getProxyID()), buf,
+            ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(changes_report, ag_getProxyID()), buf,
                          sizeof(buf));
             pu_queue_push(to_proxy, buf, strlen(buf) + 1);
         }
         /* Send it to WS */
         if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
-            send_to_ws(ao_ws_params(changes_report, buf, sizeof(buf)));
+            send_to_ws(ao_cmd_ws_params(changes_report, buf, sizeof(buf)));
         }
     }
     if(changes_report) cJSON_Delete(changes_report);

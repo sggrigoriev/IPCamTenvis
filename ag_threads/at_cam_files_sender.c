@@ -849,7 +849,7 @@ static void send_alert_to_proxy(char type, unsigned long fileRef) {
         f_num = NULL;
     }
     char buf[LIB_HTTP_MAX_MSG_SIZE];
-    const char *msg = ao_cloud_msg(ag_getProxyID(), "153", ao_cloud_alerts(ag_getProxyID(), a_num, ev, f_num), NULL, NULL, buf, sizeof(buf));
+    const char *msg = ao_cmd_cloud_msg(ag_getProxyID(), ao_cmd_cloud_alerts(ag_getProxyID(), a_num, ev, f_num), NULL, NULL, buf, sizeof(buf));
     if(!msg) {
         pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
         return;

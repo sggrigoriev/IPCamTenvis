@@ -192,7 +192,7 @@ static void *a_rdwr_the_thread(void* params) {
 static int at_start_interleaved_rw_thread() {
     if(at_is_rw_thread_run()) return 1;
 
-    stop_msg = ao_rw_error_answer(err_buf, sizeof(err_buf));
+    stop_msg = ao_cmd_rw_error_answer(err_buf, sizeof(err_buf));
 
     stop = 0;
     if(pthread_attr_init(&hb_attr)) goto on_error;

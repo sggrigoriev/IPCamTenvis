@@ -35,10 +35,11 @@
 #define AO_RW_THREAD_ERROR -24
 #define AO_WS_TO_ERROR -25
 
+
 /*
  * Returns [{"commandId": <command_id> "result": <rc>}]
  */
-cJSON* ao_cloud_responses(int command_id, int rc);
+cJSON* ao_cmd_cloud_responses(int command_id, int rc);
 /*
  * Return JSON* alert as "alerts":   "alerts": [
     {
@@ -55,63 +56,64 @@ cJSON* ao_cloud_responses(int command_id, int rc);
     }
   ]
  */
-cJSON* ao_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef);
+cJSON* ao_cmd_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef);
+
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  * [{"params":[<report>], "deviceId":"<deviceID>"}]
  * Return NULL if the message is too long
  */
-cJSON* ao_cloud_measures(cJSON* report, const char* deviceID);
+cJSON* ao_cmd_cloud_measures(cJSON* report, const char* deviceID);
 /*
  * creates the message:
  * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
  * if JSON is NULL - add empty array
  */
-const char* ao_cloud_msg(const char* deviceID, const char* seq_number, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size);
+const char* ao_cmd_cloud_msg(const char* deviceID, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size);
 
-/********************************************************************************
- * Decode cloud/Proxy JSON message into internal structure (ao_cmd_data.h)
- * @param cloud_message - zero-terminated JSON string
- * @param data - internal structure
- * @return - message type
+/************************ WS/streaming functions ************************************************************/
+/*
+ * {"resultCode":0,"params":[{"name":"ppc.streamStatus","setValue":"1","forward":0}],"viewers":[{"id":"24","status":1}], "viewersCount":0}
  */
-t_ao_msg_type ao_cloud_decode(const char* cloud_message, t_ao_msg* data);
-
-
+t_ao_msg_type ao_cmd_cloud_decode(const char* cloud_message, t_ao_msg* data);
 /*
  * Returns {"params":[{"name":"ppc.streamStatus","value":"2dgkaMa8b1RhLlr2cycqStJeU"}]}
  */
-const char* ao_stream_approve(char* buf, size_t size, const char* session_id);
-
+const char* ao_cmd_cloud_stream_approve(char* buf, size_t size, const char* session_id);
 /*
  * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU"}
  */
-const char* ao_connection_request(char* buf, size_t size, const char* session_id);
+const char* ao_cmd_cloud_connection_request(char* buf, size_t size, const char* session_id);
 /*
- * Returns {"sessionId":"2dgkaMa8b1RhLlr2cycqStJeU", "requestViewers":true}
- */
-const char* ao_active_viwers_request(char* buf, size_t size, const char* session_id);
-/*
- * Returns "{}"
- */
-const char* ao_answer_to_ws_ping();
-/*
- * Returns {"resultCode":<AO_WS_THREAD_ERROR>}
- */
-const char* ao_ws_error_answer(char* buf, size_t size);
-/*
- * Returns {"resultCode":<AO_RW_THREAD_ERROR>}
- */
-const char* ao_rw_error_answer(char* buf, size_t size);
-/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * The result should be:
+ * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
+ *
+ *
  * return {"sessionId":"<sess_id>", "params":[{"name":"streamError","value":"<err_msg>"}]}
  */
-const char* ao_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size);
-const char* ao_ws_params(cJSON* report, char* buf, size_t size);
+const char* ao_cmd_cloud_stream_error_report(const char* err_msg, const char* sessId, char* buf, size_t size);
+/*
+ * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ * The result should be:
+ * {"sessionId":"2kr51ar8x8jWD9YAf8ByOZKeW", "params":[{"name":"<param_name>","value":"<param_value>"},...]}
+ */
+const char* ao_cmd_ws_params(cJSON* report, char* buf, size_t size);
 /*
  * {"sessionId":"2o7hh2VlxWkdWK9WyizBbhmv0", "requestViewers":true}
  */
-const char* ao_active_viewers_request(const char* sessionID, char* buf, size_t size);
-
+const char* ao_cmd_ws_active_viewers_request(const char* sessionID, char* buf, size_t size);
+/*
+ * Returns "{}"
+ */
+const char* ao_cmd_ws_answer_to_ping();
+/*
+ * Returns {"resultCode":<AO_WS_THREAD_ERROR>}
+ */
+const char* ao_cmd_ws_error_answer(char* buf, size_t size);
+/*
+ * Returns {"resultCode":<AO_RW_THREAD_ERROR>}
+ */
+const char* ao_cmd_rw_error_answer(char* buf, size_t size);
 
 #endif /* IPCAMTENVIS_AO_CMD_CLOUD_H */

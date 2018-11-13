@@ -65,11 +65,11 @@ static int get_vs_conn_params(t_ao_conn* video, t_ao_conn* ws) {
 
 static int ac_send_stream_initiation() {
     char buf[512];
-    return at_ws_send(ao_connection_request(buf, sizeof(buf), video_conn.auth));
+    return at_ws_send(ao_cmd_cloud_connection_request(buf, sizeof(buf), video_conn.auth));
 }
 static int ac_send_stream_confirmation(){
     char buf[128];
-    return at_ws_send(ao_stream_approve(buf, sizeof(buf), video_conn.auth));
+    return at_ws_send(ao_cmd_cloud_stream_approve(buf, sizeof(buf), video_conn.auth));
 }
 
 t_at_rtsp_session* CAM_SESSION;
