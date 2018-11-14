@@ -45,6 +45,13 @@ int em_init(const char* ip) {
 
     return ((pConn && pConn->Connect()) == 0);
 }
+void em_deinit() {
+    g_DevMgr[0]->Disconnect();
+    g_DevMgr.DeviceRemove(g_DevMgr[0]);
+    close(g_pipeFd[0]);
+    close(g_pipeFd[1]);
+}
+
 int em_function(int to_sec) {
     fd_set rfds;
     struct timeval tv;
@@ -90,16 +97,5 @@ int em_function(int to_sec) {
     }
     else if(ret < 0) return EMM_SELECT_ERR;
     return EMM_TIMEOUT; // ret == 0 - most popular case
-}
-
-void em_deinit() {
-    g_DevMgr[0]->Disconnect();
-    g_DevMgr.DeviceRemove(g_DevMgr[0]);
-}
-int em_connect() {
-    return ((pConn && pConn->Connect()) == 0);
-}
-void em_disconnect() {
-
 }
 

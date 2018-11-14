@@ -136,10 +136,10 @@ static void send_ACK_to_Proxy(int command_number) {
 static void send_files_2SF(const char* postfix, time_t start_date, time_t end_date) {
     ac_cam_fl_t fl;
     const char* flist;
-    if(!ac_cam_fl_open(&fl, postfix, start_date, end_date)) return; /* Nothing ti send */
+    if(!ac_cam_fl_open(&fl, postfix, start_date, end_date)) return; /* Nothing to send */
     while(flist = ac_cam_fl_get_next(&fl, LIB_HTTP_MAX_MSG_SIZE-100), flist != NULL) {
         char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
-        ao_make_send_files(buf, sizeof(buf), 0, postfix, flist);
+        ao_make_send_files(buf, sizeof(buf), end_date, postfix, flist);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
     }
@@ -540,11 +540,6 @@ static void process_ws_message(msg_obj_t* obj_msg) {
             ag_db_set_int_property(AG_DB_STATE_WS_ON, 1); /* WS thread error - reconnect required */
         }
     }
-/* First, lets store change on viewersCount and  pingInterval (if any). */
-    msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
-    if(viewers_count) {
-        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
-    }
     msg_obj_t* ping_interval = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_PING_INTERVAL);
     if(ping_interval) ag_db_set_int_property(AG_DB_STATE_PING_INTERVAL, ping_interval->valueint);
     msg_obj_t* params = ao_proxy_get_ws_array(obj_msg, "params");
@@ -559,21 +554,22 @@ static void process_ws_message(msg_obj_t* obj_msg) {
     }
     msg_obj_t* viewers = ao_proxy_get_ws_array(obj_msg, "viewers");
     if(viewers) {
+        int vc = ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT);
         size_t i;
         for (i = 0; i < pr_get_array_size(viewers); i++) {
             cJSON* v = cJSON_GetArrayItem(viewers, (int)i);
             cJSON* status = cJSON_GetObjectItem(v, "status");
-            int vc = ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT);
             if((status) && (status->type == cJSON_Number)) {
                 switch (status->valueint) {
                     case -1:
-                        if(vc--) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, vc);
+                        vc--;
+                        if(vc>=0) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, vc);
                         break;
                     case 0:
-                        if(!vc) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);
+                        if(!vc) ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, ++vc);
                         break;
                     case 1:
-                        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, vc+1);
+                        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, ++vc);
                         break;
                     default:
                         break;
@@ -581,6 +577,11 @@ static void process_ws_message(msg_obj_t* obj_msg) {
             }
         }
     } /* Work with viewers */
+/* Update active viwers calculation by total amout (if it came) */
+    msg_obj_t* viewers_count = cJSON_GetObjectItem(obj_msg, AG_DB_STATE_VIEWERS_COUNT);
+    if(viewers_count) {
+        ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
+    }
     IP_CTX_(20022);
 }
 static void process_em_message(msg_obj_t* obj_msg) {

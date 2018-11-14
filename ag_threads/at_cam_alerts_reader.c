@@ -22,7 +22,7 @@
         Alert types: MD_ALERT, MD_FILE, SD_ALERT, SD_FILE
         If TO, alert is over,then generate the alert to the app
     2. How to determine the event's file(s) is/are ready?
-        ALERT_TO + FILE_TO
+        ALERT_TO + FILE_TO (AG_DB_STATE_MD_COUNTDOWN)
         FILE_TO is the time after ALERT_TO is over. - Just to give time to system finish with file writing&saving
     3. How to take all files for the event?
         Event_start_time = the time of the first alert of given type
@@ -58,7 +58,7 @@ static pthread_attr_t attr;
 
 static volatile int stop=1;                 /* Thread stop flag */
 
-static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* bufffer for sending data */
+static char out_buf[LIB_HTTP_MAX_MSG_SIZE]; /* buffer for sending data */
 
 static pu_queue_t* to_agent;                /* transport here */
 
@@ -70,7 +70,7 @@ static int is_md=0, is_sd=0, is_io=0;
 
 /**********************************************************************/
 static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
-    int ret = em_function(1);
+    int ret = em_function(to_sec);
 
     switch(ret) {
         case EMM_IO_EVENT:
@@ -138,7 +138,8 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
             break;
 /* Error cases */
         case EMM_AB_EVENT:
-            pu_log(LL_WARNING, "%s: Abnormal event came from Camera! Ignored.", __FUNCTION__);
+            pu_log(LL_WARNING, "%s: Abnormal event came from Camera! Restart Monitor!", __FUNCTION__);
+            return AC_CAM_STOP_SERVICE;
             break;
         case EMM_READ_ERROR:
             pu_log(LL_WARNING, "%s: Read error event came from Events Monitor! Ignored.", __FUNCTION__);
@@ -153,7 +154,8 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec) {
             pu_log(LL_ERROR, "%s: Peer Closed alarm came from Camera. Restart.", __FUNCTION__);
             return AC_CAM_STOP_SERVICE;
         default:
-            pu_log(LL_ERROR, "%s: Unrecognized event %d from Cam. Ignored.", __FUNCTION__, ret);
+            pu_log(LL_ERROR, "%s: Unrecognized event %d from Cam. Restart.", __FUNCTION__, ret);
+            return AC_CAM_STOP_SERVICE;
             break;
     }
     return AC_CAM_EVENT_UNDEF;
@@ -244,7 +246,7 @@ void at_stop_cam_alerts_reader() {
     pthread_attr_destroy(&attr);
 }
 
-/* Set stip flag on for async stop */
+/* Set st0p flag on for async stop */
 void at_set_stop_cam_alerts_reader() {
     stop = 1;
 }

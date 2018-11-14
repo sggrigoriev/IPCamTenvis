@@ -60,11 +60,6 @@ cJSON* ag_db_get_changes_report();
  */
 cJSON* ag_db_get_startup_report();
 /*
- * return property's flag value
- */
-int ag_db_get_flag(const char* property_name);
-
-/*
  * Return 0 if no change; return 1 if proprrty changed
  * !Set the property's flag ON in any case!.
  */

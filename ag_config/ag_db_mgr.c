@@ -116,7 +116,7 @@ typedef struct {
 
 /*04*/  int in_startup_report;  /* 1: Should be taken for startup params report to cloud */
 /*05*/  int changed;            /* Value was changed, i.e. new value <> old one */
-/*06*/  int in_changes_report;  /* Value sohuld be included into WS/cloud report */
+/*06*/  int in_changes_report;  /* Value sohuld be included into WS/cloud report: value came, maybe the same as previous */
 
 /*07*/  int persistent;         /* Should be persistently kept */
 
@@ -498,19 +498,6 @@ on_error:
     if(rep) cJSON_Delete(rep);
     return NULL;
 }
-
-/*
- * return property's flag value
- */
-int ag_db_get_flag(const char* property_name) {
-    int ret = 0;
-    pthread_mutex_lock(&local_mutex);
-        int pos = find_param(property_name);
-        if(pos >= 0) ret = IMDB[pos].change_flag;
-    pthread_mutex_unlock(&local_mutex);
-
-    return ret;
-}
 /*
  * Return 0 if no change; return 1 if property changed
  * !Set the property's flag ON anyway.
@@ -523,7 +510,6 @@ int ag_db_set_int_property(const char* property_name, int property_value) {
             ret = 0;
         else {
             replace_int_param_value(pos, property_value);
-            ret = IMDB[pos].changed;
         }
     pthread_mutex_unlock(&local_mutex);
     return ret;
@@ -560,7 +546,6 @@ int ag_db_update_changed_cam_parameters() {
     pthread_mutex_unlock(&local_mutex);
     return 1;
 }
-
 /*
  * Save persistent chabges
  */

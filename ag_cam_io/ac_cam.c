@@ -341,11 +341,12 @@ void ac_delete_old_dirs(time_t life_time) {
     time_t end_date = time(NULL)-life_time;
     while (dir_ent = readdir(dir), dir_ent != NULL) {
         if(!useful_dir(dir_ent, DEFAULT_MD_FILE_POSTFIX, 0, end_date)) continue; /* Doesn't matter SD or MD preffix to use here */
-        if(remove_dir(dir_ent->d_name) || errno == ENOENT) {
-            pu_log(LL_DEBUG, "%s: Directory %s was deleted", __FUNCTION__, dir_ent->d_name);
+        char name_n_path[PATH_MAX]={0};
+        if(remove_dir(get_sfull_name(DEFAULT_DT_FILES_PATH, dir_ent->d_name, name_n_path)) || errno == ENOENT) {
+            pu_log(LL_DEBUG, "%s: Directory %s was deleted", __FUNCTION__, name_n_path);
         }
         else {
-            pu_log(LL_ERROR, "%s: Error %s deletion: %d - %s", __FUNCTION__, dir_ent->d_name, errno, strerror(errno));
+            pu_log(LL_ERROR, "%s: Error %s deletion: %d - %s", __FUNCTION__, name_n_path, errno, strerror(errno));
         }
     }
     closedir(dir);

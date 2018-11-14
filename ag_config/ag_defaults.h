@@ -83,15 +83,15 @@
 #define DEFAULT_MSD_FILE_EXT    "mp4"
 #define DEFAULT_SNAP_FILE_EXT    "jpg"
 
-#define DEFAULT_AM_READ_TO_SEC  1
-#define DEFAULT_AM_ALERT_TO_SEC 10
-#define DEFAULT_AV_ASK_TO_SEC   2*60
-#define DEFAULT_TO_FOR_DIR_CLEANUP  /* 24*3600 */ 30       /* Once per 24 hours */
-#define DEFAULT_TO_DIR_LIFE 24*3600*7               /* Delete MD/SD files & directories uncoditionally afer aweek */
-#define DEFAULT_TO_FOR_FILES_RESEND 30
-#define DEFAULT_TO_AR_PING  30                      /* Alerts reader TO */
-#define DEFAULT_TO_URL_DEAD 15*60                   /* URL for send files getting ald after 15 minutes */
-#define DEFAULT_TO_FILE_DEAD    24*3600
+#define DEFAULT_AM_READ_TO_SEC          1               /* Frequency to scan alerts from camera */
+#define DEFAULT_AM_ALERT_TO_SEC         10              /* Period for which all WD alarms treats as one */
+#define DEFAULT_AV_ASK_TO_SEC           2*60            /* Interval to check active viewers amount though WS */
+#define DEFAULT_TO_FOR_DIR_CLEANUP      20*3600         /* Once per 20 hours */
+#define DEFAULT_TO_DIR_LIFE             24*3600*7       /* Delete MD/SD files & directories uncoditionally afer aweek */
+#define DEFAULT_TO_FOR_FILES_RESEND     30              /* Delay to resend not sent files */
+#define DEFAULT_TO_AR_PING              30              /* Alerts reader TO */
+#define DEFAULT_TO_URL_DEAD             15*60           /* URL for send files getting ald after 15 minutes */
+#define DEFAULT_TO_FILE_DEAD            24*3600         /* Max age of not reported to the cloud file kept on file server (Amazone) */
 
 #define DEFAULT_DB_PATH     "/mnt/mtd/cfg/ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
