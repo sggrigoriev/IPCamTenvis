@@ -83,8 +83,9 @@
 #define DEFAULT_MSD_FILE_EXT    "mp4"
 #define DEFAULT_SNAP_FILE_EXT    "jpg"
 
-#define DEFAULT_AM_READ_TO_SEC          1               /* Frequency to scan alerts from camera */
-#define DEFAULT_AM_ALERT_TO_SEC         10              /* Period for which all WD alarms treats as one */
+#define DEFAULT_EM_TO                   20              /* Event Monitor timeout */
+#define DEFAULT_AM_READ_TO_SEC          1
+#define DEFAULT_AM_ALERT_TO_SEC         10              /* Period for which all CAM alarms treats as one */
 #define DEFAULT_AV_ASK_TO_SEC           2*60            /* Interval to check active viewers amount though WS */
 #define DEFAULT_TO_FOR_DIR_CLEANUP      20*3600         /* Once per 20 hours */
 #define DEFAULT_TO_DIR_LIFE             24*3600*7       /* Delete MD/SD files & directories uncoditionally afer aweek */
@@ -98,6 +99,8 @@
 #define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
 #define DEFAULT_FILES_UPL_PATH  "cloud/json/files"  /* Should be added to the main URL for files upload */
+
+#define DEFAULT_CAM_MON_PORT    8889
 
 #define IP_CTX_(a) contextId = a
 

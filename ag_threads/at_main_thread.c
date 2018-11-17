@@ -21,6 +21,12 @@
 
 #include <memory.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <signal.h>
+#include <errno.h>
 
 #include "lib_timer.h"
 #include "pu_queue.h"
@@ -32,7 +38,6 @@
 
 #include "at_proxy_rw.h"
 #include "at_wud_write.h"
-#include "at_cam_alerts_reader.h"
 #include "at_ws.h"
 #include "at_cam_files_sender.h"
 
@@ -56,6 +61,10 @@
 */
 
 extern uint32_t contextId;
+
+static pid_t event_monitor_pid = -1;
+lib_timer_clock_t em_clock = {0};           /* timer for event monitor msgs receiving */
+
 
 static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;     /* main thread events set */
@@ -215,13 +224,56 @@ static void stop_ws() {
     ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
     IP_CTX_(27001);
 }
+/* EM */
+static pid_t start_events_monitor() {
+    char* const cmd_string[] = {
+            "/root/presto/bin/Monitor",                /* Process name */
+            "127.0.0.1",                /* Process IP */
+            "8889",                     /* Process Port */
+            "127.0.0.1",                /* Cam IP */
+            "8001",                     /* Cam port */
+            "admin",                    /* Cam login */
+            "admin",
+            NULL
+    };
+    if(access( cmd_string[0], F_OK ) == -1 ) {
+        pu_log(LL_ERROR, "%s: %s file doesn't exist. Abort", __FUNCTION__, cmd_string[0]);
+        return -1;
+    }
+    if( access( cmd_string[0], X_OK ) == -1 ) {
+        pu_log(LL_ERROR, "%s: No permission granted to execute %s. Abort", __FUNCTION__, cmd_string[0]);
+        return -1;
+    }
+    pid_t pid = 0;
+
+    if((pid = fork())) {
+        return pid;     /* Parent return */
+    }
+    else {
+        chdir("/root/presto/bin");
+        execv(cmd_string[0], cmd_string);  /* launcher exits and disapears... */
+        pu_log(LL_ERROR, "%s: Error execv run: %d - %s", __FUNCTION__, errno, strerror(errno));
+    }
+    pu_log(LL_INFO, "%s: Ok", __FUNCTION__);
+    return pid;
+}
+static pid_t stop_events_monitor(pid_t pid_id) {
+    kill(event_monitor_pid, SIGTERM);
+    sleep(2);
+    kill(event_monitor_pid, SIGKILL);          //In case the process didn't listen SIGTERM carefully...
+    waitpid(event_monitor_pid, 0, 0);
+    pu_log(LL_INFO, "%s: Ok", __FUNCTION__);
+    return -1;
+}
 static void restart_events_monitor() {
     IP_CTX_(22000);
-    at_stop_cam_alerts_reader();
-    if(!at_start_cam_alerts_reader()) {
+    pu_log(LL_INFO, "%s: requested", __FUNCTION__);
+    if(event_monitor_pid > 0) event_monitor_pid = stop_events_monitor(event_monitor_pid);
+    if(event_monitor_pid = start_events_monitor(), start_events_monitor < 0) {
         pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
         send_reboot();
     }
+    lib_timer_init(&em_clock, DEFAULT_EM_TO);
     IP_CTX_(22001);
 }
 /*
@@ -589,6 +641,8 @@ static void process_em_message(msg_obj_t* obj_msg) {
     t_ao_cam_alert data = ao_cam_decode_alert(obj_msg);
     pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
+    lib_timer_init(&em_clock, DEFAULT_EM_TO);
+
     switch (data.cam_event) {
         case AC_CAM_START_MD:
             ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
@@ -615,13 +669,13 @@ static void process_em_message(msg_obj_t* obj_msg) {
             pu_log(LL_ERROR, "%s: IO event came. Unsupported for now. Ignored", __FUNCTION__);
             break;
         case AC_CAM_STOP_SERVICE:
-            pu_log(LL_ERROR, "%s: Camera Events Monitor is out of service. Restart.", __FUNCTION__);
-            sleep(1);   /* Just on case... */
+            pu_log(LL_ERROR, "%s: Camera Events Monitor is out of service. Restart EM.", __FUNCTION__);
             restart_events_monitor();
         case AC_CAM_TIME_TO_PING:
             break;
         default:
-            pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Ignored", data.cam_event);
+            pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Resrart EM", data.cam_event);
+            restart_events_monitor();
             break;
     }
     IP_CTX_(23001);
@@ -712,6 +766,13 @@ static int main_thread_startup() {
         return 0;
     }
     pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
+/* Process start */
+    if(event_monitor_pid = start_events_monitor(), event_monitor_pid < 0) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
+        IP_CTX_(24006);
+        return 0;
+    }
+    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READER", __FUNCTION__);
 
 /* Threads start */
     if(!at_start_proxy_rw()) {
@@ -735,12 +796,6 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
 
-    if(!at_start_cam_alerts_reader()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
-        IP_CTX_(24006);
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READER", __FUNCTION__);
     IP_CTX_(24007);
     return 1;
 }
@@ -752,7 +807,7 @@ static void main_thread_shutdown() {
     at_set_stop_proxy_rw();
     at_set_stop_wud_write();
 
-    at_stop_cam_alerts_reader();
+    if(event_monitor_pid > 0) stop_events_monitor(event_monitor_pid);
     at_stop_sf();
     at_stop_wud_write();
     at_stop_proxy_rw();
@@ -780,6 +835,9 @@ void at_main_thread() {
 
     lib_timer_clock_t va_clock = {0};   /* timer for viewers amount check */
     lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
+
+    lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
+
 
     unsigned int events_timeout = 1; /* Wait 1 second */
 
@@ -844,6 +902,12 @@ void at_main_thread() {
             ag_db_set_int_property(AG_DB_CMD_ASK_4_VIEWERS_WS, 1);
             lib_timer_init(&va_clock, DEFAULT_AV_ASK_TO_SEC);
         }
+        if(lib_timer_alarm(em_clock)) {
+            pu_log(LL_WARNING, "%s: No pings from Events Monitor. Restart", AT_THREAD_NAME);
+            restart_events_monitor();
+            lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
+        }
+
 /* Interpret changes made in properties */
         run_actions();
     }

@@ -22,14 +22,29 @@
 #ifndef IPCAMTENVIS_AT_CAM_ALERTS_READER_H
 #define IPCAMTENVIS_AT_CAM_ALERTS_READER_H
 
-/* Start thread */
-int at_start_cam_alerts_reader();
+typedef enum {
+    MON_NAME=0,
+    MON_AGENT_IP=1,
+    MON_AGENT_PORT=2,
+    MON_CAM_IP=3,
+    MON_CAM_PORT=4,
+    MON_CAM_LOGIN=5,
+    MON_CAM_PASSWORD=6,
+    MON_SIZE
+} mon_params_t;
 
-/* Stop the thread */
-void at_stop_cam_alerts_reader();
+typedef struct {
+    char* process_name;
+    char* agent_ip;
+    int agent_port;
+    char* cam_ip;
+    int cam_port;
+    char* cam_login;
+    char* cam_password;
+} input_params_t;
 
-/* Set stip flag on for async stop */
-void at_set_stop_cam_alerts_reader();
+void at_mon_stop();
 
+void at_mon_function(const input_params_t* params);
 
 #endif /* IPCAMTENVIS_AT_CAM_ALERTS_READER_H */

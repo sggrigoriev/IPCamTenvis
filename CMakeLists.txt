@@ -143,7 +143,13 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             nopoll
             ssl
             crypto
-            stdc++)
+#            stdc++
+            )
+    set(MON_REQUIRED_LIBRARIES
+            m
+            pthread
+            stdc++
+            )
 
 
     include_directories(
@@ -199,6 +205,15 @@ file(GLOB SOURCE_FILES_IPCAM_LIB
         libs/ipcam_src/*.cpp
         libs/ipcam_src/*.c
         )
+#IPCam monitor
+file(GLOB SOURCE_FILES_IPCAM_MONITOR
+        ipcam_monitor/*.c
+        ${PROXY_LIBS_PATH}/pu_logger/*.c
+        ${PROXY_LIBS_PATH}/libtimer/*.c
+        ${PROXY_LIBS_PATH}/libtcp/*.c
+        libs/ipcam_src/*.cpp
+        libs/ipcam_src/*.c
+        )
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
     add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
@@ -207,8 +222,11 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     target_link_libraries(jq ${REQUIRED_LIBRARIES})
 
     add_executable(Tenvis ${SOURCE_FILES})
-    target_link_libraries(Tenvis ${PROXY_LIBS_PATH}/libipcam.a ${REQUIRED_LIBRARIES})
+    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES})
 
+    add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
+    target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES})
+#${PROXY_LIBS_PATH}/libipcam.a
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
@@ -221,7 +239,6 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
             add_executable(Tenvis ${SOURCE_FILES})
             target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
-            ${SYSROOT_PATH}/usr/lib/libipcam.a
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
@@ -252,14 +269,22 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             ${SYSROOT_PATH}/usr/lib/libintl.a
             ${SYSROOT_PATH}/usr/lib/libffi.a
             ${SYSROOT_PATH}/usr/lib/libcurl.a
-
-
             )
+
+            add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
+            target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES}
+#                    ${SYSROOT_PATH}/usr/lib/libipcam.a
+            )
+
             set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
             set_property(TARGET jq PROPERTY C_STANDARD 90)
-            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
+#            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
+            set_property(TARGET Monitor PROPERTY C_STANDARD 90)
+            set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)
 endif()
 
 set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
 set_property(TARGET jq PROPERTY C_STANDARD 90)
-set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
+#set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
+set_property(TARGET Monitor PROPERTY C_STANDARD 90)
+set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)

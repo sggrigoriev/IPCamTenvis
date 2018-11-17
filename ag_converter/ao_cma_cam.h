@@ -31,11 +31,7 @@
  * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
  */
 t_ao_cam_alert ao_cam_decode_alert(cJSON* obj);
-/*
- * Notify Agent about the event
- * if start_date or end_date is 0 fields are ignored
- */
-const char* ao_make_cam_alert(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size);
+
 
 #define AO_CAM_READ     1
 #define AO_CAM_WRITE    0

@@ -19,6 +19,7 @@
  Created by gsg on 30/10/17.
 */
 #include <string.h>
+#include <pthread.h>
 
 #include "cJSON.h"
 

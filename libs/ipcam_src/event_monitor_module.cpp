@@ -26,6 +26,9 @@
 
 #include "event_monitor_module.h"
 
+/* TODO: change this patch to smth reasonable! */
+static int inited = 0; 
+
 /*************************************************/
 CDvsConnManager g_DevMgr;
 DVSCONN *pConn = NULL;
@@ -42,10 +45,12 @@ int em_init(const char* ip) {
     strcpy(pConn->cUser, "admin");
     strcpy(pConn->cPassword, "admin");
     strcpy(pConn->cHost, ip);
+    inited = (pConn && pConn->Connect()) == 0;
 
-    return ((pConn && pConn->Connect()) == 0);
+    return inited;
 }
 void em_deinit() {
+    if(!inited) return;
     g_DevMgr[0]->Disconnect();
     g_DevMgr.DeviceRemove(g_DevMgr[0]);
     close(g_pipeFd[0]);
