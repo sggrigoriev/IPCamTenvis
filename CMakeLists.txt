@@ -200,11 +200,7 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/libtcp/*.c
         ${PROXY_LIBS_PATH}/json/*.c
 )
-#IPCam library
-file(GLOB SOURCE_FILES_IPCAM_LIB
-        libs/ipcam_src/*.cpp
-        libs/ipcam_src/*.c
-        )
+
 #IPCam monitor
 file(GLOB SOURCE_FILES_IPCAM_MONITOR
         ipcam_monitor/*.c
@@ -216,7 +212,6 @@ file(GLOB SOURCE_FILES_IPCAM_MONITOR
         )
 
 if(AGENT_PLATFORM STREQUAL "ubuntu")
-    add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
 
     add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
     target_link_libraries(jq ${REQUIRED_LIBRARIES})
@@ -230,9 +225,6 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
-            add_library(ipcam STATIC ${SOURCE_FILES_IPCAM_LIB})
-            install(TARGETS ipcam ARCHIVE DESTINATION ${SYSROOT_PATH}/usr/lib
-                    LIBRARY DESTINATION ${SYSROOT_PATH}/usr/lib)
 
             add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
             target_link_libraries(jq m)

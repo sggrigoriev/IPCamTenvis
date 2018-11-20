@@ -75,9 +75,14 @@ static int mon_connect(const char* cam_ip, int cam_port, const char* agent_ip, i
         pu_log(LL_ERROR, "%s: unable to bind to port %d. %d %s", __FUNCTION__, agent_port, errno, strerror(errno));
         return -1;
     }
-    int sock = lib_tcp_listen(server_socket, 30);  /* 30 seconds timeout */
+    int sock = lib_tcp_listen(server_socket, 60);  /* 60 seconds timeout */
     if(sock < 0) {
         pu_log(LL_ERROR, "%s: listen error.", AT_THREAD_NAME);
+        close(server_socket);
+        return -1;
+    }
+    if(!sock) {
+        pu_log(LL_ERROR, "%s: Timeout on connection attempt!", __FUNCTION__);
         close(server_socket);
         return -1;
     }
@@ -90,7 +95,12 @@ static int mon_connect(const char* cam_ip, int cam_port, const char* agent_ip, i
  */
 static int mon_write(int wr_sock, const char* msg) {
     IP_CTX_(20000);
-    return lib_tcp_write(wr_sock, msg, strlen(msg)+1, 1);
+    int ret = lib_tcp_write(wr_sock, msg, strlen(msg)+1, 10);    /* 10 seconds timeout */
+    if(!ret) {
+        pu_log(LL_ERROR, "%s: Timeout writing to Agent.");
+    }
+    if(ret != strlen(msg)+1) ret = 0;
+    return ret;
 }
 
 /**********************************************************************/
@@ -190,7 +200,7 @@ static cam_events_t monitor_wrapper(int to_sec, int alert_to_sec) {
                 return CAM_STOP_IO;
             }
             if(lib_timer_alarm(wd_clock)) {
-                lib_timer_init(&wd_clock, 10);
+                lib_timer_init(&wd_clock, 60);
                 return CAM_TIME_TO_PING;
             }
             break;
@@ -224,7 +234,7 @@ static cam_events_t monitor_wrapper(int to_sec, int alert_to_sec) {
             pu_log(LL_ERROR, "%s: Select pipe error in EentsMonitor: %d %s. Restart.", __FUNCTION__, errno, strerror(errno));
             return CAM_STOP_SERVICE;
          case EMM_PEERCLOSED:
-            pu_log(LL_ERROR, "%s: Peer Closed alarm came from Camera. Restart.", __FUNCTION__);
+            pu_log(LL_ERROR, "%s: 'Peer Closed' alarm came from Camera. Restart.", __FUNCTION__);
             return CAM_STOP_SERVICE;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized event %d from Cam. Restart.", __FUNCTION__, ret);
@@ -239,7 +249,7 @@ static void monitor() {
     pu_log(LL_INFO, "%s starts", AT_THREAD_NAME);
 
     time_t md_start=0, sd_start=0, io_start=0;
-    lib_timer_init(&wd_clock, 10);
+    lib_timer_init(&wd_clock, 60);
 
     while(1) {
         cam_events_t ret = monitor_wrapper(/*DEFAULT_AM_READ_TO_SEC*/1, /*DEFAULT_AM_ALERT_TO_SEC*/10);
@@ -280,7 +290,7 @@ static void monitor() {
         pu_log(LL_DEBUG, "%s: %s event arrived", AT_THREAD_NAME, cam_event2string(ret));
 
         if(!mon_write(to_agent, out_buf)) {
-            pu_log(LL_ERROR, "%s: Error sending to Agent. Exiting", AT_THREAD_NAME);
+            pu_log(LL_ERROR, "%s: Can't send msg to Agent. Exiting", AT_THREAD_NAME);
             goto on_exit;
         }
         pu_log(LL_DEBUG, "%s: %s was sent to the Agent", AT_THREAD_NAME, out_buf);

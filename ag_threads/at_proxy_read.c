@@ -85,7 +85,10 @@ monitor_connect:
             goto allez;
         }
         if (rc == LIB_TCP_READ_TIMEOUT) {
-//            pu_log(LL_DEBUG, "%s: timeout", AT_THREAD_NAME);
+            if(read_mon_socket < 0) {
+                pu_log(LL_WARNING, "%s: No connection to Camera Events Monitor. Reconnect", AT_THREAD_NAME);
+                goto monitor_connect;
+            }
             continue;   /* timeout */
         }
         if (rc == LIB_TCP_READ_MSG_TOO_LONG) {
@@ -105,10 +108,6 @@ monitor_connect:
         while (lib_tcp_assemble(conn, out_buf, sizeof(out_buf))) {     /* Read all fully incoming messages */
             pu_queue_push(q, out_buf, strlen(out_buf) + 1);
             pu_log(LL_INFO, "%s: message received: %s", AT_THREAD_NAME, out_buf);
-        }
-        if(read_mon_socket < 0) {
-            pu_log(LL_WARNING, "%s: No connection to Camera Events Monitor. Reconnect", AT_THREAD_NAME);
-            goto monitor_connect;
         }
     }
 allez:

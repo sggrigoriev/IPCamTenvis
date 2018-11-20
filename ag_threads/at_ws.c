@@ -71,7 +71,7 @@ static const char* cut_head(const char* host) {
  * this handler fires on every message
 */
 static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, noPollPtr user_data) {
-    char buf[512] = {0};
+    char buf[1024] = {0};
 
     size_t len = AU_MIN(msg->payload_size, sizeof(buf)-1);
     memcpy(buf, msg->payload, len);

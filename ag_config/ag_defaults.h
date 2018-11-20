@@ -83,7 +83,7 @@
 #define DEFAULT_MSD_FILE_EXT    "mp4"
 #define DEFAULT_SNAP_FILE_EXT    "jpg"
 
-#define DEFAULT_EM_TO                   20              /* Event Monitor timeout */
+#define DEFAULT_EM_TO                   2*60            /* Event Monitor timeout */
 #define DEFAULT_AM_READ_TO_SEC          1
 #define DEFAULT_AM_ALERT_TO_SEC         10              /* Period for which all CAM alarms treats as one */
 #define DEFAULT_AV_ASK_TO_SEC           2*60            /* Interval to check active viewers amount though WS */

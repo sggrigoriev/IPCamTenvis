@@ -273,6 +273,10 @@ static void restart_events_monitor() {
         pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
         send_reboot();
     }
+/* Send possibly lost during the pause files */
+    send_files_2SF(DEFAULT_MD_FILE_POSTFIX, 0, 0);
+    send_files_2SF(DEFAULT_SD_FILE_POSTFIX, 0, 0);
+
     lib_timer_init(&em_clock, DEFAULT_EM_TO);
     IP_CTX_(22001);
 }
@@ -703,9 +707,9 @@ static void process_streaming_message(msg_obj_t* obj_msg) {
 /*
  * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
  */
-static void process_message(pu_queue_event_t ev, char* msg) {
+static void process_message(pu_queue_event_t ev, const char* msg) {
     IP_CTX_(20000);
-    msg_obj_t *obj_msg = pr_parse_msg(msg);
+    msg_obj_t *obj_msg = cJSON_Parse(msg);
     if (obj_msg == NULL) {
         pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
         return;
@@ -731,7 +735,7 @@ static void process_message(pu_queue_event_t ev, char* msg) {
             pu_log(LL_ERROR, "%s: Unsupported protocol type %d", __FUNCTION__, protocol_number);
             break;
     }
-    pr_erase_msg(obj_msg);
+    cJSON_Delete(obj_msg);
     IP_CTX_(20001);
 }
 

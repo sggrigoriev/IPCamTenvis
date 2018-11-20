@@ -98,67 +98,45 @@ static int remove_dir(const char* path_n_name) {
 
     return rmdir(path_n_name);
 }
-/*
- * Set to zero time if !date
- * Set to zero date if date
- */
-static time_t cut_off_dt(time_t timestamp, int date) {
-    struct tm time_struct;
-    gmtime_r(&timestamp, &time_struct);
-    time_struct.tm_isdst = 0;
-    if(date) {
-        time_struct.tm_mday = 1;
-        time_struct.tm_mon = 0;
-        time_struct.tm_year = 0;
+
+typedef enum {DATE_ONLY=0, TIME_ONLY=1} cmp_t;
+static int in_dates(int yh, int m, int ds, time_t start_date, time_t end_date, cmp_t dt_switch) {
+    int le = 1, ge = 1;
+    if(start_date) {
+        struct tm ts;
+        gmtime_r(&start_date, &ts);
+
+        if (dt_switch == DATE_ONLY)
+            ge = (yh >= ts.tm_year + 1900) && (m >= ts.tm_mon + 1) && (ds >= ts.tm_mday);
+        else /* TIME_ONLY */
+            ge = (yh >= ts.tm_hour) && (m >= ts.tm_min) && (ds >= ts.tm_sec);
     }
-    else {
-        time_struct.tm_sec = 0;
-        time_struct.tm_min = 0;
-        time_struct.tm_hour = 0;
+    if(end_date) {
+        struct tm ts;
+        gmtime_r(&end_date, &ts);
+
+        if (dt_switch == DATE_ONLY)
+            le = (yh <= ts.tm_year + 1900) && (m <= ts.tm_mon + 1) && (ds <= ts.tm_mday);
+        else /* TIME_ONLY */
+            le = (yh <= ts.tm_hour) && (m <= ts.tm_min) && (ds <= ts.tm_sec);
     }
-    return mktime(&time_struct);
+    return le&&ge;
 }
 
-typedef enum {DATE_ONLY=0, TIME_ONLY=1, TIMESTAMP} cmp_t;
-static int in_dates(time_t t, time_t start_date, time_t end_date) {
-    if(!start_date && !end_date) return 1;
-    if(!start_date) return t <= end_date;
-    if(!end_date) return t >= start_date;
-
-    return ((start_date <= t) && (t <= end_date));
-}
-/*
- * Convert year, month, day, or  hour, minute, second to time_t
- */
-static time_t make_date(int yh, int mm, int ds, int time_only) {
-    struct tm time_struct;
-    time_struct.tm_isdst = 0;
-    if(time_only) {
-        time_struct.tm_year = 0; time_struct.tm_mon = 0; time_struct.tm_mday = 1;
-        time_struct.tm_hour = yh; time_struct.tm_min = mm; time_struct.tm_sec = ds;
-    }
-    else {
-        yh -= 1900;
-        mm--;
-        time_struct.tm_year = yh; time_struct.tm_mon = mm; time_struct.tm_mday = ds;
-        time_struct.tm_hour = 0; time_struct.tm_min = 0; time_struct.tm_sec = 0;
-    }
-    return mktime(&time_struct);
-}
 static int useful_file(const struct dirent* ent, const char* postfix, time_t start_date, time_t end_date) {
     if(ent->d_type != DT_REG) return 0;
     if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) return 0;
 
-    char pr[10]={0},t[10]={0},dot[10]={0},ext[10]={0};
+    char pr[3]={0},t[2]={0},dot[2]={0},ext[10]={0};
     int h,m,s;
 
-    int f = sscanf(ent->d_name, "%2s%2i%2i%2i%1s%1s%s", pr, &h, &m, &s, t, dot, ext);
+    int f = sscanf(ent->d_name, "%2s%2d%2d%2d%1s%1s%s", pr, &h, &m, &s, t, dot, ext);
     if(f != 7) return 0;
 
     if(strcmp(pr, DEFAULT_DT_FILES_PREFIX) != 0) return 0;
     if(strcmp(t, postfix) != 0) return 0;
 
-    return in_dates(make_date(h, m, s, TIME_ONLY), cut_off_dt(start_date, TIME_ONLY), cut_off_dt(end_date, TIME_ONLY));
+    return in_dates(h, m, s, start_date, end_date, TIME_ONLY);
 }
 /*
  * Return 1 if we need files from the directory
@@ -176,7 +154,7 @@ static int useful_dir(const struct dirent* ent, const char* postfix, time_t star
     f = sscanf(ent->d_name, "%4d%*c%2d%*c%2d", &y, &m, &d);
     if(f != 3) return 0;
 
-    return in_dates(make_date((int)y, m, d, DATE_ONLY), cut_off_dt(start_date, DATE_ONLY), cut_off_dt(end_date, DATE_ONLY));
+    return in_dates(y, m, d, start_date, end_date, DATE_ONLY);
 }
 /*
  * add ,"fnmame" to the fl->list if list length will be less than tot_len

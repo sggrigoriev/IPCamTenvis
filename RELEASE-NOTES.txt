@@ -1,3 +1,24 @@
+VERSION 1.2.1 20-Nov-2018
+=================================================================================================
+1. Events Monitor shifted into separate process.
+    EM port = 8889
+    EM log = monitor.log
+    EM exe = Monitor
+    No config file. Tenvis starts the EM and restarts if no pings came from it
+    Directory: should be placed into the same directory as Tenvis (/root/presto/bin/)
+    Timeout for restart = 2 min
+    EM ping timeout = 1 min.
+2. CMakeLists.txt changes:
+    Monitor exe added.
+    libipcam removed.
+3. Bug Fixes:
+    CIC-93
+4. Known bugs:
+    Tenvis could fail by SIGSEGV or just freeze without SIGSEGV notification.
+5. Info needed for bug report:
+    a) logfiles: /root/presto/log/wud.log, /root/presto/log/proxy.log, /root/presto/log/tenvis.log,
+    /root/presto/log/monitor.log, /root/presto/log/activate.log,
+
 VERSION 1.2.0 08-Nov-2018
 =================================================================================================
 Bug fixes:
