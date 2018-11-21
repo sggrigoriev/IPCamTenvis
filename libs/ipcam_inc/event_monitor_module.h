@@ -44,9 +44,14 @@ extern "C" {
 #define EMM_PEERCLOSED  -9
 
 /* Cam's known events */
-#define EMM_LOGIN       3
+#define EMM_LOGIN       3       /* DEVICE_NOTIFY_LOGIN */
+#define EMM_LOGOUT      4       /* DEVICE_NOTIFY_LOGOUT */
 #define EMM_CONN_START  110
 #define EMM_CONN_FINISH 111
+#define EMM_CONN_FAILED 112
+#define EMM_AUTH_FAILED 113
+#define EMM_DISCONNECTED 114
+#define EMM_NO_RESPONSE 115
 #define EMM_CAM_TO      116
 
 

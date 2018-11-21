@@ -236,10 +236,25 @@ static cam_events_t monitor_wrapper(int to_sec, int alert_to_sec) {
          case EMM_PEERCLOSED:
             pu_log(LL_ERROR, "%s: 'Peer Closed' alarm came from Camera. Restart.", __FUNCTION__);
             return CAM_STOP_SERVICE;
+        case EMM_CONN_FAILED:
+            pu_log(LL_ERROR, "%s: Connection to Cam failed. Restart.", __FUNCTION__);
+            return CAM_STOP_SERVICE;
+        case EMM_AUTH_FAILED:
+            pu_log(LL_ERROR, "%s: Auth Cam failed. Restart.", __FUNCTION__);
+            return CAM_STOP_SERVICE;
+        case EMM_DISCONNECTED:
+            pu_log(LL_ERROR, "%s: Cam disconnected. Restart.", __FUNCTION__);
+            return CAM_STOP_SERVICE;
+        case EMM_NO_RESPONSE:
+            pu_log(LL_ERROR, "%s: No response from Cam. Restart.", __FUNCTION__);
+            return CAM_STOP_SERVICE;
+        case EMM_LOGOUT:
+            pu_log(LL_ERROR, "%s: Cam reported logout. Restart.", __FUNCTION__);
+            return CAM_STOP_SERVICE;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized event %d from Cam. Restart.", __FUNCTION__, ret);
             return CAM_STOP_SERVICE;
-     }
+    }
     IP_CTX_(50001);
     return CAM_EVENT_UNDEF;
 }
