@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
     signal(SIGKILL, signalHandler);
     signal(SIGTERM, totalStopp);
 
-    pu_start_logger("../log/monitor.log", 10000, LL_DEBUG);
+    pu_start_logger("../log/monitor.log", 50000, LL_DEBUG);
 
 
 
