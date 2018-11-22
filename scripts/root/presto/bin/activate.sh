@@ -16,30 +16,6 @@ export LD_LIBRARY_PATH=$PRESTO_PATH/lib:$LD_LIBRARY_PATH
 #################################################################
 
 
-#performs upgrade check
-firmware_upgrade () {
-
-UPGRADE_DIR=$(cat $WUD_CONFIG_FILE | $JQ_COMMAND FW_UPGRADE_FOLDER);
-OTA_UPGRADE_FILE=$(cat $WUD_CONFIG_FILE | $JQ_COMMAND FW_UPGRADE_FILE_NAME);
-
-echo " ****** checking for $UPGRADE_DIR/$OTA_UPGRADE_FILE  *******"
-if [ -f $UPGRADE_DIR/$OTA_UPGRADE_FILE ]; 
-then
-	echo "******** OTA upgrade file exists, preforming upgrade ******"
-	cd $UPGRADE_DIR
-	rm -rf /tmp/presto
-	tar xzf $OTA_UPGRADE_FILE -C /tmp
-	cd /tmp/presto
-	./make_install
-	cd -
-	rm -rf /tmp/presto
-	rm -f $UPGRADE_DIR/$OTA_UPGRADE_FILE
-	sync
-else
-	echo " ****** No OTA Upgrade file $UPGRADE_DIR/$OTA_UPGRADE_FILE exists, proceeding *******"
-fi
-}
-
 #issue ping sound
 ping_command () {
 if [ -f $AUTH_TOKEN_FILE ];
@@ -273,9 +249,6 @@ sleep 5;
 
 cd $PRESTO_PATH/bin;
 killall -9 Proxy WUD Tenvis
-
-# check and do fw aupgrade if  found
-firmware_upgrade;
 
 cd $PRESTO_PATH/bin;
 # check  cloud parameters (key/cloud) if not ready prompt qr code sound every 5 seconds
