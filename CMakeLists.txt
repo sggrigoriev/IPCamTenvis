@@ -10,11 +10,12 @@ project(IPCamTenvis)
 set(AGENT_PLATFORM $ENV{PLATFORM})
 set(PP_SDK_PATH $ENV{SDK_PATH})
 set(GCC_STANDARD $ENV{STANDARD})
+set(BUILD_TYPE $ENV{BUILD_TYPE})
 
 set(PROXY_LIBS_PATH ${PP_SDK_PATH}/lib)
 
 message("path = $ENV{SDK_PATH}")
-
+message (" Build type is ${BUILD_TYPE}")
 
 execute_process(
         COMMAND  bash "-c" "git rev-parse --verify HEAD | tr -d '\n'"
@@ -134,6 +135,16 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     set(CMAKE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc)
     set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}g++)
     set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
+
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE")
+    if(BUILD_TYPE STREQUAL "Development")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -Wall")
+    else()
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -Wall -s")
+    endif()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -ldl -lz")
+
+
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O0 -Wall -g -ldl -lz")
 
     set(REQUIRED_LIBRARIES
