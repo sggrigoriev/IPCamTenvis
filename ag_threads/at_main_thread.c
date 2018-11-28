@@ -386,7 +386,7 @@ static void run_ws_actions() {
             if(!send_stream_error()) stop_ws();
         }
     }
-    else {  /* And actions if disconnected */
+    else {  /* And actions if WS disconnected */
         if(ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
             ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);   /* Ask for streaming disconnect */
         }
@@ -417,7 +417,7 @@ static void switch_control_streams() {
         ac_stop_video();
         switch_streaming_on();
     }
-    IP_CTX_(29001);
+    IP_CTX_(29002);
 }
 static void run_streaming_actions() {
     IP_CTX_(14000);
