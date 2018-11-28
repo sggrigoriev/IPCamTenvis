@@ -82,6 +82,7 @@ static void* wud_write(void* params) {
                             reconnect = 1;
                             break;
                         }
+                        len = sizeof(out_buf);
                         pu_log(LL_DEBUG, "%s: sent to WUD %s", PT_THREAD_NAME, out_buf);
                     }
                     break;

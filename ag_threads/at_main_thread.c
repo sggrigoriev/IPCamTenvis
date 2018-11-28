@@ -700,8 +700,8 @@ static void process_streaming_message(msg_obj_t* obj_msg) {
 
     snprintf(err_message, sizeof(err_message), "Streaming error %s. Stream restarts.", error_code);
     ac_set_stream_error(err_message);
-/* Set the reconnect flag for streamer */
-    ag_db_set_int_property(AG_DB_CMD_CONNECT_RW, 1);
+/* Set the Off state for streamer */
+    ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
     IP_CTX_(21001);
 }
 /*
