@@ -82,7 +82,7 @@ typedef int (*out_t)(int in_value);
 
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 #define ANAL(a)     if((!a)) {\
-                        pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__); \
+                        pu_log(LL_ERROR, "%s: Not enough memory.", __FUNCTION__); \
                         goto on_error; \
                     }
 #define FREE(a)     if((a)) { free(a); a = NULL;}
