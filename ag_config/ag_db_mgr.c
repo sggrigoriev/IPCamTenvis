@@ -157,8 +157,8 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  30, NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               ac_set_audio},
 {AG_DB_STATE_VIDEO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -166,7 +166,8 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity}
+{AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity},
+{AG_DB_STATE_CAPTURE_VIDEO, -1, 0,  1,  0,  1,  0,  -1, NULL,               NULL,               NULL}
 /*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
 /*  1                       2   3   4   5   6   8   9   10                  11                  12   */
 };

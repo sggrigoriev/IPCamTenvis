@@ -612,9 +612,11 @@ int ac_cam_make_snapshot(const char* full_path) {
     return ret;
 }
 int ac_set_md(int on) {
+    on = (on > 0)?1:0;  /* Could be -1 and 2 */
     return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, on);
 }
 int ac_set_sd(int on) {
+    on = (on > 0)?1:0;  /* Could be -1 and 2 */
     return update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_ON, on);
 }
 int ac_set_audio(int on) {

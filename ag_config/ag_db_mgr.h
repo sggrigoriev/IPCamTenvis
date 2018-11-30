@@ -131,5 +131,6 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
 #define AG_DB_STATE_RECORD_FULL     "ppc.recordFullDuration"    /* ? */
 #define AG_DB_STATE_SNAPSHOT        "ppc.captureImage"          /* 1 - make snapshot */
 #define AG_DB_STATE_SD_SENSITIVITY  "ppc.audioSensitivity"      /* set the cam's sensitivity for SD */
+#define AG_DB_STATE_CAPTURE_VIDEO   "ppc.captureVideo"          /* Start/stop video recording */
 
 #endif /* IPCAMTENVIS_AG_DB_MGR_H */

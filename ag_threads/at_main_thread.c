@@ -649,11 +649,11 @@ static void process_em_message(msg_obj_t* obj_msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
+            if(ag_db_get_int_property(AG_DB_STATE_MD) == 1) ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_START_SD:
-            ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
+            if(ag_db_get_int_property(AG_DB_STATE_SD) == 1) ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_STOP_MD:
