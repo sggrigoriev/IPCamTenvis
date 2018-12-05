@@ -230,16 +230,11 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
  * files_list   - JSON array of files with full path: "name1",..."nameN"
  * device_id   - gateway device_id
  *
- * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
- *                      or
- * {"name": "sendFiles", "type": <fileTypeString", "timestamp": <end_date>, "filesList": ["<filename>", ..., "<filename>"]}
+ * {"name": "sendFiles", "type": <fileTypeString", "timestamp": <end_date>}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, time_t end_date, const char* files_type, const char* files_list) {
-    if(!end_date)
-        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"filesList\": [%s]}", files_type, files_list);
-    else
-        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"timestamp\": %lu, \"filesList\": [%s]}", files_type, end_date, files_list);
+const char* ao_make_send_files(char* buf, size_t size, time_t timestamp, const char* files_type) {
+    snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"timestamp\": %lu}", files_type, timestamp);
     buf[size-1] = '\0';
     return buf;
 }

@@ -66,7 +66,7 @@ const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
  * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, time_t end_date, const char* files_type, const char* files_list);
+const char* ao_make_send_files(char* buf, size_t size, time_t timestamp, const char* files_type);
 /*
  * Answer from SF about files sent
  * files_list - JSON array of files with full path:

@@ -79,7 +79,7 @@ static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, no
 
     pu_log(LL_DEBUG, "%s: From WS: %s, len = %d", AT_THREAD_NAME, buf, len);
 
-    pu_queue_push(from_ws, buf, len+1);
+    pu_queue_push(from_ws, buf, strlen(buf)+1);
 }
 
 static void *ws_thread(void *pvoid) {

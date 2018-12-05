@@ -47,32 +47,6 @@ typedef struct {
     int no_entry;       /* 1 if we didn't read directories after open */
 }ac_cam_fl_t;
 /*
- * Return 0 if error or nothing to send
- */
-int ac_cam_fl_open(ac_cam_fl_t* fl, const char* postfix, time_t start_date, time_t end_date);
-/*
- * return "name", ..., "name" less than size bytes or NULL if no more data
- */
-const char* ac_cam_fl_get_next(ac_cam_fl_t* fl, size_t size);
-void ac_cam_fl_close(ac_cam_fl_t* fl);
-/*
- * Return empty string or all shit after the first '.' in file name
- */
-const char* ac_cam_get_file_ext(const char* name);
-/*
- * Return file size in bytes
- */
-unsigned long ac_get_file_size(const char* name);
-/*
- * Delete all files from directory
- */
-void ac_cam_clean_dir(const char* path);
-/*
- * Delete all directories YYYY-MM-DD which are empty and elder than life_time
- * Called from ac_cam_init()
- */
-void ac_delete_old_dirs(time_t life_time);
-/*
  * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
  * Return buf
  */

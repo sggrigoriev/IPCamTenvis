@@ -142,17 +142,11 @@ static void send_ACK_to_Proxy(int command_number) {
  * if end == 0 - take all after start
  * if start == end == 0 - take all
  */
-static void send_files_2SF(const char* postfix, time_t start_date, time_t end_date) {
-    ac_cam_fl_t fl;
-    const char* flist;
-    if(!ac_cam_fl_open(&fl, postfix, start_date, end_date)) return; /* Nothing to send */
-    while(flist = ac_cam_fl_get_next(&fl, LIB_HTTP_MAX_MSG_SIZE-100), flist != NULL) {
-        char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
-        ao_make_send_files(buf, sizeof(buf), end_date, postfix, flist);
+static void send_files_2SF(const char* postfix, time_t end_date) {
+    char buf[128] = {0};
+        ao_make_send_files(buf, sizeof(buf), end_date, postfix);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
         pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
-    }
-    ac_cam_fl_close(&fl);
 }
 
 static void send_snapshot(const char* full_path) {
@@ -161,23 +155,11 @@ static void send_snapshot(const char* full_path) {
     char path[1024]={0};
     snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
 
-    if(ao_make_send_files(buf, sizeof(buf), 0, ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT), path)) {
+    if(ao_make_send_files(buf, sizeof(buf), time(NULL), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT))) {
         pu_log(LL_DEBUG, "%s: Sending to SF thread: %s", __FUNCTION__, buf);
         pu_queue_push(to_sf, buf, strlen(buf) + 1);
     }
     IP_CTX_(5001);
-}
-/*
- * Send SD/MD/SNAPHOT files which wasn't sent before
- * Call on startup
- */
-static void send_remaining_files() {
-    IP_CTX_(7000);
-    send_files_2SF(DEFAULT_MD_FILE_POSTFIX, 0, 0);
-    send_files_2SF(DEFAULT_SD_FILE_POSTFIX, 0, 0);
-    send_files_2SF(DEFAULT_SNAP_FILE_POSTFIX, 0, 0);
-
-    IP_CTX_(7001);
 }
 /*
  * To WS
@@ -273,12 +255,17 @@ static void restart_events_monitor() {
         pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
         send_reboot();
     }
-/* Send possibly lost during the pause files */
-    send_files_2SF(DEFAULT_MD_FILE_POSTFIX, 0, 0);
-    send_files_2SF(DEFAULT_SD_FILE_POSTFIX, 0, 0);
+/* Restart files sender */
+    at_stop_sf();
+    if(!at_start_sf()) {
+        pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot", __FUNCTION__, "FILES_SENDER", strerror(errno));
+        IP_CTX_(22001);
+        send_reboot();
+    }
+    pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
 
     lib_timer_init(&em_clock, DEFAULT_EM_TO);
-    IP_CTX_(22001);
+    IP_CTX_(22002);
 }
 /*
  * Agent actions: agent->WS->streaming
@@ -311,8 +298,17 @@ static void run_agent_actions() {
         case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
         case AG_DB_BIN_OFF_OFF:     /* nothing to do */
         case AG_DB_BIN_ON_OFF:      /* nothing to do */
+            at_stop_sf();           /* Stop Files Sender - no connection! */
+            pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
             break;
         case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
+            if(!at_start_sf()) {
+                pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot.", __FUNCTION__, "FILES_SENDER", strerror(errno));
+                send_reboot();
+            }
+            else {
+                pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
+            }
         case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
             pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
             send_startup_report();                                  /* send cam's initial settings to the cloud */
@@ -482,8 +478,7 @@ static void send_reports() {
     if(changes_report && cJSON_GetArraySize(changes_report)) {
          /* Send it to the cloud */
         if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
-            ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(changes_report, ag_getProxyID()), buf,
-                         sizeof(buf));
+            ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(changes_report, ag_getProxyID()), buf, sizeof(buf));
             pu_queue_push(to_proxy, buf, strlen(buf) + 1);
         }
         /* Send it to WS */
@@ -554,9 +549,6 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
                     ag_saveMainURL(data.in_connection_state.main_url);
                     info_changed = 1;
                 }
-/* Send MD/SD/SNAPHOTS which weren't sent during the regular procedure */
-/* If we got conn data - Proxy lost connection. So it is possible we could not send files... */
-                send_remaining_files();
             }
             if(info_changed) ag_db_set_int_property(AG_DB_STATE_AGENT_ON, 1);
         }
@@ -660,13 +652,13 @@ static void process_em_message(msg_obj_t* obj_msg) {
             ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.end_date);
             break;
         case AC_CAM_STOP_SD:
             ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.end_date);
             break;
         case AC_CAM_START_IO:
         case AC_CAM_STOP_IO:
@@ -793,13 +785,6 @@ static int main_thread_startup() {
     }
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
 
-    if(!at_start_sf()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "FILES_SENDER", strerror(errno));
-        IP_CTX_(24005);
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
-
     IP_CTX_(24007);
     return 1;
 }
@@ -812,7 +797,6 @@ static void main_thread_shutdown() {
     at_set_stop_wud_write();
 
     if(event_monitor_pid > 0) stop_events_monitor(event_monitor_pid);
-    at_stop_sf();
     at_stop_wud_write();
     at_stop_proxy_rw();
 
@@ -843,13 +827,12 @@ void at_main_thread() {
     lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
 
 
-    unsigned int events_timeout = 1; /* Wait 1 second */
+    unsigned int events_timeout = 10; /* Wait 10 seconds - NB! Just to find SIGSEGV! */
 
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
     while(!main_finish) {
         IP_CTX_(26001);
-        size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
         pu_queue_event_t ev;
         pu_queue_t** q=NULL;
          switch (ev=pu_wait_for_queues(events, events_timeout)) {
@@ -887,6 +870,7 @@ void at_main_thread() {
          }
          if(q) {
              IP_CTX_(26009);
+             size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
              while(pu_queue_pop(*q, mt_msg, &len)) {
                  IP_CTX_(26010);
                  pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);

@@ -132,6 +132,65 @@ char* au_drop_last_symbol(char* str) {
         str[strlen(str)-1] = '\0';
     return str;
 }
+/*
+ * take size-1 sumbols. is *name got less - return 0
+ * take size-1 symbols from **name, shift pointer, copy symbols to buf.
+ */
+int au_getNsyms(const char** name, char* buf, size_t size) {
+    const char* ptr = *name;
+    if(!ptr) return 0;
+    if(!buf) return 0;
+
+    if(size < 1) return 1;
+    size--;
+
+    while (*ptr && size) {
+        *buf++ = *ptr;
+        ptr++; size--;
+    }
+    if(size) return 0;  /* Name ends before prefix */
+    *buf = '\0';
+    *name = ptr;
+    return 1;
+}
+/*
+ * Take n digits from *name, convert it to nimber.
+ * Return 0 if name doesn't have n digits in a row
+ */
+int au_getNdigs(const char** name,  int* res, int n) {
+    const char* ptr = *name;
+    if(!ptr) return 0;
+    if(!res) return 0;
+
+    *res = 0;
+    while(*ptr && n) {
+        if(!isdigit(*ptr)) return 0;
+        *res = *res * 10 + (*ptr - '0');
+        ptr++; n--;
+    }
+    if(n) return 0;     /* *name finishes before n */
+    *name = ptr;
+    return 1;
+}
+/*
+ * Get syms until the delimeter.
+ * Return 0 if syms amt greater than size-1
+ */
+int au_getUntil(const char** name, char* buf, size_t size, char delim) {
+    const char* ptr = *name;
+    if(!ptr) return 0;
+    if(!buf) return 0;
+
+    if(size < 1) return 1;
+    size--;
+    while(*ptr && size && (*ptr != delim)) {
+        *buf++ = *ptr;
+        ptr++; size--;
+    }
+    *buf = '\0';
+    *name = ptr;
+    return (*ptr == delim);
+}
 
 
 

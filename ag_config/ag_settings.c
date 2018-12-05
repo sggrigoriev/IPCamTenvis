@@ -245,25 +245,46 @@ int ag_getCurloptSSLVerifyPeer() {
     return curlopt_ssl_verify_peer;
 }
 
+/* Thread=protected functions */
+
 void ag_saveProxyAuthToken(const char* token) {
-    if(token) au_strcpy(proxy_auth_token, token, sizeof(proxy_auth_token));
+    pthread_mutex_lock(&local_mutex);
+        if(token) au_strcpy(proxy_auth_token, token, sizeof(proxy_auth_token));
+    pthread_mutex_unlock(&local_mutex);
 }
 const char* ag_getProxyAuthToken() {
-    return proxy_auth_token;
+    const char* ret;
+    pthread_mutex_lock(&local_mutex);
+        ret = proxy_auth_token;
+    pthread_mutex_unlock(&local_mutex);
+
+    return ret;
 }
 
 void ag_saveProxyID(const char* proxyID) {
-    au_strcpy(proxy_id, proxyID, sizeof(proxy_id));
+    pthread_mutex_lock(&local_mutex);
+        au_strcpy(proxy_id, proxyID, sizeof(proxy_id));
+    pthread_mutex_unlock(&local_mutex);
 }
 const char* ag_getProxyID() {
-    return proxy_id;
+    const char* ret;
+    pthread_mutex_lock(&local_mutex);
+        ret = proxy_id;
+    pthread_mutex_unlock(&local_mutex);
+    return ret;
 }
 
 void ag_saveMainURL(const char* mu) {
-    au_strcpy(main_url, mu, sizeof(main_url));
+    pthread_mutex_lock(&local_mutex);
+        au_strcpy(main_url, mu, sizeof(main_url));
+    pthread_mutex_unlock(&local_mutex);
 }
 const char* ag_getMainURL() {
-    return main_url;
+    const char* ret;
+    pthread_mutex_lock(&local_mutex);
+        ret = main_url;
+    pthread_mutex_unlock(&local_mutex);
+    return ret;
 }
 
 int ag_getIsSSL() {
