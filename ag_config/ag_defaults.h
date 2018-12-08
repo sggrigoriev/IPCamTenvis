@@ -78,7 +78,6 @@
 #define DEFAULT_UNDEF_FILE_POSTFIX "?"
 
 #define DEFAULLT_SNAP_FILE_PREFIX "P-"
-#define DEFAULLT_VIDEO_FILE_PREFIX "video"
 
 #define DEFAULT_MSD_FILE_EXT    "mp4"
 #define DEFAULT_SNAP_FILE_EXT    "jpg"

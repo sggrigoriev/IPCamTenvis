@@ -95,8 +95,8 @@ typedef struct {
     time_t file_creation_time;
 } fd_t;
 static void print_fd(const fd_t* fd) {
-    pu_log(LL_DEBUG, "%s:\naction = %s\nname = %s\next = %s\ntype=%c\nsize = %lu\nevent_time = %lu\nupl_url = %s\nheaders = %s\nfileRef = %lu\nurl_creation_time = %lu\nfile_creation_time = %lu",
-            __FUNCTION__, sf_action_name[fd->action], fd->name, fd->ext, fd->type, fd->size, fd->event_time, fd->upl_url, fd->headers, fd->fileRef, fd->url_creation_time, fd->file_creation_time);
+    pu_log(LL_DEBUG, "%s:\naction = %s\npath = %s\nname = %s\next = %s\ntype=%s\nsize = %lu\nevent_time = %lu\nupl_url = %s\nheaders = %s\nfileRef = %lu\nurl_creation_time = %lu\nfile_creation_time = %lu",
+                       __FUNCTION__, sf_action_name[fd->action], fd->path, fd->name, fd->ext, fd->type, fd->size, fd->event_time, fd->upl_url, fd->headers, fd->fileRef, fd->url_creation_time, fd->file_creation_time);
 }
 typedef enum {
     SF_RC_SENT_OK,      /* 0        File sent */
@@ -135,6 +135,7 @@ static sf_action_t calc_action(sf_rc_t rc) {
 static int type2cloud(char t) {
     switch (t) {
         case 'M':
+        case '\0':
             return 1;
         case 'P':
             return 2;
@@ -167,15 +168,6 @@ static CURL* init(){
         curl_easy_setopt(curl, CURLOPT_CAINFO, ag_getCurloptCAInfo());
     }
     return curl;
-}
-
-static void file_delete(const char* name) {
-    if(!unlink(name)) {
-        pu_log(LL_DEBUG, "%s: File %s deleted", __FUNCTION__, name);
-    }
-    else {
-        pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, name, errno, strerror(errno));
-    }
 }
 
 static struct curl_slist* make_getSF_header(const fd_t* in_par, struct curl_slist* sl) {
@@ -673,8 +665,17 @@ static void send_alert_to_proxy(char type, unsigned long fileRef) {
     }
     pu_queue_push(to_proxy, msg, strlen(msg)+1);
 }
-
 /**********************************************************************************/
+/*
+ * Returns name YYYY-MM-DD made from today's date
+ */
+static const char* make_today_dir_name(char* buf, size_t size) {
+    time_t now = time(NULL);
+    struct tm tm_now;
+    gmtime_r(&now, &tm_now);
+    snprintf(buf, size, "%04d-%02d-%02d", tm_now.tm_year+1900, tm_now.tm_mon+1, tm_now.tm_mday);
+    return buf;
+}
 /*
  * Return the deepest direcory from path.
  * NB! path does not include file
@@ -732,11 +733,58 @@ static int remove_dir(const char* path_n_name) {
             goto on_error;
         }
         on_error:
-        free(full_name);
+        if(full_name) free(full_name);
     }
     closedir(d);
 
     return rmdir(path_n_name);
+}
+/*
+ * Converts structure to JSON
+ * item:
+* {"action":<string>, "path":<string>, "file_name":<string>, "file_ext":<string>, "file_type":<string>,"file_size":<number>, "file_time":<number>,
+* "url":<string>, "headers":<string>, "url_time":<number>,"file_ref":<number>, "file_ref_time":<number>}
+ * NB! if fd fileld is undefined -> no fileld in item as well!
+ */
+static int fd2json(const fd_t* task, cJSON** item) {
+    int ret = 0;
+
+    cJSON* i = cJSON_CreateObject();
+
+    if(!i) goto on_exit;
+/* action */
+    cJSON_AddItemToObject(i, ATI_ACTION, cJSON_CreateString(sf_action_name[task->action]));
+/* path */
+    cJSON_AddItemToObject(i, ATI_PATH, cJSON_CreateString(task->path));
+/* file_name */
+    cJSON_AddItemToObject(i, ATI_FILE_NAME, cJSON_CreateString(task->name));
+/* file_ext */
+    cJSON_AddItemToObject(i, ATI_FILE_EXT, cJSON_CreateString(task->ext));
+/* file_type */
+    cJSON_AddItemToObject(i, ATI_FILE_TYPE, cJSON_CreateString(task->type));
+/* file_size */
+    cJSON_AddItemToObject(i, ATI_FILE_SIZE, cJSON_CreateNumber(task->size));
+/* file_time */
+    if(task->event_time) cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
+/* url */
+    if(strlen(task->upl_url)) cJSON_AddItemToObject(i, ATI_URL, cJSON_CreateString(task->upl_url));
+/* headers */
+    if(strlen(task->headers)) cJSON_AddItemToObject(i, ATI_HEADERS, cJSON_CreateString(task->headers));
+/* url_time */
+    if(task->url_creation_time) cJSON_AddItemToObject(i, ATI_URL_TIME, cJSON_CreateNumber(task->url_creation_time));
+/* file_ref */
+    if(task->fileRef) cJSON_AddItemToObject(i, ATI_FILE_REF, cJSON_CreateNumber(task->fileRef));
+/* file_ref_time */
+    if(task->file_creation_time) cJSON_AddItemToObject(i, ATI_FILE_REF_TIME, cJSON_CreateNumber(task->file_creation_time));
+
+    ret = 1;
+    on_exit:
+    if (!ret) {
+        if(i) cJSON_Delete(i);
+        i = NULL;
+    }
+    *item = i;
+    return ret;
 }
 /*
  * Converts JSON to structure
@@ -777,10 +825,11 @@ static int json2fd(cJSON* item, fd_t* task) {
     }
     strncpy(task->type, i->valuestring, sizeof(task->type));
 /* file_size */
-    if(i=cJSON_GetObjectItem(item, ATI_FILE_SIZE), i)
-        task->size = (size_t)i->valueint;
-    else
-        task->size = 0;
+    if(i=cJSON_GetObjectItem(item, ATI_FILE_SIZE), !i) {
+        pu_log(LL_ERROR, "%s: Item %s not found. task ignored", __FUNCTION__, ATI_FILE_SIZE);
+        return 0;
+    }
+    task->size = (size_t)i->valueint;
 /* file_time */
     if(i=cJSON_GetObjectItem(item, ATI_FILE_TIME), i)
         task->event_time = i->valueint;
@@ -811,56 +860,9 @@ static int json2fd(cJSON* item, fd_t* task) {
         task->file_creation_time = i->valueint;
     else
         task->file_creation_time = 0;
+    print_fd(task);
     return 1;
 }
-/*
- * Converts structure to JSON
- * item:
-* {"action":<string>, "path":<string>, "file_name":<string>, "file_ext":<string>, "file_type":<string>,"file_size":<number>, "file_time":<number>,
-* "url":<string>, "headers":<string>, "url_time":<number>,"file_ref":<number>, "file_ref_time":<number>}
- * NB! if fd fileld is undefined -> no fileld in item as well!
- */
-static int fd2json(const fd_t* task, cJSON** item) {
-    int ret = 0;
-
-    cJSON* i = cJSON_CreateObject();
-
-    if(!i) goto on_exit;
-/* action */
-    cJSON_AddItemToObject(i, ATI_ACTION, cJSON_CreateString(sf_action_name[task->action]));
-/* path */
-    if(strlen(task->path)) cJSON_AddItemToObject(i, ATI_PATH, cJSON_CreateString(task->path));
-/* file_name */
-    if(strlen(task->name)) cJSON_AddItemToObject(i, ATI_FILE_NAME, cJSON_CreateString(task->path));
-/* file_ext */
-    if(strlen(task->name)) cJSON_AddItemToObject(i, ATI_FILE_EXT, cJSON_CreateString(task->ext));
-/* file_type */
-    if(strlen(task->type)) cJSON_AddItemToObject(i, ATI_FILE_TYPE, cJSON_CreateString(task->type));
-/* file_size */
-    if(task->size) cJSON_AddItemToObject(i, ATI_FILE_SIZE, cJSON_CreateNumber(task->size));
-/* file_time */
-    if(task->event_time) cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
-/* url */
-    if(strlen(task->upl_url)) cJSON_AddItemToObject(i, ATI_URL, cJSON_CreateString(task->upl_url));
-/* headers */
-    if(strlen(task->headers)) cJSON_AddItemToObject(i, ATI_HEADERS, cJSON_CreateString(task->headers));
-/* url_time */
-    if(task->url_creation_time) cJSON_AddItemToObject(i, ATI_URL_TIME, cJSON_CreateNumber(task->url_creation_time));
-/* file_ref */
-    if(task->fileRef) cJSON_AddItemToObject(i, ATI_FILE_REF, cJSON_CreateNumber(task->fileRef));
-/* file_ref_time */
-    if(task->file_creation_time) cJSON_AddItemToObject(i, ATI_FILE_REF_TIME, cJSON_CreateNumber(task->file_creation_time));
-
-    ret = 1;
-    on_exit:
-    if (!ret) {
-        if(i) cJSON_Delete(i);
-        i = NULL;
-    }
-    *item = i;
-    return ret;
-}
-
 static const char* g_prefix;
 static const char* g_postfix;
 static const char* g_ext;
@@ -886,7 +888,9 @@ static int parse_fname(const char* name, char* pref, size_t pl, char* postf, siz
     if((res < 0)||(res > 59)) return 0;
 
     if(!au_getUntil(&name, postf, pol, '.')) return 0;  /* postfix is too big */
+
     if(*name++ != '.') return 0;
+
     if(!au_getUntil(&name, ext, el, '\0')) return 0;
     return 1;
 }
@@ -902,10 +906,12 @@ static int parse_dname(const char* name, int* y, int* m, int* d) {
 
     if(!au_getNdigs(&name, m, 2)) return 0;
     if((*m < 1) || (*m > 12)) return 0;
+
     if(*name++ != '-') return 0;
 
     if(!au_getNdigs(&name, d, 2)) return 0;
     if((*d < 1) || (*d > 31)) return 0;
+
     return 1;
 }
 /*
@@ -922,9 +928,10 @@ int is_dname(const char* name) {
  * if len != 0 - should be the same
  * NB-1! Limitaion for prefix: it can't be any! Just nothing or smth!
  * NB-2! Add global's size control! They should not be bigger than local arrays!
+ * NB-3! Uses only for old direcories scan! today is out of scope!
  */
 static int files_filter(const struct dirent * dn) {
-    //    if(dn->d_type != DT_REG) return 0;
+    if(dn->d_type != DT_REG) return 0;
 
     char prefix[3]={0};
     char postfix[2]={0};
@@ -943,7 +950,10 @@ static int files_filter(const struct dirent * dn) {
 }
 int dirs_filter(const struct dirent * dn) {
     if(dn->d_type != DT_DIR) return 0;
-    if(!strcmp(dn->d_name, "SNAPSHOT")) return 1;
+    if(!strcmp(dn->d_name, DEFAULT_SNAP_DIR)) return 1;
+    char buf[20] = {0};
+    make_today_dir_name(buf, sizeof(buf));
+    if(!strcmp(dn->d_name, buf)) return 0;      /* Today is out of scope */
     return is_dname(dn->d_name);
 }
 /*
@@ -956,7 +966,7 @@ int dirs_filter(const struct dirent * dn) {
  */
 static cJSON* files(const char* path, const char* prefix, const char* postfix, const char* ext, time_t timestamp, cJSON* queue) {
     fd_t task = {0};
-    struct dirent** list;
+    struct dirent** list = NULL;
 
     g_prefix = prefix;
     g_postfix = postfix;
@@ -1002,16 +1012,88 @@ static cJSON* files(const char* path, const char* prefix, const char* postfix, c
         cJSON_AddItemToArray(queue, new_item);
 
         free(list[rc]);
-    }
+     }
     free(list);
 
     return queue;
 }
 /*
- * Add tasks to queue. Scan all direcories on path, takes all files couls be sent from yong to old
+ * if dir YYYY-MM_DD is not today and has no files to send -> dalete it
+ * Return 0 if not empty
+ * Return 1 if delete (or at least made attempt to)
+ * Called after send_files()
+ */
+int empty_dir_delete(const char* path) {
+    int ret = 0;
+    int y, m, d;
+
+    const char* last_dir = get_last_dir(path);
+    if(!parse_dname(last_dir, &y, &m, &d)) return 0;
+
+    struct tm now;
+    time_t n_ts = time(NULL);
+    gmtime_r(&n_ts, &now);
+
+    int dir_time = (y-1900)*10000 + (m-1)*100 + d;
+    int today = now.tm_year*10000 + now.tm_mon*100 + now.tm_mday;
+    if (dir_time < today) {
+        cJSON *q = files(path, NULL, NULL, NULL, 0, NULL);
+        if (!q || !cJSON_GetArraySize(q)) {
+            remove_dir(path);
+            ret = 1;
+        }
+        if(q) cJSON_Delete(q);
+    }
+    return ret;
+}
+/*
+ * Delete dirs which are older than DEFAULT_TO_DIR_LIFE and return NULL
+ * Return queue with files if the dir is not too old but older than today and got files to be sent
+ * Return NULL if dir is not too old but empty
+ * Called from old_all
+ */
+static cJSON* old_dirs_delete(const char* path, cJSON* queue) {
+    int y, m, d;
+
+    const char* last_dir = get_last_dir(path);
+    if(!parse_dname(last_dir, &y, &m, &d)) return 0;
+
+    struct tm now;
+    time_t n_ts = time(NULL);
+    gmtime_r(&n_ts, &now);
+
+    struct tm old;
+    time_t old_ts = n_ts - DEFAULT_TO_DIR_LIFE;
+    gmtime_r(&old_ts, &old);
+
+    int dir_time = (y-1900)*10000 + (m-1)*100 + d;
+    int old_time = old.tm_year*10000 + old.tm_mon*100 + old.tm_mday;
+    int now_time = now.tm_year*10000 + now.tm_mon*100 + now.tm_mday;
+    if (dir_time <= old_time) {
+        remove_dir(path);
+    }
+    else if (dir_time < now_time) {
+        cJSON *q = files(path, NULL, NULL, NULL, 0, NULL);
+        if (!q || !cJSON_GetArraySize(q)) {
+            remove_dir(path);
+        }
+        else { /* queue + q */
+            if(!queue) queue = cJSON_CreateArray();
+            while (cJSON_GetArraySize(q)) cJSON_AddItemToArray(queue, cJSON_DetachItemFromArray(q, 0));
+        }
+        if(q) cJSON_Delete(q);
+    }
+    return queue;
+}
+/*
+ * Add tasks to queue. Scan all direcories on path, takes all files could be sent from yong to old.
+ * Queue should be totally rewritten!
  */
 static cJSON* old_all(const char* path, cJSON* queue) {
     struct dirent** list;
+
+    if(queue) cJSON_Delete(queue);
+    queue = NULL;
 
     int rc = scandir(path, &list, dirs_filter, alphasort);
 
@@ -1022,37 +1104,14 @@ static cJSON* old_all(const char* path, cJSON* queue) {
     while(rc--) {
         char p[PATH_MAX];
         snprintf(p, sizeof(p), "%s/%s", path, list[rc]->d_name);
-        files(p, NULL, NULL, NULL, 0, queue);
+        queue = old_dirs_delete(p, queue);
         free(list[rc]);
     }
     free(list);
 
     return queue;
 }
-/*
- * if dir YYYY-MM_DD is not today and has no files to send -> dalete it
- * if dir YYYY-MM_DD is older than DEFAULT_TO_DIR_LIFE -> delete it with all contents!
- */
-void old_dir_delete(const char* path) {
-    int y, m, d;
 
-    const char* last_dir = get_last_dir(path);
-    if(!parse_dname(last_dir, &y, &m, &d)) return;
-
-    struct tm now;
-    struct tm old;
-    time_t n_ts = time(NULL);
-    time_t old_ts = n_ts - DEFAULT_TO_DIR_LIFE;
-    gmtime_r(&n_ts, &now);
-    gmtime_r(&old_ts, &old);
-    if (((y-1900)*100000 + (m-1)*100 + d) <= (old.tm_year*10000 + old.tm_mon*100 + old.tm_mday))
-        remove_dir(path);
-    else if (((y-1900)*100000 + (m-1)*100 + d) < (now.tm_year*10000 + now.tm_mon*100 + now.tm_mday)) {
-        cJSON *q = files(path, NULL, NULL, NULL, 0, NULL);
-        if (!q || !cJSON_GetArraySize(q)) remove_dir(path);
-        if (q) cJSON_Delete(q);
-    }
-}
 typedef struct {
     char type[3];
     time_t timestamp;
@@ -1063,7 +1122,7 @@ typedef struct {
  * else scan the today's of given type
  * return 0 if
  */
-static int msg2type(pu_queue_msg_t* msg, task_t* task) {
+static int msg2type(char* msg, task_t* task) {
     int ret = 0;
     cJSON* obj = NULL;
 
@@ -1099,7 +1158,7 @@ on_exit:
  * Queue format:
  * [<action>,...<action>]
  */
-static cJSON* fill_queue(pu_queue_msg_t* msg, cJSON* rq) {
+static cJSON* fill_queue(char* msg, cJSON* rq) {
     task_t task;
     char buf[PATH_MAX]={0};
 
@@ -1115,11 +1174,20 @@ static cJSON* fill_queue(pu_queue_msg_t* msg, cJSON* rq) {
         return files(buf, DEFAULLT_SNAP_FILE_PREFIX, DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, 0, rq);
     }
 /* MD, SD, VIDEO */
-    struct tm tm_d;
-    time_t now = time(NULL);
-    gmtime_r(&now, &tm_d);
-    snprintf(buf, sizeof(buf), "%s/%04d-%02d-%02d", DEFAULT_DT_FILES_PATH, tm_d.tm_year+1900, tm_d.tm_mon+1, tm_d.tm_mday);
+    char now_dir[20]={0};
+    make_today_dir_name(now_dir, sizeof(now_dir));
+    snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
     return files(buf, DEFAULT_DT_FILES_PREFIX, task.type, DEFAULT_MSD_FILE_EXT, task.timestamp, rq);
+}
+static void file_delete(const char* dir, const char* name) {
+    char buf[PATH_MAX]={0};
+    snprintf(buf, sizeof(buf), "%s/%s", dir, name);
+    if(!unlink(buf)) {
+        pu_log(LL_INFO, "%s: File %s deleted", __FUNCTION__, buf);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, buf, errno, strerror(errno));
+    }
 }
 /*
  * Send files from queue if it is not empty.
@@ -1137,14 +1205,20 @@ static cJSON* sendFromQueue(cJSON* rq) {
     if(item) cJSON_Delete(item);
     if(!ret) return rq;
 
+    char* txt = cJSON_PrintUnformatted(rq);
+    if(txt) {
+        pu_log(LL_DEBUG, "%s: On entry: %s", __FUNCTION__, txt);
+        free(txt);
+    }
+
     sf_rc_t rc = send_file(&task);
     switch (rc) {
         case SF_RC_SENT_OK:
             send_alert_to_proxy(task.type[0], task.fileRef);
         case SF_RC_NO_SPACE:
         case SF_RC_BAD_FILE:
-            file_delete(task.name);
-            old_dir_delete(task.path);
+            file_delete(task.path, task.name);
+            empty_dir_delete(task.path);
             break;
         case SF_RC_EARLY:
         case SF_RC_1_FAIL:
@@ -1153,15 +1227,20 @@ static cJSON* sendFromQueue(cJSON* rq) {
         case SF_RC_URL_TOO_OLD:
         case SF_RC_FREF_TOO_OLD: {
             cJSON *new_item = NULL;
-            task.action = calc_action(rc);  /* Update the action regarding the operation result */
-            fd2json(&task, &new_item);      /* Make new item with task */
-            if(new_item) cJSON_AddItemToArray(rq, new_item); /* Append the queue by new task */
+            fd2json(&task, &new_item);                          /* Make new item with task */
+			task.action = calc_action(rc);                      /* Update the action regarding the operation result */
+            if(new_item) cJSON_AddItemToArray(rq, new_item);    /* Append the queue by new task */
         }
             break;
         case SF_RC_NOT_FOUND:
             /* Nothing to do */
         default:
             break;
+    }
+    txt = cJSON_PrintUnformatted(rq);
+    if(txt) {
+        pu_log(LL_DEBUG, "%s: On exit: %s", __FUNCTION__, txt);
+        free(txt);
     }
     return rq;
 }
