@@ -101,47 +101,9 @@ static void print_Agent_start_params() {
  * Debugging utility
  */
 volatile uint32_t contextId = 0;
-/*NB! For pu_wait_for_queues debug! */
-volatile pthread_cond_t *par1 = NULL;
-volatile pthread_mutex_t* par2 = NULL;
-volatile struct timespec* par3 = NULL;
 /**/
 void signalHandler( int signum ) {
     pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%lu\n", __FUNCTION__, signum, contextId, pthread_self());
-    if(par1) {
-        pu_log(LL_ERROR, "par1 addr = %p", par1);
-        pu_log(LL_ERROR, "par1->__align %x" , par1->__align);
-        pu_log(LL_ERROR, "par1->__data.__broadcast_seq %d", par1->__data.__broadcast_seq);
-        pu_log(LL_ERROR, "par1->__data.__futex %d", par1->__data.__futex);
-        pu_log(LL_ERROR, "par1->__data.__lock %d", par1->__data.__lock);
-        pu_log(LL_ERROR, "par1->__data.__mutex %p", par1->__data.__mutex);
-        pu_log(LL_ERROR, "par1->__data.__nwaiters %d", par1->__data.__nwaiters);
-        pu_log(LL_ERROR, "par1->__data.__total_seq %d", par1->__data.__total_seq);
-        pu_log(LL_ERROR, "par1->__data.__wakeup_seq %d", par1->__data.__wakeup_seq);
-        pu_log(LL_ERROR, "par1->__data.__woken_seq %d", par1->__data.__woken_seq);
-        pu_log(LL_ERROR, "par1->__size %24c", *par1->__size);
-    }
-    if(par2) {
-        pu_log(LL_ERROR, "par2 addr = %p", par2);
-        pu_log(LL_ERROR, "par2->__align = %lu", par2->__align);
-        pu_log(LL_ERROR, "par2->__data.__lock %d", par2->__data.__lock);
-        pu_log(LL_ERROR, "par2->__data.__count %d", par2->__data.__count);
-        pu_log(LL_ERROR, "par2->__data.__kind %d", par2->__data.__kind);
-        struct __pthread_internal_slist* l = par2->__data.__list.__next;
-        do {
-            pu_log(LL_ERROR, "par2->__data.__list.__next %p", l);
-            if(l) l = l->__next;
-        } while (l);
-        pu_log(LL_ERROR, "par2->__data.__nusers %d", par2->__data.__nusers);
-        pu_log(LL_ERROR, "par2->__data.__owner %d", par2->__data.__owner);
-        pu_log(LL_ERROR, "par2->__data.__spins %d", par2->__data.__spins);
-        pu_log(LL_ERROR, "par2->__size %24c", *par2->__size);
-    }
-    if(par3) {
-        pu_log(LL_ERROR, "par3 addr = %p", par3);
-        pu_log(LL_ERROR, "par3->tv_nsec %d", par3->tv_nsec);
-        pu_log(LL_ERROR, "par3->tv_sec %d", par3->tv_sec);
-    }
     exit(signum);
 }
 

@@ -19,6 +19,7 @@
  Created by gsg on 25/09/18.
  Cloud & cam properties db
 */
+#include <stdint.h>
 #include <string.h>
 #include <limits.h>
 #include <pthread.h>
@@ -86,7 +87,7 @@ typedef int (*out_t)(int in_value);
                         goto on_error; \
                     }
 #define FREE(a)     if((a)) { free(a); a = NULL;}
-
+extern uint32_t contextId;
 /*
  * Convertors. We got only 2 params, so make 4 functions and that's all
 */
@@ -575,21 +576,36 @@ void ag_clear_flags() {
 }
 
 ag_db_bin_state_t ag_db_bin_anal(const char* property_name) {
+    IP_CTX_(500);
     ag_db_bin_state_t ret = AG_DB_BIN_UNDEF;
+    IP_CTX_(501);
     pthread_mutex_lock(&local_mutex);
+    IP_CTX_(502);
     int i = find_param(property_name);
+    IP_CTX_(503);
     if(i < 0) goto on_exit;
+    IP_CTX_(504);
     int value = IMDB[i].value;
+    IP_CTX_(505);
     int changed = IMDB[i].changed;
+    IP_CTX_(506);
     int change_flag = IMDB[i].change_flag;
+    IP_CTX_(507);
     if(          !changed && !change_flag) {ret = AG_DB_BIN_NO_CHANGE; goto on_exit;}   /* No change */
+    IP_CTX_(508);
     if(!value && !changed &&  change_flag) {ret = AG_DB_BIN_OFF_OFF; goto on_exit;}     /* 0->0 */
+    IP_CTX_(509);
     if( value &&  changed &&  change_flag) {ret = AG_DB_BIN_OFF_ON; goto on_exit;}      /* 0->1 */
+    IP_CTX_(510);
     if(!value &&  changed &&  change_flag) {ret = AG_DB_BIN_ON_OFF; goto on_exit;}      /* 1->0 */
+    IP_CTX_(511);
     if( value && !changed &&  change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}       /* 1->1 */
+    IP_CTX_(512);
 
 on_exit:
+    IP_CTX_(513);
     pthread_mutex_unlock(&local_mutex);
+    IP_CTX_(514);
     return ret;
 }
 

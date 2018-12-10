@@ -60,9 +60,13 @@
 #define ATI_FILE_REF  "file_ref"
 #define ATI_FILE_REF_TIME "file_ref_time"
 
-static volatile int is_stop = 0;
-static pthread_t id;
-static pthread_attr_t attr;
+#define AT_THREAD_NAME "SF_TREAD"
+
+extern uint32_t contextId;
+
+static volatile int is_stop = 1;
+static pthread_t thread_id;
+static pthread_attr_t thread_attr;
 
 static pu_queue_t* from_main;
 static pu_queue_t* to_proxy;
@@ -1357,6 +1361,8 @@ static cJSON* sendFromQueue(cJSON* rq) {
 }
 
 static void* thread_function(void* params) {
+    pu_log(LL_INFO, "%s: started", AT_THREAD_NAME);
+    is_stop = 0;
     from_main = aq_get_gueue(AQ_ToSF);
     to_proxy = aq_get_gueue(AQ_ToProxyQueue);   /* Send alerts if the file sent */
     pu_queue_event_t events = pu_add_queue_event(pu_create_event_set(), AQ_ToSF);
@@ -1416,6 +1422,7 @@ static void* thread_function(void* params) {
     }
     if(send_queue) cJSON_Delete(send_queue);
     if(send_all_queue) cJSON_Delete(send_all_queue);
+    pu_log(LL_INFO, "%s: stop", AT_THREAD_NAME);
     return NULL;
 }
 
@@ -1424,20 +1431,28 @@ int at_start_sf() {
         pu_log(LL_WARNING, "%s: %s is already runs!", __FUNCTION__, PT_THREAD_NAME);
         return 1;
     }
-    if(pthread_attr_init(&attr)) return 0;
-    if(pthread_create(&id, &attr, &thread_function, NULL)) return 0;
+    if(pthread_attr_init(&thread_attr)) return 0;
+    if(pthread_create(&thread_id, &thread_attr, &thread_function, NULL)) return 0;
+    is_stop = 0;
     return 1;
-
 }
 void at_stop_sf() {
+    IP_CTX_(600);
     void *ret;
+    IP_CTX_(601);
     if(is_stop) {
+        IP_CTX_(602);
         pu_log(LL_WARNING, "%s: %s already stops", __FUNCTION__, PT_THREAD_NAME);
+        IP_CTX_(603);
         return;
     }
+    IP_CTX_(604);
     at_set_stop_sf();
-    pthread_join(id, &ret);
-    pthread_attr_destroy(&attr);
+    IP_CTX_(605);
+    pthread_join(thread_id, &ret);
+    IP_CTX_(606);
+    pthread_attr_destroy(&thread_attr);
+    IP_CTX_(607);
 }
 void at_set_stop_sf() {
     is_stop = 1;

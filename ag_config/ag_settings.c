@@ -321,7 +321,7 @@ int ag_load_config(const char* cfg_file_name) {
     if(!getUintValue(cfg, AGENT_IPCAM_PORT, (unsigned int *)&ipcam_port))                       AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_POSTFIX, ipcam_postfix, sizeof(ipcam_postfix)))            AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_CHANNEL, ipcam_channel, sizeof(ipcam_channel)))            AGS_ERR;
-    if(!getStrValue(cfg, AGENT_IPCAM_MODE, ipcam_mode, sizeof(ipcam_mode)))                  AGS_ERR;
+    if(!getStrValue(cfg, AGENT_IPCAM_MODE, ipcam_mode, sizeof(ipcam_mode)))                     AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_LOGIN, cam_login, sizeof(cam_login)))                      AGS_ERR;
     if(!getStrValue(cfg, AGENT_IPCAM_PASSWORD, cam_password, sizeof(cam_password)))             AGS_ERR;
     getProtocolValue(cfg, AGENT_IPCAM_PROTOCOL, &video_protocol);

@@ -307,40 +307,64 @@ static void capture_video() {
 static void run_agent_actions() {
     IP_CTX_(12000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_AGENT_ON);
+    IP_CTX_(12001);
     switch(variant) {
         case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
         case AG_DB_BIN_OFF_OFF:     /* nothing to do */
+            break;
         case AG_DB_BIN_ON_OFF:      /* nothing to do */
-            at_stop_sf();           /* Stop Files Sender - no connection! */
+            IP_CTX_(12002);
+            at_stop_sf();
+            IP_CTX_(12003);/* Stop Files Sender - no connection! */
             pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
+            IP_CTX_(12004);
             break;
         case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
+            IP_CTX_(12005);
             if(!at_start_sf()) {
+                IP_CTX_(12006);
                 pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot.", __FUNCTION__, "FILES_SENDER", strerror(errno));
+                IP_CTX_(12007);
                 send_reboot();
+                IP_CTX_(12008);
             }
             else {
+                IP_CTX_(12009);
                 pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
+                IP_CTX_(12010);
             }
         case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
+            IP_CTX_(12011);
             pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
+            IP_CTX_(12012);
             send_startup_report();                                  /* send cam's initial settings to the cloud */
+            IP_CTX_(12013);
             break;
         default:
+            IP_CTX_(12014);
             pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
+            IP_CTX_(12015);
             break;
     }
-
+    IP_CTX_(12016);
     if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
+        IP_CTX_(12017);
         if (ag_db_get_int_property(AG_DB_CMD_SEND_WD_AGENT)) {  /* PING processing */
+            IP_CTX_(12018);
             send_wd();
+            IP_CTX_(12019);
             ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 0);
+            IP_CTX_(12020);
         }
+        IP_CTX_(12021);
         if(!ag_db_get_int_property(AG_DB_STATE_WS_ON)) {        /* Kick the WS to start if it is not started! */
+            IP_CTX_(12022);
             ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);
+            IP_CTX_(12023);
         }
+        IP_CTX_(12024);
     }
-    IP_CTX_(12001);
+    IP_CTX_(12025);
 }
 static void run_ws_actions() {
     IP_CTX_(13000);
@@ -841,7 +865,7 @@ void at_main_thread() {
     lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
 
 
-    unsigned int events_timeout = 10; /* Wait 10 seconds - NB! Just to find SIGSEGV! */
+    unsigned int events_timeout = 1;
 
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
