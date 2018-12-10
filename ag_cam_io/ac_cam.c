@@ -381,13 +381,44 @@ int ac_cam_make_video() {
     if(ptrw) free(ptrw);
     return ret;
 }
+/*
+ * on could be -1,0,1,2
+ */
 int ac_set_md(int on) {
-    on = (on > 0)?1:0;  /* Could be -1 and 2 */
-    return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, on);
+    int new_val = update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, (on > 0)?1:0);
+    switch (on) {
+        case -1:
+            if(!new_val) return -1;
+            else return 2;
+            return new_val;
+        case 2:
+            if(new_val) return 2;
+            else return -1;
+            break;
+        case 0:
+        case 1:
+        default:
+            break;
+    }
+    return new_val;
 }
 int ac_set_sd(int on) {
-    on = (on > 0)?1:0;  /* Could be -1 and 2 */
-    return update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_ON, on);
+    int new_val = update_one_parameter(AO_CAM_CMD_SD, AO_CAM_PAR_SD_ON, on);
+    switch (on) {
+        case -1:
+            if(!new_val) return -1;
+            else return 2;
+            return new_val;
+        case 2:
+            if(new_val) return 2;
+            else return -1;
+            break;
+        case 0:
+        case 1:
+        default:
+            break;
+    }
+    return new_val;
 }
 int ac_set_audio(int on) {
     return update_one_parameter(AO_CAM_CMD_CFGREC, AO_CAM_PAR_CFGREC_AUDIO_ON, on);
