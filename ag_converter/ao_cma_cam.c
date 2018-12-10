@@ -39,6 +39,7 @@
 #define CMD_TIME_NAME   "timecfg"
 #define CMD_SNAP_NAME   "snapshot?&strm=0&q=0"
 #define CMD_CFGREC_NAME "cfgrec"
+#define CMD_SNAP_VIDEO_NAME "record"
 
 #define PAR_READ    "?list=1"
 /* Cam's parameters names */
@@ -359,6 +360,9 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
     switch(cmd_id) {
         case AO_CAM_CMD_SNAPSHOT:
             name = CMD_SNAP_NAME;
+            break;
+        case AO_CAM_CMD_CAPTURE_VIDEO:
+            name = CMD_SNAP_VIDEO_NAME;
             break;
         case AO_CAM_CMD_MD:
             name = (read_pars)?CMD_MD_NAME PAR_READ:CMD_MD_NAME;

@@ -94,9 +94,11 @@
 #define DEFAULT_TO_URL_DEAD             15*60           /* URL for send files getting ald after 15 minutes */
 #define DEFAULT_TO_FILE_DEAD            24*3600         /* Max age of not reported to the cloud file kept on file server (Amazone) */
 
+#define DEFAULT_CAPTURE_VIDEO_LEN       20              /* Current len = 20 seconds TODO! Should be configured in CAM!*/
+#define DEFAULT_MP4_PROCESSING          60              /* Time for mp4 file creation for MD, SD & viled capturing */
+
 #define DEFAULT_DB_PATH     "/mnt/mtd/cfg/ipcam_db_stor.txt"
 #define DEFAULT_SNAP_DIR   "SNAPSHOTS"              /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_SNAP_DIR */
-#define DEFAULT_VIDEO_DIR   "VIDEOS"                /* Full path should be on DEFAULT_DT_FILES_PATH/DEFAULT_VIDEO_DIR */
 
 #define DEFAULT_FILES_UPL_PATH  "cloud/json/files"  /* Should be added to the main URL for files upload */
 

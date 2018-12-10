@@ -72,6 +72,11 @@ void ac_cam_deinit();
  * Return 1 if OK
  */
 int ac_cam_make_snapshot(const char* full_path);
+/*
+ * Return 0 if error
+ * Return 1 if OK
+ */
+int ac_cam_make_video();
 
 /* on = 1 set On, set = 0 set Off */
 int ac_set_md(int on);

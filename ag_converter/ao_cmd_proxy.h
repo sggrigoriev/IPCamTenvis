@@ -58,15 +58,14 @@ const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
  * Send file to cloud - internal Agent-SF command.
  * buf         - buffer to store the message
  * size        - buffer size
- * end_date     - event end_date - needs to send the file not earliar than now-end_date > timeout. Not use if 0
- * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
- * files_list   - JSON array of files with full path: "name1",..."nameN"
- * device_id   - gateway device_id
+ * start       - start event timestamp or 0
+ * stop        - end event timestamp or 0
+ * files_type   - "A" - audio, "" - video, "S" - cound, "P" - photo
  *
- * {"name": "sendFiles", "type": <fileTypeString", "filesList": ["<filename>", ..., "<filename>"]}
+ * {"name": "sendFiles", "type": "<fileTypeString"[, "start_date": <start_date>, "end_date": <end_date>]}
  * Return pointer to the buf
 */
-const char* ao_make_send_files(char* buf, size_t size, time_t timestamp, const char* files_type);
+const char* ao_make_send_files(char* buf, size_t size, const char* files_type, time_t start, time_t stop);
 /*
  * Answer from SF about files sent
  * files_list - JSON array of files with full path:

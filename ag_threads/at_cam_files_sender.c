@@ -572,7 +572,7 @@ static const sf_rc_t send_file(fd_t* fd) {
     }
     switch (fd->action) {
         case SF_ACT_SEND_IF_TIME:
-            if ((time(NULL) - fd->event_time) < ag_db_get_int_property(AG_DB_STATE_MD_COUNTDOWN)) {
+            if (time(NULL) < fd->event_time) {
                 pu_log(LL_WARNING, "%s: Too early to send %s. Queued.", __FUNCTION__, fd->name);
                 ret = SF_RC_EARLY;
                 break;
@@ -581,6 +581,7 @@ static const sf_rc_t send_file(fd_t* fd) {
             rc = getSF_URL(fd);
             if (rc == 0) {
                 ret = SF_RC_1_FAIL;
+                fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             } else if (rc == -1) {
                 ret = SF_RC_NO_SPACE;
@@ -593,12 +594,14 @@ static const sf_rc_t send_file(fd_t* fd) {
             if ((time(NULL) - fd->url_creation_time) > DEFAULT_TO_URL_DEAD) {
                 pu_log(LL_WARNING, "%s: Too old URL. Queued.", __FUNCTION__);
                 ret = SF_RC_URL_TOO_OLD;
+                fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             }
             rc = sendFile(fd);
             if (rc == 0) {
                 pu_log(LL_ERROR, "%s: error upload file %s", __FUNCTION__, fd->name);
                 ret = SF_RC_2_FAIL;
+                fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             } else if (rc == 2) {
                 pu_log(LL_WARNING, "%s: No file %s", __FUNCTION__, fd->name);
@@ -611,11 +614,13 @@ static const sf_rc_t send_file(fd_t* fd) {
             if ((time(NULL) - fd->file_creation_time) > DEFAULT_TO_FILE_DEAD) {
                 pu_log(LL_WARNING, "%s: fileRef %d too old. Queued", __FUNCTION__, fd->fileRef);
                 ret = SF_RC_FREF_TOO_OLD;
+                fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             }
             if (!sendSF_update(fd)) {
                 pu_log(LL_ERROR, "%s: error sending completion update for file %s", __FUNCTION__, fd->name);
                 ret = SF_RC_3_FAIL;
+                fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             }
             break;
@@ -666,6 +671,21 @@ static void send_alert_to_proxy(char type, unsigned long fileRef) {
     pu_queue_push(to_proxy, msg, strlen(msg)+1);
 }
 /**********************************************************************************/
+static int ymd_tm2int(struct tm* date) {
+/*     int dir_time =  */
+    return date->tm_year*10000 + date->tm_mon*100 + date->tm_mday;
+}
+static int ymd2int(int y, int m, int d) {
+    return (y-1900)*10000 + (m-1)*100 + d;
+}
+static int hms_time_t2int(time_t t) {
+    struct tm d;
+    gmtime_r(&t, &d);
+    return d.tm_sec + d.tm_min*100 + d.tm_hour*10000;
+}
+static int hms2int(int h, int m, int s) {
+    return s + m*100 + h*10000;
+}
 /*
  * Returns name YYYY-MM-DD made from today's date
  */
@@ -765,7 +785,10 @@ static int fd2json(const fd_t* task, cJSON** item) {
 /* file_size */
     cJSON_AddItemToObject(i, ATI_FILE_SIZE, cJSON_CreateNumber(task->size));
 /* file_time */
-    if(task->event_time) cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
+    if(!task->event_time)
+        cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(UINT_MAX));
+    else
+        cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
 /* url */
     if(strlen(task->upl_url)) cJSON_AddItemToObject(i, ATI_URL, cJSON_CreateString(task->upl_url));
 /* headers */
@@ -831,10 +854,14 @@ static int json2fd(cJSON* item, fd_t* task) {
     }
     task->size = (size_t)i->valueint;
 /* file_time */
-    if(i=cJSON_GetObjectItem(item, ATI_FILE_TIME), i)
-        task->event_time = i->valueint;
-    else
+    if(i=cJSON_GetObjectItem(item, ATI_FILE_TIME), i) {
+        pu_log(LL_ERROR, "%s: Item %s not found. task ignored", __FUNCTION__, ATI_FILE_TIME);
+        return 0;
+    }
+    if((unsigned int)i->valueint == UINT_MAX)
         task->event_time = 0;
+    else
+        task->event_time = i->valueint;
 /* url */
     if(i=cJSON_GetObjectItem(item, ATI_URL), i)
         strncpy(task->upl_url, i->valuestring, sizeof(task->upl_url));
@@ -866,6 +893,8 @@ static int json2fd(cJSON* item, fd_t* task) {
 static const char* g_prefix;
 static const char* g_postfix;
 static const char* g_ext;
+static time_t g_start;
+static time_t g_stop;
 /*
  *
  * <pref>HHMMSS[<postf>].<ext>
@@ -874,18 +903,17 @@ static const char* g_ext;
  * postf - 1 sym or 0
  * ext - up to el-1
  */
-static int parse_fname(const char* name, char* pref, size_t pl, char* postf, size_t pol, char* ext, size_t el) {
-    int res;
+static int parse_fname(const char* name, char* pref, size_t pl, char* postf, size_t pol, char* ext, size_t el, int* h, int* m, int* s) {
     if(!au_getNsyms(&name, pref, pl)) return 0;    /* prefix */
 
-    if(!au_getNdigs(&name, &res, 2)) return 0;     /* hours */
-    if((res < 0)||(res > 23)) return 0;
+    if(!au_getNdigs(&name, h, 2)) return 0;     /* hours */
+    if((*h < 0)||(*h > 23)) return 0;
 
-    if(!au_getNdigs(&name, &res, 2)) return 0;     /* minutes */
-    if((res < 0)||(res > 59)) return 0;
+    if(!au_getNdigs(&name, m, 2)) return 0;     /* minutes */
+    if((*m < 0)||(*m > 59)) return 0;
 
-    if(!au_getNdigs(&name, &res, 2)) return 0;     /* seconds */
-    if((res < 0)||(res > 59)) return 0;
+    if(!au_getNdigs(&name, s, 2)) return 0;     /* seconds */
+    if((*s < 0)||(*s > 59)) return 0;
 
     if(!au_getUntil(&name, postf, pol, '.')) return 0;  /* postfix is too big */
 
@@ -936,16 +964,18 @@ static int files_filter(const struct dirent * dn) {
     char prefix[3]={0};
     char postfix[2]={0};
     char ext[10]={0};
+    int h, m, s;
 /* Size control */
     size_t pref_len = (g_prefix)?strlen(g_prefix)+1:sizeof(prefix);
     size_t post_len = (g_postfix)?strlen(g_postfix)+1:sizeof(postfix);
     size_t ext_len = (g_ext)?strlen(g_ext)+1:sizeof(ext);
 
-
-    if(!parse_fname(dn->d_name, prefix, pref_len, postfix, post_len, ext, ext_len)) return 0;
+    if(!parse_fname(dn->d_name, prefix, pref_len, postfix, post_len, ext, ext_len, &h, &m, &s)) return 0;
     if(pref_len && g_prefix && (strcmp(prefix, g_prefix)!=0)) return 0;
     if(post_len && g_postfix && (strcmp(postfix, g_postfix)!=0)) return 0;
     if(ext_len && g_ext && (strcmp(ext, g_ext)!=0)) return 0;
+    if(g_start && (hms_time_t2int(g_start) > hms2int(h,m,s))) return 0;
+    if(g_stop && (hms_time_t2int(g_stop) < hms2int(h,m,s))) return 0;
     return 1;
 }
 int dirs_filter(const struct dirent * dn) {
@@ -957,20 +987,66 @@ int dirs_filter(const struct dirent * dn) {
     return is_dname(dn->d_name);
 }
 /*
+ * return
+ */
+static time_t get_item_time(cJSON* item) {
+    cJSON* event_time = cJSON_GetObjectItem(item, ATI_FILE_TIME);
+    if(!event_time) {
+        pu_log(LL_ERROR, "Task time is not set!");
+        return 0;
+    }
+    return event_time->valueint;
+}
+/*
+ * Add item to the queue:
+ * if time -> send after tasks with early time
+ * if !time -> send first
+ */
+static cJSON* insert_task(cJSON* item, cJSON* queue) {
+    time_t item_time = get_item_time(item);
+
+/******/
+    cJSON *c=queue->child;
+    if(!c) { /* Insert first: empty array */
+        item->prev = NULL;
+        item->next = NULL;
+        queue->child = item;
+    }
+    else {
+        while(c && (get_item_time(c)>=item_time)) {
+            c = c->next;
+        }
+        if(!c)
+            cJSON_AddItemToArray(queue, item);  /* Append queue */
+        else {  /* Insert after */
+            item->prev = c;
+            item->next = c->next;
+            c->next = item;
+            if(item->next) item->next->prev = item;
+        }
+    }
+
+/******/
+    return queue;
+}
+/*
  * Add tasks to the queue and return it. Files come from yong to old
  * path - fill path to directory with files to be sent
  * prefix - NULL - any 2 symbols prefix, "" - no prefix, ".." - file should have this prefix (2 chars exactly!)
  * postfix - NULL - any, "" - no postfix, "..." - file should have this postfix (1 char exactly)
  * ext - NULL - any, "..." - file should have this extention
- * timestamp - 0 could be sent immediately, timestamp !=0 -> could be sent ater timestamp + TO (TO depends on file type)
+ * !start_date - take all
+ * start_date && end_date - take from interval
  */
-static cJSON* files(const char* path, const char* prefix, const char* postfix, const char* ext, time_t timestamp, cJSON* queue) {
+static cJSON* files(const char* path, const char* prefix, const char* postfix, const char* ext, time_t start_date, time_t end_date, cJSON* queue) {
     fd_t task = {0};
     struct dirent** list = NULL;
 
     g_prefix = prefix;
     g_postfix = postfix;
     g_ext = ext;
+    g_start = start_date;
+    g_stop = end_date;
 
     int rc = scandir(path, &list, files_filter, alphasort);
 
@@ -982,16 +1058,17 @@ static cJSON* files(const char* path, const char* prefix, const char* postfix, c
     while(rc--) {
         pu_log(LL_DEBUG, "%s: File found: %s", __FUNCTION__, list[rc]->d_name);
 /* Place to fill out the task */
-        task.action = (timestamp)?SF_ACT_SEND_IF_TIME:SF_ACT_SEND;
+        task.action = (end_date)?SF_ACT_SEND_IF_TIME:SF_ACT_SEND;
         strncpy(task.path, path, sizeof(task.path));
         strncpy(task.name, list[rc]->d_name, sizeof(task.name));
         char pref[3];
-        if(!parse_fname(task.name, pref, 3, task.type, sizeof(task.type), task.ext, sizeof(task.ext))) {
+        int y,m,d;
+        if(!parse_fname(task.name, pref, 3, task.type, sizeof(task.type), task.ext, sizeof(task.ext), &y, &m, &d)) {
             pu_log(LL_ERROR, "%s: error parsing file %s/%s", __FUNCTION__, path, task.name);
             free(list[rc]);
             continue;
         }
-        task.event_time = timestamp;
+        task.event_time = (end_date)?end_date+DEFAULT_MP4_PROCESSING:0;
         struct stat st;
         char buf[PATH_MAX]={0};
         snprintf(buf, sizeof(buf), "%s/%s", path, task.name);
@@ -1008,8 +1085,11 @@ static cJSON* files(const char* path, const char* prefix, const char* postfix, c
             free(list[rc]);
             continue;
         }
-        if(!queue) queue = cJSON_CreateArray();
-        cJSON_AddItemToArray(queue, new_item);
+        if(!queue) {
+            queue = cJSON_CreateArray();
+        }
+        queue = insert_task(new_item, queue);
+
 
         free(list[rc]);
      }
@@ -1034,10 +1114,10 @@ int empty_dir_delete(const char* path) {
     time_t n_ts = time(NULL);
     gmtime_r(&n_ts, &now);
 
-    int dir_time = (y-1900)*10000 + (m-1)*100 + d;
-    int today = now.tm_year*10000 + now.tm_mon*100 + now.tm_mday;
+    int dir_time = ymd2int(y, m, d);
+    int today = ymd_tm2int(&now);
     if (dir_time < today) {
-        cJSON *q = files(path, NULL, NULL, NULL, 0, NULL);
+        cJSON *q = files(path, NULL, NULL, NULL, 0, 0, NULL);
         if (!q || !cJSON_GetArraySize(q)) {
             remove_dir(path);
             ret = 1;
@@ -1073,7 +1153,7 @@ static cJSON* old_dirs_delete(const char* path, cJSON* queue) {
         remove_dir(path);
     }
     else if (dir_time < now_time) {
-        cJSON *q = files(path, NULL, NULL, NULL, 0, NULL);
+        cJSON *q = files(path, NULL, NULL, NULL, 0, 0, NULL);
         if (!q || !cJSON_GetArraySize(q)) {
             remove_dir(path);
         }
@@ -1114,13 +1194,17 @@ static cJSON* old_all(const char* path, cJSON* queue) {
 
 typedef struct {
     char type[3];
-    time_t timestamp;
+    time_t start_date;
+    time_t end_date;
 } task_t;
 /*
  * Converts JSON item to scan task
- * if type == "?" -> scan all
- * else scan the today's of given type
- * return 0 if
+ * if type == "?" && !time-> scan all old
+ * if type == "P" && !time -> all from SNAPSHOTS
+ * if type == "?" && time -> all MD,SD,VIDEO from today
+ * if type == "S" or "" or "M" && time -> given type for the period
+ * else error
+ * return 0 if error
  */
 static int msg2type(char* msg, task_t* task) {
     int ret = 0;
@@ -1128,7 +1212,8 @@ static int msg2type(char* msg, task_t* task) {
 
     if(!msg) { /* Local task to scan all */
         strncpy(task->type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task->type));
-        task->timestamp = 0;
+        task->start_date = 0;
+        task->end_date = 0;
     }
     else {
         if(obj=cJSON_Parse(msg), !obj) {
@@ -1141,11 +1226,16 @@ static int msg2type(char* msg, task_t* task) {
             goto on_exit;
         }
         strncpy(task->type, i->valuestring, sizeof(task->type));
-        if(i=cJSON_GetObjectItem(obj, "timestamp"), !i) {
-            task->timestamp = 0;
+        if(i=cJSON_GetObjectItem(obj, "start_date"), !i) {
+            task->start_date = 0;
         }
         else
-            task->timestamp = i->valueint;
+            task->start_date = i->valueint;
+        if(i=cJSON_GetObjectItem(obj, "end_date"), !i) {
+            task->end_date = 0;
+        }
+        else
+            task->end_date = i->valueint;
     }
     ret = 1;
 on_exit:
@@ -1159,25 +1249,38 @@ on_exit:
  * [<action>,...<action>]
  */
 static cJSON* fill_queue(char* msg, cJSON* rq) {
-    task_t task;
+    task_t task = {{0}, 0, 0};
     char buf[PATH_MAX]={0};
 
     if(!msg2type(msg, &task)) {
         pu_log(LL_ERROR, "%s: error parsing %s. Ignored", __FUNCTION__, msg);
         return rq;
     }
-    if(!strncmp(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type))) {
+    if(!strncmp(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type)) && !task.start_date) {        /* if type == "?" && !time-> scan all old */
         return old_all(DEFAULT_DT_FILES_PATH, rq);
     }
-    else if(!strncmp(task.type, DEFAULT_SNAP_FILE_POSTFIX, sizeof(task.type))) {
+    else if(!strncmp(task.type, DEFAULT_SNAP_FILE_POSTFIX, sizeof(task.type)) && !task.start_date) {    /* if type == "P" && !time -> all from SNAPSHOTS */
         snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
-        return files(buf, DEFAULLT_SNAP_FILE_PREFIX, DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, 0, rq);
+        return files(buf, DEFAULLT_SNAP_FILE_PREFIX, DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, 0, 0, rq);
     }
-/* MD, SD, VIDEO */
-    char now_dir[20]={0};
-    make_today_dir_name(now_dir, sizeof(now_dir));
-    snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
-    return files(buf, DEFAULT_DT_FILES_PREFIX, task.type, DEFAULT_MSD_FILE_EXT, task.timestamp, rq);
+    else if(!strncmp(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type)) && task.start_date) {    /* if type == "?" && time -> all MD,SD,VIDEO from today */
+        char now_dir[20]={0};
+        make_today_dir_name(now_dir, sizeof(now_dir));
+        snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
+        return files(buf, DEFAULT_DT_FILES_PREFIX, DEFAULT_UNDEF_FILE_POSTFIX, DEFAULT_MSD_FILE_EXT, 0,0, rq);
+    }
+    else if((!strncmp(task.type, DEFAULT_MD_FILE_POSTFIX, sizeof(task.type)) ||
+            !strncmp(task.type, DEFAULT_SD_FILE_POSTFIX, sizeof(task.type)) ||
+            !strncmp(task.type, DEFAULT_VIDEO_FILE_POSTFIX, sizeof(task.type))) && task.start_date && task.end_date) { /* if type == "S" or "" or "M" && time -> given type for the period */
+        char now_dir[20]={0};
+        make_today_dir_name(now_dir, sizeof(now_dir));
+        snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
+        return files(buf, DEFAULT_DT_FILES_PREFIX, task.type, DEFAULT_MSD_FILE_EXT, task.start_date,task.end_date, rq);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: Error task: type = %s, start_date = %lu, end_date = %lu. Ignored", __FUNCTION__, task.type, task.start_date, task.end_date);
+        return rq;
+    }
 }
 static void file_delete(const char* dir, const char* name) {
     char buf[PATH_MAX]={0};
@@ -1199,9 +1302,17 @@ static cJSON* sendFromQueue(cJSON* rq) {
         cJSON_Delete(rq);
         return NULL;
     }
-    cJSON* item = cJSON_DetachItemFromArray(rq, 0); /* Get first, remove it from array */
+    cJSON* item = cJSON_GetArrayItem(rq,0);
+    time_t t = get_item_time(item);
+    if(((unsigned int)t < UINT_MAX) && (t > time(NULL))) {
+        pu_log(LL_DEBUG, "%s: 1st in queue %s/%s is to early to send", __FUNCTION__, cJSON_GetObjectItem(item, ATI_PATH)->valuestring, cJSON_GetObjectItem(item, ATI_FILE_NAME)->valuestring);
+        return rq;
+    }
+
+    item = cJSON_DetachItemFromArray(rq, 0); /* Get first, remove it from array */
     fd_t task;
     int ret = json2fd(item, &task);
+
     if(item) cJSON_Delete(item);
     if(!ret) return rq;
 
@@ -1229,7 +1340,7 @@ static cJSON* sendFromQueue(cJSON* rq) {
             cJSON *new_item = NULL;
             fd2json(&task, &new_item);                          /* Make new item with task */
 			task.action = calc_action(rc);                      /* Update the action regarding the operation result */
-            if(new_item) cJSON_AddItemToArray(rq, new_item);    /* Append the queue by new task */
+            if(new_item) insert_task(new_item, rq);         /* Append the queue by new task */
         }
             break;
         case SF_RC_NOT_FOUND:
@@ -1262,7 +1373,7 @@ static void* thread_function(void* params) {
     cJSON* send_queue = NULL;
     cJSON* send_all_queue = NULL;
 /* Check remaining files on start */
-    send_all_queue = fill_queue(NULL, send_all_queue);
+    send_queue = fill_queue(NULL, send_queue);
 
     while(!is_stop) {
         pu_queue_event_t ev;

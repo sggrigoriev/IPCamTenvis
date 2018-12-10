@@ -347,6 +347,40 @@ int ac_cam_make_snapshot(const char* full_path) {
     close_curl_session(crl);
     return ret;
 }
+int ac_cam_make_video() {
+    int ret = 0;
+    CURLcode res;
+    FILE* fpw=NULL;
+    char* ptrw=NULL;
+    size_t szw=0;
+    const char* uri;
+
+    CURL* crl = open_curl_session();
+    if(!crl) return 0;
+
+    fpw = open_memstream(&ptrw, &szw);
+    if( fpw == NULL ) {
+        pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
+        goto on_error;
+    }
+    if(uri = ao_make_cam_uri(AO_CAM_CMD_CAPTURE_VIDEO, AO_CAM_WRITE), !uri) goto on_error;
+
+    curl_easy_setopt(crl, CURLOPT_URL, uri);
+    curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL);
+    curl_easy_setopt(crl, CURLOPT_WRITEDATA, fpw);
+    res = curl_easy_perform(crl);
+    if(res != CURLE_OK) {
+        pu_log(LL_ERROR, "%s: %s\n", __FUNCTION__, curl_easy_strerror(res));
+        goto on_error;
+    }
+    fflush(fpw);
+
+    ret = 1;
+ on_error:
+    if(fpw) fclose(fpw);
+    if(ptrw) free(ptrw);
+    return ret;
+}
 int ac_set_md(int on) {
     on = (on > 0)?1:0;  /* Could be -1 and 2 */
     return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, on);

@@ -41,6 +41,7 @@ t_ao_cam_alert ao_cam_decode_alert(cJSON* obj);
 #define AO_CAM_CMD_SD       3
 #define AO_CAM_CMD_TIME     4
 #define AO_CAM_CMD_CFGREC   5
+#define AO_CAM_CMD_CAPTURE_VIDEO    6
 
 typedef enum {
     AO_CAM_PAR_UNDEF,

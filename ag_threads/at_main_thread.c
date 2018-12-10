@@ -137,28 +137,14 @@ static void send_ACK_to_Proxy(int command_number) {
     IP_CTX_(4001);
 }
 /*
- * Take files with the postfix placing between start-end
- * if start == 0 - take all before end
- * if end == 0 - take all after start
- * if start == end == 0 - take all
+ * Kick send files thread to send files with the postfix specified
  */
-static void send_files_2SF(const char* postfix, time_t end_date) {
-    char buf[128] = {0};
-        ao_make_send_files(buf, sizeof(buf), end_date, postfix);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
-        pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
-}
-
-static void send_snapshot(const char* full_path) {
+static void send_files_2SF(const char* postfix, time_t start_date, time_t end_date) {
     IP_CTX_(5000);
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    char path[1024]={0};
-    snprintf(path, sizeof(path)-1, "\"%s\"", full_path);
-
-    if(ao_make_send_files(buf, sizeof(buf), time(NULL), ac_get_event2file_type(AC_CAM_MADE_SNAPSHOT))) {
-        pu_log(LL_DEBUG, "%s: Sending to SF thread: %s", __FUNCTION__, buf);
-        pu_queue_push(to_sf, buf, strlen(buf) + 1);
-    }
+    char buf[128] = {0};
+    ao_make_send_files(buf, sizeof(buf), postfix, start_date, end_date);
+    pu_queue_push(to_sf, buf, strlen(buf) + 1);
+    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
     IP_CTX_(5001);
 }
 /*
@@ -274,8 +260,7 @@ static void restart_events_monitor() {
  */
 static void make_snapshot() {
     IP_CTX_(16000);
-    int snapshot_command = ag_db_get_int_property(AG_DB_STATE_SNAPSHOT);
-    if (snapshot_command < 1) return;
+    if (ag_db_get_int_property(AG_DB_STATE_SNAPSHOT) < 1) return;
 
     char name[30]={0};
     char path[256]={0};
@@ -284,12 +269,40 @@ static void make_snapshot() {
     snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
     if (!ac_cam_make_snapshot(path)) {
         pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
+        ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
         IP_CTX_(16001);
         return;
     }
-    send_snapshot(path);
+    send_files_2SF(DEFAULT_SNAP_FILE_POSTFIX, 0, 0);
     ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
     IP_CTX_(16002);
+}
+/* TODO! Sgift these to IMdB */
+static time_t capture_start=0;
+static time_t capture_stop=0;
+static void capture_video() {
+    IP_CTX_(16100);
+
+    if(ag_db_get_int_property(AG_DB_STATE_CAPTURE_VIDEO) > 0) { /* Process capturing */
+        if(!capture_start) {
+            capture_start = time(NULL);
+            if (!ac_cam_make_video()) {
+                pu_log(LL_ERROR, "%s: Error video capture", __FUNCTION__);
+                ag_db_set_int_property(AG_DB_STATE_CAPTURE_VIDEO, 0);
+                capture_start = 0;
+                IP_CTX_(16101);
+                return;
+            }
+            capture_stop = capture_start + DEFAULT_CAPTURE_VIDEO_LEN;
+        }
+        if(time(NULL) >= capture_stop) { /* Capture is over */
+            send_files_2SF(DEFAULT_VIDEO_FILE_POSTFIX, capture_start, capture_stop);
+            capture_start = 0;
+            capture_stop = 0;
+            ag_db_set_int_property(AG_DB_STATE_CAPTURE_VIDEO, 0);
+        }
+    }
+    IP_CTX_(16102);
 }
 static void run_agent_actions() {
     IP_CTX_(12000);
@@ -468,6 +481,7 @@ static void run_cam_actions() {
     IP_CTX_(15000);
     ag_db_update_changed_cam_parameters();
     make_snapshot();
+    capture_video();
     IP_CTX_(15001);
 }
 static void send_reports() {
@@ -641,24 +655,24 @@ static void process_em_message(msg_obj_t* obj_msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            if(ag_db_get_int_property(AG_DB_STATE_MD) == 1) ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_START_SD:
-            if(ag_db_get_int_property(AG_DB_STATE_SD) == 1) ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
             break;
         case AC_CAM_STOP_MD:
             ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.end_date);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
             break;
         case AC_CAM_STOP_SD:
             ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
             ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
 
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.end_date);
+            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
             break;
         case AC_CAM_START_IO:
         case AC_CAM_STOP_IO:
