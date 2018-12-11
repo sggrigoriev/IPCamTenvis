@@ -154,7 +154,7 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_md},
 {AG_DB_STATE_SD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_sd},
-{AG_DB_STATE_RECORDING,     0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+{AG_DB_STATE_RECORDING,     0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
 {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  30, NULL,               NULL,               NULL},

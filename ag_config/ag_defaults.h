@@ -87,7 +87,7 @@
 #define DEFAULT_AM_ALERT_TO_SEC         10              /* Period for which all CAM alarms treats as one */
 #define DEFAULT_AV_ASK_TO_SEC           2*60            /* Interval to check active viewers amount though WS */
 #define DEFAULT_TO_SEND_ALL             10              /* Send old files TO */
-#define DEAULT_TO_SCAN_ALL              3600            /* Scan for old files TO */
+#define DEAULT_TO_SCAN_ALL              3600             /* Scan for old files TO */
 #define DEFAULT_TO_DIR_LIFE             24*3600*7       /* Delete MD/SD files & directories uncoditionally afer aweek */
 #define DEFAULT_TO_FOR_FILES_RESEND     30              /* Delay to resend not sent files */
 #define DEFAULT_TO_AR_PING              30              /* Alerts reader TO */

@@ -1377,8 +1377,15 @@ static void* thread_function(void* params) {
     cJSON* send_queue = NULL;
     cJSON* send_all_queue = NULL;
 /* Check remaining files on start */
-    task_t task = {{DEFAULT_UNDEF_FILE_POSTFIX}, time(NULL), 0};
+    task_t task;
+
+    strncpy(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type));
+    task.start_date = time(NULL); task.end_date = 0;
     send_queue = fill_queue(&task, send_queue);
+
+    strncpy(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type));
+    task.start_date = 0; task.end_date = 0;
+    send_all_queue = fill_queue(&task, send_all_queue);
 
     while(!is_stop) {
         pu_queue_event_t ev;

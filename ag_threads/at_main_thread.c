@@ -294,12 +294,14 @@ static void capture_video() {
                 return;
             }
             capture_stop = capture_start + DEFAULT_CAPTURE_VIDEO_LEN;
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
         }
         if(time(NULL) >= capture_stop) { /* Capture is over */
             send_files_2SF(DEFAULT_VIDEO_FILE_POSTFIX, capture_start, capture_stop);
             capture_start = 0;
             capture_stop = 0;
             ag_db_set_int_property(AG_DB_STATE_CAPTURE_VIDEO, 0);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
         }
     }
     IP_CTX_(16102);
