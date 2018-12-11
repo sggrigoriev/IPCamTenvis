@@ -47,7 +47,7 @@ typedef struct {
     int no_entry;       /* 1 if we didn't read directories after open */
 }ac_cam_fl_t;
 /*
- * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
+ * Create name as prefixHHMMSSpostfix.ext, store it into buf
  * Return buf
  */
 const char* ac_make_name_from_date(const char* prefix, time_t timestamp, const char* postfix, const char* ext, char* buf, size_t size);

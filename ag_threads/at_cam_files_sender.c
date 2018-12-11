@@ -102,6 +102,14 @@ static void print_fd(const fd_t* fd) {
     pu_log(LL_DEBUG, "%s:\naction = %s\npath = %s\nname = %s\next = %s\ntype=%s\nsize = %lu\nevent_time = %lu\nupl_url = %s\nheaders = %s\nfileRef = %lu\nurl_creation_time = %lu\nfile_creation_time = %lu",
                        __FUNCTION__, sf_action_name[fd->action], fd->path, fd->name, fd->ext, fd->type, fd->size, fd->event_time, fd->upl_url, fd->headers, fd->fileRef, fd->url_creation_time, fd->file_creation_time);
 }
+static void print_queue(const char* words, cJSON* q) {
+    if (!q) return;
+    char *txt = cJSON_PrintUnformatted(q);
+    if (txt) {
+        pu_log(LL_DEBUG, "%s: %s queue = %s", __FUNCTION__, words, txt);
+        free(txt);
+    }
+}
 typedef enum {
     SF_RC_SENT_OK,      /* 0        File sent */
     SF_RC_EARLY,        /* 1    Should wait until sending */
@@ -379,7 +387,7 @@ static int parse_cloud_answer(const char* ptr, fd_t* in_par) {
     }
     cJSON* action = cJSON_GetObjectItem(obj, "filesAction");
     if(action && (action->valueint == 2)) { /* No space to upload */
-        pu_log(LL_WARNING, "%s: No space to upload file. File %s will be deleted.", __FUNCTION__, in_par->name);
+        pu_log(LL_WARNING, "%s: No space to upload file. File %s/%s will be deleted.", __FUNCTION__, in_par->path, in_par->name);
         ret = -1;
         goto on_error;
     }
@@ -492,13 +500,16 @@ static int sendFile(fd_t* in_par) {
     FILE* fp = NULL;
     FILE* fd = NULL;
 
+    char pathNname[PATH_MAX];
+    snprintf(pathNname, sizeof(pathNname), "%s/%s", in_par->path, in_par->name);
+
     if(curl = init(), !curl) return 0;
 
     if(hs = make_getSF_header(in_par, hs), !hs) goto on_exit;
     if(hs = make_SF_header(in_par->headers, hs), !hs) goto on_exit; /* Add file server headers to the common one */
 
-    if(fd = fopen(in_par->name, "rb"), !fd) { /* open file to upload */
-        pu_log(LL_ERROR, "%s: Open %s file error %d-%s", __FUNCTION__, in_par->name, errno, strerror(errno));
+    if(fd = fopen(pathNname, "rb"), !fd) { /* open file to upload */
+        pu_log(LL_ERROR, "%s: Open %s file error %d-%s", __FUNCTION__, pathNname, errno, strerror(errno));
         if(errno == ENOENT) ret = 2;   /* No such file. It was sent already */
         goto on_exit;
     }
@@ -571,13 +582,13 @@ static const sf_rc_t send_file(fd_t* fd) {
     int rc;
     print_fd(fd);
     if(!fd->size) {
-        pu_log(LL_ERROR, "%s: File %s got zero size! Will be deleted", __FUNCTION__, fd->name);
+        pu_log(LL_ERROR, "%s: File %s/%s got zero size! Will be deleted", __FUNCTION__, fd->path, fd->name);
         return SF_RC_BAD_FILE;
     }
     switch (fd->action) {
         case SF_ACT_SEND_IF_TIME:
             if (time(NULL) < fd->event_time) {
-                pu_log(LL_WARNING, "%s: Too early to send %s. Queued.", __FUNCTION__, fd->name);
+                pu_log(LL_WARNING, "%s: Too early to send %s/%s. Queued.", __FUNCTION__, fd->path, fd->name);
                 ret = SF_RC_EARLY;
                 break;
             }
@@ -603,17 +614,17 @@ static const sf_rc_t send_file(fd_t* fd) {
             }
             rc = sendFile(fd);
             if (rc == 0) {
-                pu_log(LL_ERROR, "%s: error upload file %s", __FUNCTION__, fd->name);
+                pu_log(LL_ERROR, "%s: error upload file %s/%s", __FUNCTION__, fd->path, fd->name);
                 ret = SF_RC_2_FAIL;
                 fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
             } else if (rc == 2) {
-                pu_log(LL_WARNING, "%s: No file %s", __FUNCTION__, fd->name);
+                pu_log(LL_WARNING, "%s: No file %s/%s", __FUNCTION__, fd->path, fd->name);
                 ret = SF_RC_NOT_FOUND;
                 break;
             }
             fd->file_creation_time = time(NULL);
-            pu_log(LL_DEBUG, "%s: file %s sent OK", __FUNCTION__, fd->name);
+            pu_log(LL_DEBUG, "%s: file %s/%s sent OK", __FUNCTION__, fd->path, fd->name);
         case SF_ACT_UPDATE:
             if ((time(NULL) - fd->file_creation_time) > DEFAULT_TO_FILE_DEAD) {
                 pu_log(LL_WARNING, "%s: fileRef %d too old. Queued", __FUNCTION__, fd->fileRef);
@@ -622,7 +633,7 @@ static const sf_rc_t send_file(fd_t* fd) {
                 break;
             }
             if (!sendSF_update(fd)) {
-                pu_log(LL_ERROR, "%s: error sending completion update for file %s", __FUNCTION__, fd->name);
+                pu_log(LL_ERROR, "%s: error sending completion update for file %s/%s", __FUNCTION__, fd->path, fd->name);
                 ret = SF_RC_3_FAIL;
                 fd->event_time = time(NULL)+DEFAULT_MP4_PROCESSING;
                 break;
@@ -789,10 +800,7 @@ static int fd2json(const fd_t* task, cJSON** item) {
 /* file_size */
     cJSON_AddItemToObject(i, ATI_FILE_SIZE, cJSON_CreateNumber(task->size));
 /* file_time */
-    if(!task->event_time)
-        cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(UINT_MAX));
-    else
-        cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
+    cJSON_AddItemToObject(i, ATI_FILE_TIME, cJSON_CreateNumber(task->event_time));
 /* url */
     if(strlen(task->upl_url)) cJSON_AddItemToObject(i, ATI_URL, cJSON_CreateString(task->upl_url));
 /* headers */
@@ -858,14 +866,11 @@ static int json2fd(cJSON* item, fd_t* task) {
     }
     task->size = (size_t)i->valueint;
 /* file_time */
-    if(i=cJSON_GetObjectItem(item, ATI_FILE_TIME), i) {
+    if(i=cJSON_GetObjectItem(item, ATI_FILE_TIME), !i) {
         pu_log(LL_ERROR, "%s: Item %s not found. task ignored", __FUNCTION__, ATI_FILE_TIME);
         return 0;
     }
-    if((unsigned int)i->valueint == UINT_MAX)
-        task->event_time = 0;
-    else
-        task->event_time = i->valueint;
+    task->event_time = i->valueint;
 /* url */
     if(i=cJSON_GetObjectItem(item, ATI_URL), i)
         strncpy(task->upl_url, i->valuestring, sizeof(task->upl_url));
@@ -891,7 +896,6 @@ static int json2fd(cJSON* item, fd_t* task) {
         task->file_creation_time = i->valueint;
     else
         task->file_creation_time = 0;
-    print_fd(task);
     return 1;
 }
 static const char* g_prefix;
@@ -991,15 +995,17 @@ int dirs_filter(const struct dirent * dn) {
     return is_dname(dn->d_name);
 }
 /*
- * return
+ * return 1 if item->time >= time
+ * return 0 if item->time < time
+ * if item->time = 0 then return 1
  */
-static time_t get_item_time(cJSON* item) {
+static time_t GE_item_time(cJSON* item, time_t t) {
     cJSON* event_time = cJSON_GetObjectItem(item, ATI_FILE_TIME);
     if(!event_time) {
         pu_log(LL_ERROR, "Task time is not set!");
         return 0;
     }
-    return event_time->valueint;
+    return (!event_time->valueint)?1:event_time->valueint >= t;
 }
 /*
  * Add item to the queue:
@@ -1007,7 +1013,7 @@ static time_t get_item_time(cJSON* item) {
  * if !time -> send first
  */
 static cJSON* insert_task(cJSON* item, cJSON* queue) {
-    time_t item_time = get_item_time(item);
+    time_t item_time = cJSON_GetObjectItem(item, ATI_FILE_TIME)->valueint;
 
 /******/
     cJSON *c=queue->child;
@@ -1017,7 +1023,7 @@ static cJSON* insert_task(cJSON* item, cJSON* queue) {
         queue->child = item;
     }
     else {
-        while(c && (get_item_time(c)>=item_time)) {
+        while(c && (GE_item_time(c, item_time))) {
             c = c->next;
         }
         if(!c)
@@ -1052,6 +1058,8 @@ static cJSON* files(const char* path, const char* prefix, const char* postfix, c
     g_start = start_date;
     g_stop = end_date;
 
+    pu_log(LL_DEBUG, "%s: scan with path = %s, prefix = %s, postfix = %s, ext = %s, start = %lu, stop = %lu",
+            __FUNCTION__, path, (prefix)?prefix:"NULL", (postfix)?postfix:"NULL", (ext)?ext:"NULL", start_date, end_date);
     int rc = scandir(path, &list, files_filter, alphasort);
 
     if(rc < 0) {
@@ -1210,7 +1218,7 @@ typedef struct {
  * else error
  * return 0 if error
  */
-static int msg2type(char* msg, task_t* task) {
+static int msg2type(pu_queue_msg_t* msg, task_t* task) {
     int ret = 0;
     cJSON* obj = NULL;
 
@@ -1252,37 +1260,40 @@ on_exit:
  * Queue format:
  * [<action>,...<action>]
  */
-static cJSON* fill_queue(char* msg, cJSON* rq) {
-    task_t task = {{0}, 0, 0};
+static cJSON* fill_queue(task_t* task, cJSON* rq) {
     char buf[PATH_MAX]={0};
 
-    if(!msg2type(msg, &task)) {
-        pu_log(LL_ERROR, "%s: error parsing %s. Ignored", __FUNCTION__, msg);
-        return rq;
-    }
-    if(!strncmp(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type)) && !task.start_date) {        /* if type == "?" && !time-> scan all old */
+/* send all old */
+    if(!strncmp(task->type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task->type)) && !task->start_date) {        /* if type == "?" && !time-> scan all old */
+        pu_log(LL_DEBUG, "%s: scan all old dirs in %s", __FUNCTION__, DEFAULT_DT_FILES_PATH);
         return old_all(DEFAULT_DT_FILES_PATH, rq);
     }
-    else if(!strncmp(task.type, DEFAULT_SNAP_FILE_POSTFIX, sizeof(task.type)) && !task.start_date) {    /* if type == "P" && !time -> all from SNAPSHOTS */
+/* send snapshots */
+    else if(!strncmp(task->type, DEFAULT_SNAP_FILE_POSTFIX, sizeof(task->type)) && !task->start_date) {    /* if type == "P" && !time -> all from SNAPSHOTS */
         snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
+        pu_log(LL_DEBUG, "%s: scan snapshots on %s", __FUNCTION__, buf);
         return files(buf, DEFAULLT_SNAP_FILE_PREFIX, DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, 0, 0, rq);
     }
-    else if(!strncmp(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type)) && task.start_date) {    /* if type == "?" && time -> all MD,SD,VIDEO from today */
+/* send MD/SD/Video for today */
+    else if(!strncmp(task->type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task->type)) && task->start_date) {    /* if type == "?" && time -> all MD,SD,VIDEO from today */
         char now_dir[20]={0};
         make_today_dir_name(now_dir, sizeof(now_dir));
         snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
-        return files(buf, DEFAULT_DT_FILES_PREFIX, DEFAULT_UNDEF_FILE_POSTFIX, DEFAULT_MSD_FILE_EXT, 0,0, rq);
+        pu_log(LL_DEBUG, "%s: scan for MD/SD/VIDEO for today in %s", __FUNCTION__, buf);
+        return files(buf, DEFAULT_DT_FILES_PREFIX, NULL, DEFAULT_MSD_FILE_EXT, 0,0, rq);
     }
-    else if((!strncmp(task.type, DEFAULT_MD_FILE_POSTFIX, sizeof(task.type)) ||
-            !strncmp(task.type, DEFAULT_SD_FILE_POSTFIX, sizeof(task.type)) ||
-            !strncmp(task.type, DEFAULT_VIDEO_FILE_POSTFIX, sizeof(task.type))) && task.start_date && task.end_date) { /* if type == "S" or "" or "M" && time -> given type for the period */
+/* send by main thread request */
+    else if((!strncmp(task->type, DEFAULT_MD_FILE_POSTFIX, sizeof(task->type)) ||
+            !strncmp(task->type, DEFAULT_SD_FILE_POSTFIX, sizeof(task->type)) ||
+            !strncmp(task->type, DEFAULT_VIDEO_FILE_POSTFIX, sizeof(task->type))) && task->start_date && task->end_date) { /* if type == "S" or "" or "M" && time -> given type for the period */
         char now_dir[20]={0};
         make_today_dir_name(now_dir, sizeof(now_dir));
         snprintf(buf, sizeof(buf), "%s/%s", DEFAULT_DT_FILES_PATH, now_dir);
-        return files(buf, DEFAULT_DT_FILES_PREFIX, task.type, DEFAULT_MSD_FILE_EXT, task.start_date,task.end_date, rq);
+        pu_log(LL_DEBUG, "%s: scan for %s in %s", __FUNCTION__, task->type, buf);
+        return files(buf, DEFAULT_DT_FILES_PREFIX, task->type, DEFAULT_MSD_FILE_EXT, task->start_date,task->end_date, rq);
     }
     else {
-        pu_log(LL_ERROR, "%s: Error task: type = %s, start_date = %lu, end_date = %lu. Ignored", __FUNCTION__, task.type, task.start_date, task.end_date);
+        pu_log(LL_ERROR, "%s: Error task: type = %s, start_date = %lu, end_date = %lu. Ignored", __FUNCTION__, task->type, task->start_date, task->end_date);
         return rq;
     }
 }
@@ -1301,14 +1312,14 @@ static void file_delete(const char* dir, const char* name) {
  * If the file can't be sent - put it to the end of queue
  */
 static cJSON* sendFromQueue(cJSON* rq) {
+    print_queue("sendFromQueue on entry", rq);
     if(!rq) return NULL;
     if(!cJSON_GetArraySize(rq)) {
         cJSON_Delete(rq);
         return NULL;
     }
     cJSON* item = cJSON_GetArrayItem(rq,0);
-    time_t t = get_item_time(item);
-    if(((unsigned int)t < UINT_MAX) && (t > time(NULL))) {
+    if(cJSON_GetObjectItem(item, ATI_FILE_TIME)->valueint > time(NULL)) {
         pu_log(LL_DEBUG, "%s: 1st in queue %s/%s is to early to send", __FUNCTION__, cJSON_GetObjectItem(item, ATI_PATH)->valuestring, cJSON_GetObjectItem(item, ATI_FILE_NAME)->valuestring);
         return rq;
     }
@@ -1319,12 +1330,6 @@ static cJSON* sendFromQueue(cJSON* rq) {
 
     if(item) cJSON_Delete(item);
     if(!ret) return rq;
-
-    char* txt = cJSON_PrintUnformatted(rq);
-    if(txt) {
-        pu_log(LL_DEBUG, "%s: On entry: %s", __FUNCTION__, txt);
-        free(txt);
-    }
 
     sf_rc_t rc = send_file(&task);
     switch (rc) {
@@ -1352,11 +1357,7 @@ static cJSON* sendFromQueue(cJSON* rq) {
         default:
             break;
     }
-    txt = cJSON_PrintUnformatted(rq);
-    if(txt) {
-        pu_log(LL_DEBUG, "%s: On exit: %s", __FUNCTION__, txt);
-        free(txt);
-    }
+    print_queue("sendFromQueue on exit", rq);
     return rq;
 }
 
@@ -1370,16 +1371,14 @@ static void* thread_function(void* params) {
     lib_timer_clock_t files_resend_clock = {0};
     lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
 
-    lib_timer_clock_t send_all_clock = {0};   /* timer for backgound "send_all" task */
-    lib_timer_init(&send_all_clock, DEFAULT_TO_SEND_ALL);
-
     lib_timer_clock_t scan_all_clock = {0};   /* timer for backgound "send_all" task */
     lib_timer_init(&scan_all_clock, DEAULT_TO_SCAN_ALL);
 
     cJSON* send_queue = NULL;
     cJSON* send_all_queue = NULL;
 /* Check remaining files on start */
-    send_queue = fill_queue(NULL, send_queue);
+    task_t task = {{DEFAULT_UNDEF_FILE_POSTFIX}, time(NULL), 0};
+    send_queue = fill_queue(&task, send_queue);
 
     while(!is_stop) {
         pu_queue_event_t ev;
@@ -1389,7 +1388,13 @@ static void* thread_function(void* params) {
                 size_t len = sizeof(q_msg);
                 while (pu_queue_pop(from_main, q_msg, &len)) {
                     pu_log(LL_INFO, "%s: received from Agent: %s ", PT_THREAD_NAME, q_msg);
-                    send_queue = fill_queue(q_msg, send_queue);
+                    if(!msg2type(q_msg, &task)) {
+                        pu_log(LL_ERROR, "%s: error parsing %s. Ignored", __FUNCTION__, q_msg);
+                    }
+                    else {
+                        send_queue = fill_queue(&task, send_queue);
+                        print_queue("send_queue after fill", send_queue);
+                    }
                     len = sizeof(q_msg);
                 }
              }
@@ -1407,16 +1412,17 @@ static void* thread_function(void* params) {
 /* if got smth in send queue - send it */
         if(lib_timer_alarm(files_resend_clock)) {
             send_queue = sendFromQueue(send_queue);
-            lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
-        }
-/* Make background "send all" if any */
-        if(lib_timer_alarm(send_all_clock)) {
             send_all_queue = sendFromQueue(send_all_queue);
-            lib_timer_init(&send_all_clock, DEFAULT_TO_SEND_ALL);
+            lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
         }
 /* Scan for old files */
         if(lib_timer_alarm(scan_all_clock)) {
-            send_all_queue = fill_queue(NULL, send_all_queue);
+            strncpy(task.type, DEFAULT_UNDEF_FILE_POSTFIX, sizeof(task.type));
+            task.start_date = 0; task.end_date = 0;
+            send_all_queue = fill_queue(&task, send_all_queue);
+
+            print_queue("send_all_queue after fill", send_queue);
+
             lib_timer_init(&scan_all_clock, DEAULT_TO_SCAN_ALL);
         }
     }

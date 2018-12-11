@@ -67,7 +67,7 @@ const char* ac_get_event2file_type(t_ac_cam_events e) {
     return ret;
 }
 /*
- * Create name as prefixYYYY-MM-DD_HHMMSSpostfix.ext, store it into buf
+ * Create name as prefixHHMMSSpostfix.ext, store it into buf
  * Return buf
  */
 #define AC_CAM_FIX_L 20
@@ -85,7 +85,7 @@ const char* ac_make_name_from_date(const char* prefix, time_t timestamp, const c
     }
     struct tm tm_d;
     gmtime_r(&timestamp, &tm_d);
-    snprintf(fix, sizeof(fix)-1, "%04d-%02d-%02d_%02d%02d%02d", tm_d.tm_year+1900, tm_d.tm_mon+1, tm_d.tm_mday, tm_d.tm_hour, tm_d.tm_min, tm_d.tm_sec);
+    snprintf(fix, sizeof(fix)-1, "%02d%02d%02d", tm_d.tm_hour, tm_d.tm_min, tm_d.tm_sec);
     snprintf(buf, size, "%s%s%s.%s", (prefix)?prefix:"", fix, (postfix)?postfix:"", ext);
     return buf;
 

@@ -168,7 +168,7 @@ static const ag_db_record_t SCHEME[] = {
 {AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
 {AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity},
-{AG_DB_STATE_CAPTURE_VIDEO, -1, 0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL}
+{AG_DB_STATE_CAPTURE_VIDEO, 0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL}
 /*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
 /*  1                       2   3   4   5   6   8   9   10                  11                  12   */
 };
