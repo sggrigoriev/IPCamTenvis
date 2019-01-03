@@ -42,12 +42,20 @@ static const char* CLOUD_V_STATUS = "status";
 static const char* CLOUD_VIEWERS_COUNT = "viewersCount";
 static const char* CLOUD_PING_TO = "pingInterval";
 
-static volatile unsigned int seq_number=100;
 static pthread_mutex_t sn_mutex = PTHREAD_MUTEX_INITIALIZER; /* To protect the seq_number change */
+static volatile unsigned int seq_number=100;
 static unsigned int get_sn() {
     unsigned int ret;
     pthread_mutex_lock(&sn_mutex);
     ret = seq_number = (seq_number > 999)?100:seq_number+1;
+    pthread_mutex_unlock(&sn_mutex);
+    return ret;
+}
+static volatile unsigned int alert_number = 1;
+static unsigned int inc_alert_number() {
+    unsigned int ret;
+    pthread_mutex_lock(&sn_mutex);
+    ret = alert_number = (alert_number > 10000)?1:seq_number+1;
     pthread_mutex_unlock(&sn_mutex);
     return ret;
 }
@@ -92,7 +100,7 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
       "deviceId": "DEVICE_ID",
       "alertType": "motion",
       "timestamp": 1418428568000,
-      "params": [					-- will be empty if no file uploaded!!
+      "params": [					-- will not be presented if !fileRef!!
         {
           "name": "fileRef",
           "value": "1234567"
@@ -101,7 +109,7 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
     }
   ]
  */
-cJSON* ao_cmd_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef) {
+cJSON* ao_cmd_cloud_alerts(const char* deviceID, t_ac_cam_events ev, const char* fileRef) {
     const char* alert_type = get_cloud_alert_type(ev);
     if(!alert_type) return NULL;
 
@@ -140,7 +148,7 @@ cJSON* ao_cmd_cloud_measures(cJSON* report, const char* deviceID) {
 /*
  * creates the message:
  * {"proxyId":"<deviceID>","seq":"153", "alerts":<alerts>,"responses":<responses>,"measures":<measures>}
- * if JSON is NULL - add empty array
+ * if JSON is NULL - do not add array!
  * Return NULL if message is too long
  * NB1! Function frees all JSONs by itself!
  * NB2! seq calculates here.
@@ -152,9 +160,9 @@ const char* ao_cmd_cloud_msg(const char* deviceID, cJSON* alerts, cJSON* respons
     char sn[10]={0};
     snprintf(sn, sizeof(buf), "%d", get_sn());
     cJSON_AddItemToObject(obj, "seq", cJSON_CreateString(sn));
-    addArray(obj, "alerts", alerts);
-    addArray(obj, "responses", responses);
-    addArray(obj, "measures", measures);
+    if(alerts) addArray(obj, "alerts", alerts);
+    if(responses) addArray(obj, "responses", responses);
+    if(measures) addArray(obj, "measures", measures);
 
     char* msg = cJSON_PrintUnformatted(obj);
 
