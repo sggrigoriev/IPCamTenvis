@@ -75,7 +75,7 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(gst REQUIRED gstreamer-1.0 gstreamer-rtsp-1.0 glib-2.0 gobject-2.0)
 
-#Print variables
+    #Print variables
     message("NO_GST_PLAGINS = $ENV{NO_GST_PLAGINS}")
     message("gst_FOUND = ${gst_FOUND}")
     message("gst_LIBRARIES = ${gst_LIBRARIES}")
@@ -88,38 +88,38 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/build)
     set(REQUIRED_LIBRARIES
-        ${gst_LIBRARIES}
-        curl
-        m
-        pthread
-        nopoll
-        ssl
-        crypto
-        stdc++
-    )
+            ${gst_LIBRARIES}
+            curl
+            m
+            pthread
+            nopoll
+            ssl
+            crypto
+            stdc++
+            )
     include_directories(
-        ./
-        ac_cam
-        ag_cam_io
-        ag_converter
-        ag_config
-        ag_threads
-        ag_queues
-        ag_ring_buffer
-        au_string
-        libs/ipcam_inc
-        gsrtsp_local
-        ${PROXY_LIBS_PATH}/pu_logger
-        ${PROXY_LIBS_PATH}/presto_commands
-        ${PROXY_LIBS_PATH}/pc_config
-        ${PROXY_LIBS_PATH}/pu_queues
-        ${PROXY_LIBS_PATH}/libtimer
-        ${PROXY_LIBS_PATH}/libhttpcomm
-        ${PROXY_LIBS_PATH}/libtcp
-        ${PROXY_LIBS_PATH}/json
-        ${IPCAM_LIB_PATH}/ipcam_inc
-        ${gst_INCLUDE_DIRS}
-        /usr/local/include/nopoll
+            ./
+            ac_cam
+            ag_cam_io
+            ag_converter
+            ag_config
+            ag_threads
+            ag_queues
+            ag_ring_buffer
+            au_string
+            libs/ipcam_inc
+            gsrtsp_local
+            ${PROXY_LIBS_PATH}/pu_logger
+            ${PROXY_LIBS_PATH}/presto_commands
+            ${PROXY_LIBS_PATH}/pc_config
+            ${PROXY_LIBS_PATH}/pu_queues
+            ${PROXY_LIBS_PATH}/libtimer
+            ${PROXY_LIBS_PATH}/libhttpcomm
+            ${PROXY_LIBS_PATH}/libtcp
+            ${PROXY_LIBS_PATH}/json
+            ${IPCAM_LIB_PATH}/ipcam_inc
+            ${gst_INCLUDE_DIRS}
+            /usr/local/include/nopoll
     )
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions( -DGST_EXT)
@@ -127,7 +127,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions(-DEXTERN=)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
 
-#    set(CMAKE_VERBOSE_MAKEFILE ON)
+    #    set(CMAKE_VERBOSE_MAKEFILE ON)
     set(CMAKE_SYSTEM_NAME Linux)
     set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
     set(SYSROOT_PATH $ENV{SYSROOT})
@@ -154,7 +154,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             nopoll
             ssl
             crypto
-#            stdc++
+            #            stdc++
             )
     set(MON_REQUIRED_LIBRARIES
             m
@@ -164,29 +164,29 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 
     include_directories(
-        ./
-        ac_cam
-        ag_cam_io
-        ag_converter
-        ag_config
-        ag_threads
-        ag_queues
-        ag_ring_buffer
-        au_string
-        libs/ipcam_inc
-        gsrtsp_local
-        ${PROXY_LIBS_PATH}/proxy_eui64
-        ${PROXY_LIBS_PATH}/pu_logger
-        ${PROXY_LIBS_PATH}/presto_commands
-        ${PROXY_LIBS_PATH}/pc_config
-        ${PROXY_LIBS_PATH}/pu_queues
-        ${PROXY_LIBS_PATH}/libtimer
-        ${PROXY_LIBS_PATH}/libhttpcomm
-        ${PROXY_LIBS_PATH}/libtcp
-        ${PROXY_LIBS_PATH}/json
-        ${SYSROOT_PATH}/usr/include
-        #        ${gst_INCLUDE_DIRS}
-        #        /usr/local/include/nopoll
+            ./
+            ac_cam
+            ag_cam_io
+            ag_converter
+            ag_config
+            ag_threads
+            ag_queues
+            ag_ring_buffer
+            au_string
+            libs/ipcam_inc
+            gsrtsp_local
+            ${PROXY_LIBS_PATH}/proxy_eui64
+            ${PROXY_LIBS_PATH}/pu_logger
+            ${PROXY_LIBS_PATH}/presto_commands
+            ${PROXY_LIBS_PATH}/pc_config
+            ${PROXY_LIBS_PATH}/pu_queues
+            ${PROXY_LIBS_PATH}/libtimer
+            ${PROXY_LIBS_PATH}/libhttpcomm
+            ${PROXY_LIBS_PATH}/libtcp
+            ${PROXY_LIBS_PATH}/json
+            ${SYSROOT_PATH}/usr/include
+            #        ${gst_INCLUDE_DIRS}
+            #        /usr/local/include/nopoll
     )
     message(STATUS "Compiling for hiSilicon CPU (${TOOLCHAIN_PATH}/target/usr)")
     message(STATUS "sysroot is (${SYSROOT_PATH})")
@@ -210,11 +210,12 @@ file (GLOB SOURCE_FILES
         ${PROXY_LIBS_PATH}/libtimer/*.c
         ${PROXY_LIBS_PATH}/libtcp/*.c
         ${PROXY_LIBS_PATH}/json/*.c
-)
+        )
 
 #IPCam monitor
 file(GLOB SOURCE_FILES_IPCAM_MONITOR
         ipcam_monitor/*.c
+        ag_converter/ao_cmd_data.c
         ${PROXY_LIBS_PATH}/pu_logger/*.c
         ${PROXY_LIBS_PATH}/libtimer/*.c
         ${PROXY_LIBS_PATH}/libtcp/*.c
@@ -232,16 +233,16 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
 
     add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
     target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES})
-#${PROXY_LIBS_PATH}/libipcam.a
+    #${PROXY_LIBS_PATH}/libipcam.a
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 
-            add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
-            target_link_libraries(jq m)
+    add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
+    target_link_libraries(jq m)
 
-            add_executable(Tenvis ${SOURCE_FILES})
-            target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
+    add_executable(Tenvis ${SOURCE_FILES})
+    target_link_libraries(Tenvis ${REQUIRED_LIBRARIES}
             ${SYSROOT_PATH}/usr/lib/libgstapp-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstaudio-1.0.a
             ${SYSROOT_PATH}/usr/lib/libgstbase-1.0.a
@@ -274,16 +275,16 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             ${SYSROOT_PATH}/usr/lib/libcurl.a
             )
 
-            add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
-            target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES}
-#                    ${SYSROOT_PATH}/usr/lib/libipcam.a
+    add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
+    target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES}
+            #                    ${SYSROOT_PATH}/usr/lib/libipcam.a
             )
 
-            set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
-            set_property(TARGET jq PROPERTY C_STANDARD 90)
-#            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
-            set_property(TARGET Monitor PROPERTY C_STANDARD 90)
-            set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)
+    set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
+    set_property(TARGET jq PROPERTY C_STANDARD 90)
+    #            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
+    set_property(TARGET Monitor PROPERTY C_STANDARD 90)
+    set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)
 endif()
 
 set_property(TARGET Tenvis PROPERTY C_STANDARD 90)

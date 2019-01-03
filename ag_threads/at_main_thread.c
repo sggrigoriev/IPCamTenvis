@@ -60,7 +60,7 @@
     Main thread global variables
 */
 
-extern uint32_t contextId;
+extern void sht_add(uint32_t ctx);
 
 static pid_t event_monitor_pid = -1;
 lib_timer_clock_t em_clock = {0};           /* timer for event monitor msgs receiving */
@@ -89,29 +89,6 @@ typedef enum {
     MT_PROTO_EM,    /* from events monitor */
     MT_PROTO_STREAMING  /* from streamer */
 } protocol_type_t;
-/*
- * To Proxy & WUD
- */
-static void send_startup_report() {
-    IP_CTX_(1000);
-    pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
-    cJSON* report = ag_db_get_startup_report();
-    if(report) {
-        char buf[LIB_HTTP_MAX_MSG_SIZE];
-        const char* msg = ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
-        cJSON_Delete(report);
-        if(!msg) {
-            pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
-            IP_CTX_(1001);
-            return;
-        }
-        pu_queue_push(to_proxy, msg, strlen(msg)+1);
-    }
-    else {
-        pu_log(LL_ERROR, "%s: Error startup report creation. Nothing was sent.", __FUNCTION__);
-    }
-    IP_CTX_(1002);
-}
 static void send_wd() {
     IP_CTX_(2000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
@@ -137,17 +114,6 @@ static void send_ACK_to_Proxy(int command_number) {
     IP_CTX_(4001);
 }
 /*
- * Kick send files thread to send files with the postfix specified
- */
-static void send_files_2SF(const char* postfix, time_t start_date, time_t end_date) {
-    IP_CTX_(5000);
-    char buf[128] = {0};
-    ao_make_send_files(buf, sizeof(buf), postfix, start_date, end_date);
-    pu_queue_push(to_sf, buf, strlen(buf) + 1);
-    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, postfix, buf);
-    IP_CTX_(5001);
-}
-/*
  * To WS
  */
 static int send_to_ws(const char* msg) {
@@ -161,6 +127,35 @@ static int send_to_ws(const char* msg) {
     return 1;
 }
 
+/*
+ * To Proxy & WS
+ */
+static void send_startup_reports() {
+    IP_CTX_(1000);
+    pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
+    cJSON* report = ag_db_get_startup_report();
+    if(report) {
+        char buf[LIB_HTTP_MAX_MSG_SIZE];
+        const char* cloud_msg = ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
+        if(!cloud_msg) {
+            pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
+            IP_CTX_(1001);
+            cJSON_Delete(report);
+            return;
+        }
+        pu_queue_push(to_proxy, cloud_msg, strlen(cloud_msg)+1);
+        /* Send it to WS */
+        if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) {
+            send_to_ws(ao_cmd_ws_params(report, buf, sizeof(buf)));
+        }
+        cJSON_Delete(report);
+    }
+    else {
+        pu_log(LL_ERROR, "%s: Error startup report creation. Nothing was sent.", __FUNCTION__);
+    }
+    IP_CTX_(1002);
+}
+
 static int send_active_viewers_reqiest(){
     IP_CTX_(10000);
     char sess[128] = {0};
@@ -168,7 +163,7 @@ static int send_active_viewers_reqiest(){
     IP_CTX_(10001);
     return send_to_ws(
             ao_cmd_ws_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
-            );
+    );
 }
 static int send_stream_error() {
     IP_CTX_(11000);
@@ -178,8 +173,8 @@ static int send_stream_error() {
 
     int ret = send_to_ws(
             ao_cmd_cloud_stream_error_report(ac_get_stream_error(err, sizeof(err)-1),
-                                   ac_get_session_id(sess, sizeof(sess)-1),
-                                   buf, sizeof(buf)-1)
+                                             ac_get_session_id(sess, sizeof(sess)-1),
+                                             buf, sizeof(buf)-1)
     );
     ac_clear_stream_error();
     IP_CTX_(11001);
@@ -264,6 +259,7 @@ static void make_snapshot() {
 
     char name[30]={0};
     char path[256]={0};
+    char buf[512]={0};
 
     ac_make_name_from_date(DEFAULLT_SNAP_FILE_PREFIX, time(NULL), DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, name, sizeof(name)-1);
     snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
@@ -273,7 +269,11 @@ static void make_snapshot() {
         IP_CTX_(16001);
         return;
     }
-    send_files_2SF(DEFAULT_SNAP_FILE_POSTFIX, 0, 0);
+
+    ao_make_got_files(path, buf, sizeof(buf));
+    pu_queue_push(to_sf, buf, strlen(buf) + 1);
+    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, buf);
+
     ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
     IP_CTX_(16002);
 }
@@ -282,7 +282,6 @@ static time_t capture_start=0;
 static time_t capture_stop=0;
 static void capture_video() {
     IP_CTX_(16100);
-
     if(ag_db_get_int_property(AG_DB_STATE_CAPTURE_VIDEO) > 0) { /* Process capturing */
         if(!capture_start) {
             capture_start = time(NULL);
@@ -294,14 +293,13 @@ static void capture_video() {
                 return;
             }
             capture_stop = capture_start + DEFAULT_CAPTURE_VIDEO_LEN;
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+            if(ag_db_get_int_property(AG_DB_STATE_CAPTURE_VIDEO) == 1) ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
         }
-        if(time(NULL) >= capture_stop) { /* Capture is over */
-            send_files_2SF(DEFAULT_VIDEO_FILE_POSTFIX, capture_start, capture_stop);
+        if(time(NULL) >= capture_stop) { /* Capture is over. File was sent via EM processing */
             capture_start = 0;
             capture_stop = 0;
             ag_db_set_int_property(AG_DB_STATE_CAPTURE_VIDEO, 0);
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
+            if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
         }
     }
     IP_CTX_(16102);
@@ -314,13 +312,16 @@ static void run_agent_actions() {
         case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
         case AG_DB_BIN_OFF_OFF:     /* nothing to do */
             break;
-        case AG_DB_BIN_ON_OFF:      /* nothing to do */
+        case AG_DB_BIN_ON_OFF:
             IP_CTX_(12002);
-            at_stop_sf();
-            IP_CTX_(12003);/* Stop Files Sender - no connection! */
+            at_stop_sf();           /* Stop Files Sender - no connection! */
+            IP_CTX_(12003);
             pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
             IP_CTX_(12004);
+            ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);   /* Stop WS if it is running */
             break;
+        case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
+            at_stop_sf();
         case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
             IP_CTX_(12005);
             if(!at_start_sf()) {
@@ -335,12 +336,7 @@ static void run_agent_actions() {
                 pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
                 IP_CTX_(12010);
             }
-        case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
-            IP_CTX_(12011);
-            pu_log(LL_INFO, "%s: Got connection info. Connect WS requested", __FUNCTION__);
-            IP_CTX_(12012);
-            send_startup_report();                                  /* send cam's initial settings to the cloud */
-            IP_CTX_(12013);
+            ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);   /* Kick WD for (re)connection */
             break;
         default:
             IP_CTX_(12014);
@@ -359,12 +355,6 @@ static void run_agent_actions() {
             IP_CTX_(12020);
         }
         IP_CTX_(12021);
-        if(!ag_db_get_int_property(AG_DB_STATE_WS_ON)) {        /* Kick the WS to start if it is not started! */
-            IP_CTX_(12022);
-            ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);
-            IP_CTX_(12023);
-        }
-        IP_CTX_(12024);
     }
     IP_CTX_(12025);
 }
@@ -372,32 +362,37 @@ static void run_ws_actions() {
     IP_CTX_(13000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_WS_ON);
     switch(variant) {
-        case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
-        case AG_DB_BIN_OFF_OFF:     /* nothing to do */
+        case AG_DB_BIN_NO_CHANGE:
+            if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) break;     /* If WS on - nothing to care about  */
+        case AG_DB_BIN_OFF_OFF:     /* start if agent online */
+            if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
+                pu_log(LL_INFO, "%s: Agent is ON -> Connect required", __FUNCTION__);
+                if (!ac_connect_video()) {
+                    pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
+                    ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
+                }
+                else {
+                    ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+                    send_startup_reports();
+                }
+            }
             break;
         case AG_DB_BIN_ON_OFF:      /* Was connected - disconnect required */
-            pu_log(LL_DEBUG, "%s: 1->0: Disconnect required", __FUNCTION__);
+            pu_log(LL_INFO, "%s: 1->0: Disconnect required", __FUNCTION__);
             stop_ws();
-            break;
-        case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
-            pu_log(LL_DEBUG, "%s: 0->1: Connect required", __FUNCTION__);
-            if (!ac_connect_video()) {
-                pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
-                ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
-            }
-            else {
-                ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
-            }
             break;
         case AG_DB_BIN_ON_ON:       /* 1->1: reconnection request */
-            pu_log(LL_DEBUG, "%s: 1->1: Reconnect required", __FUNCTION__);
+            pu_log(LL_INFO, "%s: 1->1: Reconnect required", __FUNCTION__);
             stop_ws();
+        case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
+            pu_log(LL_INFO, "%s: 0->1: Connect required", __FUNCTION__);
             if (!ac_connect_video()) {
                 pu_log(LL_ERROR, "%s: Fail to WS interface start. WS inactive.", __FUNCTION__);
                 ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
             }
             else {
                 ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+                send_startup_reports();
             }
             break;
         default:
@@ -422,9 +417,7 @@ static void run_ws_actions() {
         }
     }
     else {  /* And actions if WS disconnected */
-        if(ag_db_get_int_property(AG_DB_STATE_RW_ON)) {
-            ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);   /* Ask for streaming disconnect */
-        }
+        ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);   /* Ask for streaming disconnect */
     }
     IP_CTX_(13001);
 }
@@ -447,8 +440,8 @@ static void switch_control_streams() {
     ag_db_bin_state_t audio_state = ag_db_bin_anal(AG_DB_STATE_AUDIO);
 
     if((video_state == AG_DB_BIN_OFF_ON) || (video_state == AG_DB_BIN_ON_OFF) ||
-        (audio_state == AG_DB_BIN_OFF_ON) || (audio_state == AG_DB_BIN_ON_OFF)) {
-        pu_log(LL_DEBUG, "%s: Streams change: video = %d, Audio = %d", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIDEO), ag_db_get_int_property(AG_DB_STATE_AUDIO));
+       (audio_state == AG_DB_BIN_OFF_ON) || (audio_state == AG_DB_BIN_ON_OFF)) {
+        pu_log(LL_DEBUG, "%s: Streams change: video = %d, Audio = %d. Restart streaming.", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIDEO), ag_db_get_int_property(AG_DB_STATE_AUDIO));
         ac_stop_video();
         switch_streaming_on();
     }
@@ -481,18 +474,20 @@ static void run_streaming_actions() {
             ac_stop_video();
             ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
         }
-    } else
-        {      /* Actions for inactive streaming */
-        if(ag_db_get_int_property(AG_DB_STATE_WS_ON) && ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers - start show */
-            switch_streaming_on();
-        }
-        switch(ag_db_bin_anal(AG_DB_STATE_STREAM_STATUS)) {
+    }
+    else if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) { /* actions for inactive streaming */
+        switch (ag_db_bin_anal(AG_DB_STATE_STREAM_STATUS)) {    /* Got cloud request for streaming */
             case AG_DB_BIN_ON_ON:
             case AG_DB_BIN_OFF_ON:
+                pu_log(LL_DEBUG, "%s: Start streaming because of stream request from the cloud.", __FUNCTION__);
                 switch_streaming_on();
                 ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
                 break;
             default:
+                if(ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT)) { /* Got viewers */
+                    pu_log(LL_DEBUG, "%s: Start streaming because of %d active viewers.", __FUNCTION__, ag_db_get_int_property(AG_DB_STATE_VIEWERS_COUNT));
+                    switch_streaming_on();
+                }
                 break;
         }
     }
@@ -510,13 +505,13 @@ static void run_cam_actions() {
     capture_video();
     IP_CTX_(15001);
 }
-static void send_reports() {
+static void send_changes_reports() {
     IP_CTX_(30000);
 /* Make changes report */
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     cJSON* changes_report = ag_db_get_changes_report();
     if(changes_report && cJSON_GetArraySize(changes_report)) {
-         /* Send it to the cloud */
+        /* Send it to the cloud */
         if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
             ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(changes_report, ag_getProxyID()), buf, sizeof(buf));
             pu_queue_push(to_proxy, buf, strlen(buf) + 1);
@@ -536,7 +531,7 @@ static void run_actions() {
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
     run_cam_actions();          /* MD/SD on-off; update cam's channges, make snapshot,...*/
-    send_reports();             /* Send changes report to the cloud and to WS */
+    send_changes_reports();     /* Send changes report to the cloud and to WS */
     ag_db_save_persistent();    /* Save persistent data on disk */
     ag_clear_flags();           /* clear change flags to be prepared to the next cycle */
     IP_CTX_(17001);
@@ -681,24 +676,34 @@ static void process_em_message(msg_obj_t* obj_msg) {
 
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+            if(ag_db_get_int_property(AG_DB_STATE_MD) == 1) {
+                ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
+                ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+            }
             break;
         case AC_CAM_START_SD:
-            ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+            if(ag_db_get_int_property(AG_DB_STATE_SD) == 1) {
+                ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
+                ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+            }
             break;
         case AC_CAM_STOP_MD:
-            ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
-
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
+            if(ag_db_get_int_property(AG_DB_STATE_MD_ON)) ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
+            if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
             break;
         case AC_CAM_STOP_SD:
-            ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
-            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
+            if(ag_db_get_int_property(AG_DB_STATE_SD_ON)) ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
+            if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
+            break;
+        case AC_CAM_GOT_FILE: {                         /* Just forward it to SF */
+            char* txt = cJSON_PrintUnformatted(obj_msg);
+            if(txt) {
+                pu_queue_push(to_sf, txt, strlen(txt) + 1);
+                pu_log(LL_DEBUG, "%s: %s forwarded to SF_thread", __FUNCTION__, txt);
+                free(txt);
 
-            send_files_2SF(ac_get_event2file_type(data.cam_event), data.start_date, data.end_date);
+            }
+        }
             break;
         case AC_CAM_START_IO:
         case AC_CAM_STOP_IO:
@@ -875,7 +880,7 @@ void at_main_thread() {
         IP_CTX_(26001);
         pu_queue_event_t ev;
         pu_queue_t** q=NULL;
-         switch (ev=pu_wait_for_queues(events, events_timeout)) {
+        switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
                 IP_CTX_(26002);
                 q = &from_poxy;
@@ -892,34 +897,34 @@ void at_main_thread() {
                 IP_CTX_(26005);
                 q = &from_cam;
                 break;
-             case AQ_Timeout:
-                 IP_CTX_(26006);
-                 q = NULL;
-                 break;
-             case AQ_STOP:
-                 IP_CTX_(26007);
-                 q = NULL;
-                 main_finish = 1;
-                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
-                 break;
-             default:
-                 IP_CTX_(26008);
-                 q = NULL;
-                 pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
-                 break;
-         }
-         if(q) {
-             IP_CTX_(26009);
-             size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
-             while(pu_queue_pop(*q, mt_msg, &len)) {
-                 IP_CTX_(26010);
-                 pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);
-                 process_message(ev, mt_msg);
-                 len = sizeof(mt_msg);
-              }
-             IP_CTX_(26011);
-         }
-         /* Place for own periodic actions */
+            case AQ_Timeout:
+                IP_CTX_(26006);
+                q = NULL;
+                break;
+            case AQ_STOP:
+                IP_CTX_(26007);
+                q = NULL;
+                main_finish = 1;
+                pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
+                break;
+            default:
+                IP_CTX_(26008);
+                q = NULL;
+                pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
+                break;
+        }
+        if(q) {
+            IP_CTX_(26009);
+            size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
+            while(pu_queue_pop(*q, mt_msg, &len)) {
+                IP_CTX_(26010);
+                pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);
+                process_message(ev, mt_msg);
+                len = sizeof(mt_msg);
+            }
+            IP_CTX_(26011);
+        }
+        /* Place for own periodic actions */
         /*1. Wathchdog */
         if(lib_timer_alarm(wd_clock)) {
             ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 1);

@@ -23,11 +23,12 @@
 #include <sys/types.h>
 
 #include <DvsConn.h>
+#include <libs/ipcam_inc/DvsConn.h>
 
 #include "event_monitor_module.h"
 
 /* TODO: change this patch to smth reasonable! */
-static int inited = 0; 
+static int inited = 0;
 
 /*************************************************/
 CDvsConnManager g_DevMgr;
@@ -57,7 +58,7 @@ void em_deinit() {
     close(g_pipeFd[1]);
 }
 
-int em_function(int to_sec) {
+int em_function(int to_sec, char* buf, size_t size) {
     fd_set rfds;
     struct timeval tv;
 
@@ -91,9 +92,13 @@ int em_function(int to_sec) {
         else
             switch(eBuff.event) {
                 case DEVICEEVENT_PEERCLOSED:
-                        return EMM_PEERCLOSED;
+                    return EMM_PEERCLOSED;
                 case DEVICEEVENT_NO_RESPONSE:
-                        return EMM_NO_RESPOND;
+                    return EMM_NO_RESPOND;
+                case NOTIFICATION_MSG:
+                    strncpy(buf, eBuff.noti.msg, size);
+                    buf[size-1] = '\0';
+                    return EMM_GOT_MSG;
                 case NOTIFICATION_ALARM:
                     return (eBuff.noti.alarm.onoff)?-eBuff.noti.alarm.event : EMM_ALRM_IGNOR;
                 default:
@@ -103,4 +108,3 @@ int em_function(int to_sec) {
     else if(ret < 0) return EMM_SELECT_ERR;
     return EMM_TIMEOUT; // ret == 0 - most popular case
 }
-

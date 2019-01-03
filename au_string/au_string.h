@@ -81,5 +81,10 @@ int au_getNdigs(const char** name,  int* res, int n);
  * Return 0 if syms amt greater than size-1
  */
 int au_getUntil(const char** name, char* buf, size_t size, char delim);
+/*
+ * copy file path to path and file name to name.
+ * copy empty str if not found.
+ */
+void au_splitNamePath(const char* nameNpath, char* path, size_t psize, char* name, size_t nsize);
 
 #endif /* IPCAMTENVIS_AU_STRING_H */

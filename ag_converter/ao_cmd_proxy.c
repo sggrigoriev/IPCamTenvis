@@ -221,28 +221,6 @@ static int get_stream_start_stop(cJSON* obj, t_ao_in_manage_video* data) {
     return 0;
 }
 
-/*
- * Send file to cloud - internal Agent-SF command.
- * buf         - buffer to store the message
- * size        - buffer size
- * start       - start event timestamp or 0
- * stop        - end event timestamp or 0
- * files_type   - 'A' - audio, 'V' - video, 'S' - cound, 'P' - phote
- *
- * {"name": "sendFiles", "type": "<fileTypeString", "start_date": <start_date>, "end_date": <end_date>}
- * Return pointer to the buf
-*/
-const char* ao_make_send_files(char* buf, size_t size, const char* files_type, time_t start, time_t stop) {
-    if(!start) {
-        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\"}", files_type);
-    }
-    else {
-        snprintf(buf, size-1, "{\"name\": \"sendFiles\", \"type\": \"%s\", \"start_date\": %lu, \"end_date\": %lu}", files_type, start, stop);
-    }
-    buf[size-1] = '\0';
-    return buf;
-}
-
 void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data) {
     data->command_type = AO_UNDEF;
 
@@ -250,23 +228,9 @@ void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data) {
         data->command_type = AO_IN_PROXY_ID;
     }
     else if(get_proxy_conn_status(own_msg, &data->in_connection_state)) {
-         data->command_type = AO_IN_CONNECTION_INFO;
+        data->command_type = AO_IN_CONNECTION_INFO;
     }
     else {
         get_stream_start_stop(own_msg, &data->in_manage_video);
     }
-}
-
-/*
- * {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
- * NB! Returned value should be freed!
- */
-char* ao_get_files_sent(cJSON* obj) {
-    cJSON* item;
-     if(item = cJSON_GetObjectItem(obj, "filesList"), !item) return NULL;
-    if(item->type != cJSON_Array) {
-        pu_log(LL_ERROR, "%s: Wrong 'filesSent' message format: Array expexted on 'filesList'", __FUNCTION__);
-        return NULL;
-    }
-    return cJSON_PrintUnformatted(item);
 }

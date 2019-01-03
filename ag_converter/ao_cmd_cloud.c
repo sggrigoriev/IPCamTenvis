@@ -20,6 +20,8 @@
 */
 #include <string.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "cJSON.h"
 
@@ -75,7 +77,7 @@ static const char* get_cloud_alert_type(t_ac_cam_events ev) {
  * [{"commandId": <command_id>, "result": <rc>}]
  */
 cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
-  cJSON* ret = cJSON_CreateArray();
+    cJSON* ret = cJSON_CreateArray();
     cJSON* elem = cJSON_CreateObject();
     cJSON_AddItemToObject(elem, "commandId", cJSON_CreateNumber(command_id));
     cJSON_AddItemToObject(elem, "result", cJSON_CreateNumber(rc));
@@ -346,7 +348,7 @@ const char* ao_cmd_ws_params(cJSON* report, char* buf, size_t size) {
     cJSON_AddItemReferenceToObject(obj, "params", report);
 
     char* msg = cJSON_PrintUnformatted(obj);
-    if(!msg || (strlen(msg)>(LIB_HTTP_MAX_MSG_SIZE-1))) {
+    if(!msg || (strlen(msg)>(DEFAULT_HTTP_MAX_MSG_SIZE-1))) {
         buf[0] = '\0';
         ret = NULL;
     }
@@ -385,5 +387,3 @@ const char* ao_cmd_ws_error_answer(char* buf, size_t size) {
 const char* ao_cmd_rw_error_answer(char* buf, size_t size) {
     return error_answer(buf, size, AO_RW_THREAD_ERROR);
 }
-
-

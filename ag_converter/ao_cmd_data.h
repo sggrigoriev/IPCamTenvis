@@ -23,8 +23,15 @@
 #ifndef IPCAMTENVIS_AO_CMD_DATA_H
 #define IPCAMTENVIS_AO_CMD_DATA_H
 
-#include "lib_http.h"
+#include <time.h>
+
 #include "ag_defaults.h"
+
+/* Alert constants: EM->Agent->SF */
+#define AC_ALERT_NAME   "alertName"
+#define AC_ALERT_START  "startDate"
+#define AC_ALERT_END    "endDate"
+#define AC_ALERT_MSG    "path"
 
 /*************************************************************************
  * All from and to Agent messages internak format: from Proxy, from Cam
@@ -70,18 +77,18 @@ typedef enum {
 } t_ao_ws_msg_type;
 
 typedef struct {
-    char url[LIB_HTTP_MAX_URL_SIZE];
+    char url[4097];
     int port;
-    char auth[LIB_HTTP_AUTHENTICATION_STRING_SIZE];   /* Session ID in out case */
+    char auth[129];   /* Session ID in out case */
 } t_ao_conn;
 
 /* AO_IN_CONNECTION_INFO */
 typedef struct {
     t_ao_msg_type   msg_type;
-    char            proxy_device_id[LIB_HTTP_DEVICE_ID_SIZE];
+    char            proxy_device_id[32];
     int             is_online;        /* 0 - ofline, 1 - online */
-    char            proxy_auth[LIB_HTTP_AUTHENTICATION_STRING_SIZE];
-    char            main_url[LIB_HTTP_MAX_URL_SIZE];
+    char            proxy_auth[129];
+    char            main_url[4097];
 } t_ao_in_connection_state;
 
 /* AO_IN_MANAGE_VIDEO */
@@ -115,11 +122,21 @@ typedef enum {
     AC_CAM_START_MD, AC_CAM_STOP_MD, AC_CAM_START_SD, AC_CAM_STOP_SD, AC_CAM_START_IO, AC_CAM_STOP_IO,
     AC_CAM_MADE_SNAPSHOT, AC_CAM_RECORD_VIDEO,
     AC_CAM_STOP_SERVICE, AC_CAM_TIME_TO_PING,
+    AC_CAM_GOT_FILE,
     AC_CAM_EVENTS_SIZE
 } t_ac_cam_events;
 
-const char* ac_cam_event2string(t_ac_cam_events e);
 t_ac_cam_events ac_cam_string2event(const char* string);
+const char* ac_cam_event2string(t_ac_cam_events event);
+
+/*
+ * Alert EM->Agent (got file) and/or Agent->SF (got file, got stapshot)
+ */
+const char* ao_make_got_files(const char* path, char* buf, size_t size);
+/*
+ * Alert EM-> Agent about motion od sound detection
+ */
+const char* ao_make_MDSD(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size);
 
 
 /* AO_ALRT_CAM */
@@ -128,6 +145,7 @@ typedef struct {
     t_ac_cam_events cam_event;
     time_t start_date;              /* Alert start timestamp */
     time_t end_date;                /* Alert end timestamp */
+    char buf[256];                  /* Message from EM event == AC_CAM_GOT_FILE*/
 } t_ao_cam_alert;
 
 typedef union {

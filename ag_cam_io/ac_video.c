@@ -93,9 +93,9 @@ static int init_proc() {
     pu_log(LL_DEBUG, "%s (AC_WOWZA) done", __FUNCTION__);
 
     return 1;
-on_error:
+    on_error:
     shutdown_proc();
-     return 0;
+    return 0;
 }
 
 static int process_connect() {
@@ -112,7 +112,7 @@ static int process_describe() {
     if(!ac_req_vs_announce(PLAYER_SESSION, sdp)) goto on_exit;
 
     rc = 1;
-on_exit:
+    on_exit:
     return rc;
 }
 static int process_setup(int is_video, int is_audio) {
@@ -166,12 +166,8 @@ static int video_on = 0;
 int ac_start_video(int is_video, int is_audio) {
     if(video_on) {
         pu_log(LL_WARNING, "%s: Video already on! Suspicious call", __FUNCTION__);
-        return 0;
+        return 1;
     }
-    else {
-        ac_rtsp_stop_streaming();   /* In case it still run */
-    }
-
     if(!init_proc()) {
         pu_log(LL_ERROR, "%s: Video initiation error, exit", __FUNCTION__);
         goto on_error;
@@ -210,7 +206,7 @@ int ac_start_video(int is_video, int is_audio) {
     }
     video_on = 1;
     return 1;
-on_error:
+    on_error:
     ac_rtsp_stop_streaming();
     ac_rtsp_close_streaming_connecion();
     shutdown_proc();
@@ -240,13 +236,13 @@ static char stream_error[256]={0};
 
 void ac_set_stream_error(const char* err) {
     pthread_mutex_lock(&local_mutex);
-        strncpy(stream_error, err, sizeof(stream_error)-1);
-        stream_error[sizeof(stream_error)-1] = '\0';
+    strncpy(stream_error, err, sizeof(stream_error)-1);
+    stream_error[sizeof(stream_error)-1] = '\0';
     pthread_mutex_unlock(&local_mutex);
 }
 void ac_clear_stream_error() {
     pthread_mutex_lock(&local_mutex);
-        stream_error[0] = '\0';
+    stream_error[0] = '\0';
     pthread_mutex_unlock(&local_mutex);
 }
 const char* ac_get_stream_error(char* buf, size_t size) {
@@ -260,7 +256,7 @@ const char* ac_get_stream_error(char* buf, size_t size) {
 int ac_is_stream_error() {
     int ret;
     pthread_mutex_lock(&local_mutex);
-        ret = strlen(stream_error) > 0;
+    ret = strlen(stream_error) > 0;
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }
@@ -270,7 +266,3 @@ const char* ac_get_session_id(char* buf, size_t size) {
     buf[size-1] = '\0';
     return buf;
 }
-
-
-
-

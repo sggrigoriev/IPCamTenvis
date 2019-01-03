@@ -17,14 +17,11 @@
 */
 /*
  Created by gsg on 16/10/17.
-
  Contains defaults for the Tenvis Agent
 */
 
 #ifndef IPCAMTENVIS_AG_DEFAULTS_H
 #define IPCAMTENVIS_AG_DEFAULTS_H
-
-#include "lib_http.h"
 
 #define DEFAULT_CFG_FILE_NAME       "./Tenvis.conf"
 
@@ -53,6 +50,8 @@
 #define DEFAULT_VIDEO_PROTOCOL  AG_VIDEO_RTSP
 #define DEFAULT_MAX_UDP_STREAM_BUFF_SIZE    8192    /* I had 1514 in trace and add a little...*/
 
+#define DEFAULT_HTTP_MAX_MSG_SIZE   8193
+
 #define DEFAULT_IPCAM_LOGIN     "admin"
 #define DEFAULT_IPCAM_PASSWORD  "admin"
 
@@ -80,7 +79,9 @@
 #define DEFAULLT_SNAP_FILE_PREFIX "P-"
 
 #define DEFAULT_MSD_FILE_EXT    "mp4"
-#define DEFAULT_SNAP_FILE_EXT    "jpg"
+#define DEFAULT_SNAP_FILE_EXT   "jpg"
+
+#define DEFAULT_MON_FMSG_PREFIX "eof: "
 
 #define DEFAULT_EM_TO                   2*60            /* Event Monitor timeout */
 #define DEFAULT_AM_READ_TO_SEC          1
@@ -104,6 +105,6 @@
 
 #define DEFAULT_CAM_MON_PORT    8889
 
-#define IP_CTX_(a) contextId = a
+#define IP_CTX_(a) sht_add(a);
 
-#endif /* IPCAMTENVIS_AG_DEFAULTS_H */
+#endif /* IPCAMTENVIS_AG_DEFAULTS_H  */

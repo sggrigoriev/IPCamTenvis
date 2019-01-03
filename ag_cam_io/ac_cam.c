@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
+#include <stdlib.h>
 
 #include "cJSON.h"
 #include "pu_logger.h"
@@ -376,7 +377,7 @@ int ac_cam_make_video() {
     fflush(fpw);
 
     ret = 1;
- on_error:
+    on_error:
     if(fpw) fclose(fpw);
     if(ptrw) free(ptrw);
     return ret;
@@ -434,5 +435,3 @@ int ac_set_sd_sensitivity(int value) {
 int ac_set_md_sensitivity(int value) {
     return update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_SENS, value);
 }
-
-

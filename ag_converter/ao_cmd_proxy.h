@@ -54,31 +54,6 @@ msg_obj_t* ao_proxy_get_ws_array(msg_obj_t* msg, const char* arr_name);
 const char* ao_proxy_get_ws_param_name(msg_obj_t* param);
 const char* ao_proxy_get_ws_param_value(msg_obj_t* param);
 
-/*
- * Send file to cloud - internal Agent-SF command.
- * buf         - buffer to store the message
- * size        - buffer size
- * start       - start event timestamp or 0
- * stop        - end event timestamp or 0
- * files_type   - "A" - audio, "" - video, "S" - cound, "P" - photo
- *
- * {"name": "sendFiles", "type": "<fileTypeString"[, "start_date": <start_date>, "end_date": <end_date>]}
- * Return pointer to the buf
-*/
-const char* ao_make_send_files(char* buf, size_t size, const char* files_type, time_t start, time_t stop);
-/*
- * Answer from SF about files sent
- * files_list - JSON array of files with full path:
- * Returns
- *  {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
- */
-const char* pr_make_send_filesAnswer(char* buf, size_t size, const char* files_list);
-/*
- * {"name": "filesSent", "filesList": ["<filename>", ..., "<filename>"]}
- * NB! Returned value should be freed!
- */
-char* ao_get_files_sent(cJSON* obj);
-
 void ao_proxy_decode(msg_obj_t* own_msg, t_ao_msg* data);
 
 #endif /* IPCAMTENVIS_AO_CMD_PROXY_H */

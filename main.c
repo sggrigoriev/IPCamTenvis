@@ -17,7 +17,6 @@
 */
 /*
     Created by gsg on 16/10/17.
-
     IPCam's Agent process main function
 */
 #include <stdio.h>
@@ -56,7 +55,7 @@ static int gst_and_curl_startup() {
     }
 
     return 1;
-on_error:
+    on_error:
     gst_and_curl_shutdown();
     return 0;
 }
@@ -100,12 +99,38 @@ static void print_Agent_start_params() {
 /*
  * Debugging utility
  */
-volatile uint32_t contextId = 0;
+#define SHT_STCK_LEN 10
+
+static uint32_t stck[SHT_STCK_LEN] = {0};
+static int idx_inc(int i) {
+    i = i+1;
+    return (i < SHT_STCK_LEN)?i:0;
+}
+static int idx_dec(int i) {
+    i = i -1;
+    return (i < 0)?SHT_STCK_LEN-1:i;
+}
+static int idx=0;
+void sht_add(uint32_t ctx) {
+    stck[idx] = ctx;
+    idx = idx_inc(idx);
+}
+static void printStack() {
+    printf("\nTENVIS.%s: Stack output:", __FUNCTION__);
+    int i = idx;
+    int stop = i;
+    do {
+        i = idx_dec(i);
+        printf("\nTENVIS.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
+    } while (i != stop);
+}
 /**/
 void signalHandler( int signum ) {
-    pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%lu\n", __FUNCTION__, signum, contextId, pthread_self());
+    printf("\nTENVIS.%s: Interrupt signal (%d) received. thread_id=%lu\n", __FUNCTION__, signum, pthread_self());
+    printStack();
     exit(signum);
 }
+
 
 
 int main(int argc, char* argv[]) {
@@ -153,4 +178,3 @@ int main(int argc, char* argv[]) {
     gst_and_curl_shutdown();
     exit(0);
 }
-

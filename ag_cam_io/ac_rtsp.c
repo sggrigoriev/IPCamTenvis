@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <memory.h>
+#include <lib_http.h>
 
 #include "pu_logger.h"
 
@@ -78,7 +79,7 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
     }
     sess->device = device;
     sess->state = AC_STATE_UNDEF;
-     sess->audio_url = NULL;
+    sess->audio_url = NULL;
     sess->video_url = NULL;
 
     if(ag_isCamInterleavedMode()) {
@@ -121,7 +122,7 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
     }
 
     if(!ag_isCamInterleavedMode()) {
-         if (sess->media.rt_media.video.dst.ip = au_strdup("0.0.0.0"), !sess->media.rt_media.video.dst.ip) {
+        if (sess->media.rt_media.video.dst.ip = au_strdup("0.0.0.0"), !sess->media.rt_media.video.dst.ip) {
             pu_log(LL_ERROR, "%s: Memory allocation error at %d", __FUNCTION__, __LINE__);
             goto on_error;
         }
@@ -138,7 +139,7 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
         return sess;
     }
 
-on_error:
+    on_error:
     pu_log(LL_DEBUG, "%s error section start", __FUNCTION__);
     if(sess) ac_rtsp_deinit(sess);
     return NULL;
@@ -180,9 +181,9 @@ int ac_req_options(t_at_rtsp_session* sess) {
     switch(sess->device) {
         case AC_CAMERA:
             return ac_alfaProOptions(sess, 0);
-         case AC_WOWZA:
+        case AC_WOWZA:
             return ac_WowzaOptions(sess);
-         default:
+        default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);
             return 0;
     }
@@ -274,6 +275,3 @@ int ac_rtsp_start_streaming() {
 void ac_rtsp_stop_streaming() {
     at_stop_rw();
 }
-
-
-

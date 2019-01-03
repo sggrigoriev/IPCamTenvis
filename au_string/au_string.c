@@ -191,6 +191,38 @@ int au_getUntil(const char** name, char* buf, size_t size, char delim) {
     *name = ptr;
     return (*ptr == delim);
 }
+/*
+ * copy file path to path and file name to name.
+ * copy empty str if not found.
+ */
+void au_splitNamePath(const char* nameNpath, char* path, size_t psize, char* name, size_t nsize) {
+    if((!path) || (!name) || (!psize) || (!nsize)) return;
 
+    path[0] = '\0';
+    name[0] = '\0';
+    if(!nameNpath) return;
 
-
+    int i, slash_idx = -1;
+    for(i = (int)strlen(nameNpath)-1; i >= 0; i-- ) {
+        if(nameNpath[i] == '/') {
+            slash_idx = i;
+            break;
+        }
+    }
+    if(slash_idx < 0) { /* No slash found - treat all as name */
+        strncpy(name, nameNpath, nsize);
+        name[nsize-1] = '\0';
+        return;
+    }
+/* Slash found */
+    size_t path_len = AU_MIN(slash_idx, psize);
+    if(path_len) {
+        memcpy(path, nameNpath, path_len);
+        path[path_len] = '\0';
+    }
+    size_t name_len = strlen(nameNpath) - slash_idx -1;
+    if(name_len) {
+        strncpy(name, nameNpath+slash_idx+1, nsize);
+        name[nsize-1] = '\0';
+    }
+}

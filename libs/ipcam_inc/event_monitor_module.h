@@ -42,6 +42,7 @@ extern "C" {
 #define EMM_SELECT_ERR  -7
 #define EMM_ALRM_IGNOR  -8
 #define EMM_PEERCLOSED  -9
+#define EMM_GOT_MSG    -10
 
 /* Cam's known events */
 #define EMM_LOGIN       3       /* DEVICE_NOTIFY_LOGIN */
@@ -58,7 +59,7 @@ extern "C" {
 
 int em_init(const char* ip);
 void em_deinit();
-int em_function(int to_sec);
+int em_function(int to_sec, char* buf, size_t size);
 
 #ifdef __cplusplus
 }

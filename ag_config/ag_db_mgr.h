@@ -121,7 +121,7 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
 #define AG_DB_STATE_RECORD_SECS     "ppc.recordSeconds"         /* ? */
 #define AG_DB_STATE_MD_SENSITIVITY  "ppc.motionSensitivity"     /* Set the cam's sensitivity for MD */
 #define AG_DB_STATE_MD_COUNTDOWN    "ppc.motionCountDownTime"   /* ? */
-#define AG_DB_STATE_MD_ON           "ppc.motionActivity"        /* Sen MD on/off */
+#define AG_DB_STATE_MD_ON           "ppc.motionActivity"        /* Set MD on/off */
 #define AG_DB_STATE_SD_ON           "ppc.audioActivity"         /* Set SD on/off */
 #define AG_DB_STATE_AUDIO           "audioStreaming"            /* allow audio streaming&recording */
 #define AG_DB_STATE_VIDEO           "videoStreaming"            /* allow video streaming&recording */

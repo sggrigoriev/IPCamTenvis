@@ -31,14 +31,39 @@
 #include "pu_logger.h"
 
 #include "at_cam_alerts_reader.h"
-
+#define PROC_NAME   "IPCAM_MONITOR"
 /*
  * Debugging utility
  */
-#define PROC_NAME   "IPCAM_MONITOR"
-volatile uint32_t contextId = 0;
+#define SHT_STCK_LEN 10
+
+static uint32_t stck[SHT_STCK_LEN] = {0};
+static int idx_inc(int i) {
+    i = i+1;
+    return (i < SHT_STCK_LEN)?i:0;
+}
+static int idx_dec(int i) {
+    i = i -1;
+    return (i < 0)?SHT_STCK_LEN-1:i;
+}
+static int idx=0;
+void sht_add(uint32_t ctx) {
+    stck[idx] = ctx;
+    idx = idx_inc(idx);
+}
+static void printStack() {
+    printf("\nTENVIS.%s: Stack output:", __FUNCTION__);
+    int i = idx;
+    int stop = i;
+    do {
+        i = idx_dec(i);
+        printf("\nTENVIS.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
+    } while (i != stop);
+}
+/**/
 void signalHandler( int signum ) {
-    pu_log(LL_ERROR, "MONITOR.%s: Interrupt signal (%d) received. ContextId=%d thread_id=%lu\n", __FUNCTION__, signum, contextId, pthread_self());
+    printf("\n%s.%s: Interrupt signal (%d) received. thread_id=%lu\n", PROC_NAME, __FUNCTION__, signum, pthread_self());
+    printStack();
     exit(signum);
 }
 void totalStopp(int signum) {

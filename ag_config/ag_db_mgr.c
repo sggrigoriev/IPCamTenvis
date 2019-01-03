@@ -24,6 +24,8 @@
 #include <limits.h>
 #include <pthread.h>
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "pu_logger.h"
 
@@ -39,16 +41,13 @@ Own properties list
  state_agent_on: 0/1 -- offline or connected
  connect_agent_cmd: 0/1  -- 0 - no_command, 1 - (re)connect!
  send_wd_agent_cmd: 0/1 -- 0 - no command, 1 - send request
-
  state_ws_on: 0/1    -- offline or connected
  connect_ws_cmd: 0/1    -- 0 - no_command, 1 - (re)connect!
  send_pong_ws_cmd: 0/1  -- 0 - no command, 1 - send pong!
  ask_4_viewers_cmd: 0/1 -- 0 - no_command, 1 - send request
-
  state_rw_on: 0/1    -- offline or online
  connect_rw_cmd: 0/1        -- 0 - no command, 1 - (re)connect
  disconnect_rw_cmd: 0/1     -- 0 - no command, 1 - disconnect
-
 Cam properties list
  viewersCount: int set when WS sends the "viewersCount"  Actions: from >0 to 0 -> stop streaming other changes -> no action
  pingInterval: int set whin WS send the "pingInterval"
@@ -71,7 +70,6 @@ Cam properties list
  ppc.captureImage: Measurement/command
  streamError: Value is string. Should be sent to WS in case of streaming error
  ppc.audioSensitivity: The audio sensitivity of the camera
-
 */
 /* Function to convert values between cloud<->camera
  * Returned memory should be freed!
@@ -87,7 +85,7 @@ typedef int (*out_t)(int in_value);
                         goto on_error; \
                     }
 #define FREE(a)     if((a)) { free(a); a = NULL;}
-extern uint32_t contextId;
+extern void sht_add(uint32_t ctx);
 /*
  * Convertors. We got only 2 params, so make 4 functions and that's all
 */
@@ -133,42 +131,42 @@ typedef struct {
 static const ag_db_record_t SCHEME[] = {
 /*  1                       2   3   4   5   6    8   9   10                   11                  12  */
 /*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
-{AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 
-{AG_DB_STATE_WS_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_WS,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_ASK_4_VIEWERS_WS,0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_PONG_REQUEST,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_WS_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_CONNECT_WS,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_ASK_4_VIEWERS_WS,0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_PONG_REQUEST,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 
-{AG_DB_STATE_RW_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_RW_ON,         0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 /* Cam-related properties start from here */
 /*  1                       2   3   4   5   6    8   9   10                   11                  12  */
 /*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
-{AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
-{AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_md},
-{AG_DB_STATE_SD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_sd},
-{AG_DB_STATE_RECORDING,     0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
-{AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  30, NULL,               NULL,               NULL},
-{AG_DB_STATE_MD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               ac_set_audio},
-{AG_DB_STATE_VIDEO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
-{AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
-{AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity},
-{AG_DB_STATE_CAPTURE_VIDEO, 0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL}
+        {AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
+        {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_RAPID_MOTION,  0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_MD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_md},
+        {AG_DB_STATE_SD,            0,  0,  1,  0,  1,  1,  0,  NULL,               NULL,               ac_set_sd},
+        {AG_DB_STATE_RECORDING,     0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_RECORD_SECS,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_MD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, MS_cloud_2_cam,     MS_cam_2_cloud,     ac_set_md_sensitivity},
+        {AG_DB_STATE_MD_COUNTDOWN,  0,  0,  1,  0,  0,  0,  30, NULL,               NULL,               NULL},
+        {AG_DB_STATE_MD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_SD_ON,         0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_AUDIO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               ac_set_audio},
+        {AG_DB_STATE_VIDEO,         0,  0,  1,  0,  1,  1,  1,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_VIDEOCALL,     0,  0,  1,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_SW_VERSION,    0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL}, /*TODO: Take out of here! */
+        {AG_DB_STATE_MEM_AVAILABLE, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_RECORD_FULL,   0,  0,  1,  0,  0,  0,  1,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
+        {AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity},
+        {AG_DB_STATE_CAPTURE_VIDEO, 0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL}
 /*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
 /*  1                       2   3   4   5   6   8   9   10                  11                  12   */
 };
@@ -209,7 +207,7 @@ static char* get_persistent_data(const char* file_name) {
         goto on_error;
     }
     ret = JSON_string;
-on_error:
+    on_error:
     if(fd) fclose(fd);
     return ret;
 }
@@ -287,7 +285,7 @@ static int create_imdb() {
 /*12*/  IMDB[i].cam_method = SCHEME[i].cam_method;
     }
     return 1;
-on_error:
+    on_error:
     ag_db_unload_cam_properties();
     return 0;
 }
@@ -332,7 +330,7 @@ static int load_persistent_data() {
         replace_param_value(pos, value->valuestring);
     }
     ret = 1;    /* we're here if OK */
-on_error:
+    on_error:
     FREE(JSON_string);
     if(data) cJSON_Delete(data);
     return ret;
@@ -468,15 +466,15 @@ cJSON* ag_db_get_changes_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = 0; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].in_changes_report && IMDB[i].change_flag) {
-                add_reported_property(rep, IMDB[i].name, IMDB[i].value);
-            }
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].in_changes_report && IMDB[i].change_flag) {
+            add_reported_property(rep, IMDB[i].name, IMDB[i].value);
         }
+    }
     pthread_mutex_unlock(&local_mutex);
 
     if(cJSON_GetArraySize(rep)) return rep;
-on_error:
+    on_error:
     if(rep)cJSON_Delete(rep);
     return NULL;
 }
@@ -484,19 +482,19 @@ cJSON* ag_db_get_startup_report() {
     cJSON* rep = cJSON_CreateArray(); ANAL(rep);
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = 0; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
-        }
-        add_version(rep);
-        char* msg = cJSON_PrintUnformatted(rep);
-        if(msg) {
-            pu_log(LL_DEBUG, "%s: report %s", __FUNCTION__, msg);
-            free(msg);
-        }
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].in_startup_report) add_reported_property(rep, IMDB[i].name, IMDB[i].value);
+    }
+    add_version(rep);
+    char* msg = cJSON_PrintUnformatted(rep);
+    if(msg) {
+        pu_log(LL_DEBUG, "%s: report %s", __FUNCTION__, msg);
+        free(msg);
+    }
     pthread_mutex_unlock(&local_mutex);
 
     if(cJSON_GetArraySize(rep)) return rep;
-on_error:
+    on_error:
     if(rep) cJSON_Delete(rep);
     return NULL;
 }
@@ -507,12 +505,12 @@ on_error:
 int ag_db_set_int_property(const char* property_name, int property_value) {
     int ret = 0;
     pthread_mutex_lock(&local_mutex);
-        int pos = find_param(property_name);
-        if(pos < 0)
-            ret = 0;
-        else {
-            replace_int_param_value(pos, property_value);
-        }
+    int pos = find_param(property_name);
+    if(pos < 0)
+        ret = 0;
+    else {
+        replace_int_param_value(pos, property_value);
+    }
     pthread_mutex_unlock(&local_mutex);
     return ret;
 }
@@ -524,11 +522,11 @@ int ag_db_set_property(const char* property_name, const char* property_value) {
 int ag_db_get_int_property(const char* property_name) {
     int ret = 0;
     pthread_mutex_lock(&local_mutex);
-        int pos = find_param(property_name);
-        if(pos < 0)
-            ret = 0;
-        else
-            ret = IMDB[pos].value;
+    int pos = find_param(property_name);
+    if(pos < 0)
+        ret = 0;
+    else
+        ret = IMDB[pos].value;
     pthread_mutex_unlock(&local_mutex);
 
     return ret;
@@ -540,11 +538,11 @@ int ag_db_get_int_property(const char* property_name) {
 int ag_db_update_changed_cam_parameters() {
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = AG_FIRST_CAM_PAR_IDX; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].changed) {
-                sync_camera_param(i);
-            }
+    for(i = AG_FIRST_CAM_PAR_IDX; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].changed) {
+            sync_camera_param(i);
         }
+    }
     pthread_mutex_unlock(&local_mutex);
     return 1;
 }
@@ -554,12 +552,12 @@ int ag_db_update_changed_cam_parameters() {
 void ag_db_save_persistent() {
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = 0; i < NELEMS(SCHEME); i++) {
-            if(IMDB[i].persistent && IMDB[i].changed) {
-                update_persistent_store();
-                break;
-            }
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        if(IMDB[i].persistent && IMDB[i].changed) {
+            update_persistent_store();
+            break;
         }
+    }
     pthread_mutex_unlock(&local_mutex);
 }
 /*
@@ -568,10 +566,10 @@ void ag_db_save_persistent() {
 void ag_clear_flags() {
     int i;
     pthread_mutex_lock(&local_mutex);
-        for(i = 0; i < NELEMS(SCHEME); i++) {
-            IMDB[i].changed = 0;
-            IMDB[i].change_flag = 0;
-        }
+    for(i = 0; i < NELEMS(SCHEME); i++) {
+        IMDB[i].changed = 0;
+        IMDB[i].change_flag = 0;
+    }
     pthread_mutex_unlock(&local_mutex);
 }
 
@@ -602,13 +600,9 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name) {
     if( value && !changed &&  change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}       /* 1->1 */
     IP_CTX_(512);
 
-on_exit:
+    on_exit:
     IP_CTX_(513);
     pthread_mutex_unlock(&local_mutex);
     IP_CTX_(514);
     return ret;
 }
-
-
-
-

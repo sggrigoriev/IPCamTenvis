@@ -1,3 +1,23 @@
+VERSION 1.3.1 11-Dec-2018
+=================================================================================================
+0. Bugs fixed:
+    CIC-117
+    CIC-111
+    CIC-104
+    CIC-103
+    CIC-100
+    CIC-96
+    CIC-95
+    CIC-93
+    CIC-98
+    CIC-77
+    CIC-74
+
+1. EM notifues about files ready to send
+2. SF changed the files sending procedure
+3. Print stack function added to SIGSEGV handler
+4. WS restart fixed
+5. Stream restart fixed
 VERSION 1.3.0 11-Dec-2018
 =================================================================================================
 1. ppc.captureVideo added. Video recorded mp4 files 20 seconds length
@@ -173,10 +193,3 @@ VERSION 0.0.1 27-Apr-2018
         - Send watchdog reply by WS command
         - Total reconnect including WD restart by cloud connection info change (by Proxy)
         - Send watchdog to WUD by timeout
-
-
-
-
-
-
-
