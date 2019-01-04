@@ -673,27 +673,27 @@ static void process_em_message(msg_obj_t* obj_msg) {
     pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
     lib_timer_init(&em_clock, DEFAULT_EM_TO);
-
+    int send_alert = 0;
     switch (data.cam_event) {
         case AC_CAM_START_MD:
-            if(ag_db_get_int_property(AG_DB_STATE_MD) == 1) {
-                ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
-                ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
-            }
+            ag_db_set_int_property(AG_DB_STATE_MD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+/* STATE_MD could be 2 and no alerts in this case */
+            if(ag_db_get_int_property(AG_DB_STATE_MD) == 1) send_alert = 1;
             break;
         case AC_CAM_START_SD:
-            if(ag_db_get_int_property(AG_DB_STATE_SD) == 1) {
-                ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
-                ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
-            }
+            ag_db_set_int_property(AG_DB_STATE_SD_ON, 1);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 1);
+/* STATE_SD could be 2 and no alerts in this case */
+            if(ag_db_get_int_property(AG_DB_STATE_SD) == 1) send_alert = 1;
             break;
         case AC_CAM_STOP_MD:
-            if(ag_db_get_int_property(AG_DB_STATE_MD_ON)) ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
-            if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
+            ag_db_set_int_property(AG_DB_STATE_MD_ON, 0);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
             break;
         case AC_CAM_STOP_SD:
-            if(ag_db_get_int_property(AG_DB_STATE_SD_ON)) ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
-            if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
+            ag_db_set_int_property(AG_DB_STATE_SD_ON, 0);
+            ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
             break;
         case AC_CAM_GOT_FILE: {                         /* Just forward it to SF */
             char* txt = cJSON_PrintUnformatted(obj_msg);
@@ -718,6 +718,16 @@ static void process_em_message(msg_obj_t* obj_msg) {
             pu_log(LL_ERROR, "%s: Unrecognized alert type %d received. Resrart EM", data.cam_event);
             restart_events_monitor();
             break;
+    }
+    if(send_alert) {
+        char buf[512]={0};
+        const char* msg = ao_cmd_cloud_msg(ag_getProxyAuthToken(), ao_cmd_cloud_alerts(ag_getProxyAuthToken(), data.cam_event, data.start_date, NULL), NULL, NULL, buf, sizeof(buf));
+        if(msg) {
+            pu_queue_push(to_proxy, msg, strlen(msg)+1);
+        }
+        else {
+            pu_log(LL_ERROR, "%s: alert %s was not sent to the Cloud (Proxy)", __FUNCTION__, buf);
+        }
     }
     IP_CTX_(23001);
 }

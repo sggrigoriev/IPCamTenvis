@@ -52,10 +52,11 @@ static unsigned int get_sn() {
     return ret;
 }
 static volatile unsigned int alert_number = 1;
-static unsigned int inc_alert_number() {
+static unsigned int get_alert_number() {
     unsigned int ret;
     pthread_mutex_lock(&sn_mutex);
-    ret = alert_number = (alert_number > 10000)?1:seq_number+1;
+    ret = alert_number;
+    alert_number = (alert_number > 10000)?1:alert_number+1;
     pthread_mutex_unlock(&sn_mutex);
     return ret;
 }
@@ -71,15 +72,15 @@ static cJSON* addArray(cJSON* obj, const char* name, cJSON* array) {
 }
 static const char* get_cloud_alert_type(t_ac_cam_events ev) {
     switch (ev) {
-        case AC_CAM_STOP_MD:
+        case AC_CAM_START_MD:
             return "motion";
-        case AC_CAM_STOP_SD:
+        case AC_CAM_START_SD:
             return "audio";
         default:
             pu_log(LL_ERROR, "%s: Unsupported event type %d", __FUNCTION__, ev);
             break;
     }
-    return NULL;
+    return "undef";
 }
 /*
  * [{"commandId": <command_id>, "result": <rc>}]
@@ -93,14 +94,13 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
     return ret;
 }
 /*
- * Sends after the file was successfully sent
- * Return JSON* alert as [
+ * Return JSON* alert as "alerts":   "alerts": [
     {
       "alertId": "12345",
       "deviceId": "DEVICE_ID",
       "alertType": "motion",
-      "timestamp": 1418428568000,
-      "params": [					-- will not be presented if !fileRef!!
+      "timesec": 1418428568000,
+      "params": [					-- will not be presented be empty if no file uploaded!!
         {
           "name": "fileRef",
           "value": "1234567"
@@ -109,16 +109,16 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc) {
     }
   ]
  */
-cJSON* ao_cmd_cloud_alerts(const char* deviceID, t_ac_cam_events ev, const char* fileRef) {
-    const char* alert_type = get_cloud_alert_type(ev);
-    if(!alert_type) return NULL;
-
+cJSON* ao_cmd_cloud_alerts(const char* deviceID, t_ac_cam_events ev, time_t event_time, const char* fileRef) {
     cJSON* arr = cJSON_CreateArray();
 
     cJSON* alert_item = cJSON_CreateObject();
-    cJSON_AddItemToObject(alert_item, "alertId", cJSON_CreateString(alert_no));
+    char buf[20]={0};
+    snprintf(buf, sizeof(buf), "%d", get_alert_number());
+    cJSON_AddItemToObject(alert_item, "alertId", cJSON_CreateString(buf));
     cJSON_AddItemToObject(alert_item, "deviceId", cJSON_CreateString(deviceID));
-    cJSON_AddItemToObject(alert_item, "alertType", cJSON_CreateString(alert_type));
+    cJSON_AddItemToObject(alert_item, "alertType", cJSON_CreateString(get_cloud_alert_type(ev)));
+    cJSON_AddItemToObject(alert_item, "timesec", cJSON_CreateNumber(event_time));
     cJSON_AddItemToArray(arr, alert_item);
 
     if(fileRef) {
@@ -156,7 +156,7 @@ cJSON* ao_cmd_cloud_measures(cJSON* report, const char* deviceID) {
 const char* ao_cmd_cloud_msg(const char* deviceID, cJSON* alerts, cJSON* responses, cJSON* measures, char* buf, size_t size) {
     cJSON* obj = cJSON_CreateObject();
 
-    cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(ag_getProxyID()));
+    cJSON_AddItemToObject(obj, "proxyId", cJSON_CreateString(deviceID));
     char sn[10]={0};
     snprintf(sn, sizeof(buf), "%d", get_sn());
     cJSON_AddItemToObject(obj, "seq", cJSON_CreateString(sn));

@@ -184,6 +184,7 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
 on_error:
     if(conn) nopoll_conn_close(conn);
     if(ctx) nopoll_ctx_unref(ctx);
+    nopoll_cleanup_library();
     pthread_mutex_destroy(&io_lock);
     return 0;
 }
@@ -201,6 +202,7 @@ void at_ws_stop() {
 
     if(conn) nopoll_conn_close(conn);
     if(ctx) nopoll_ctx_unref(ctx);
+    nopoll_cleanup_library();
 }
 
 int at_is_ws_run() {
@@ -213,12 +215,10 @@ int at_ws_send(const char* msg) {
     long size = (long)strlen(msg)+1;
     int ret = 1;
 
-    pthread_mutex_lock(&io_lock);
-        if (nopoll_conn_send_text (conn, msg, size) != size) {
-            pu_log(LL_ERROR, "%s: RC = %d - %s. Unable to send %s to Web Socket.", AT_THREAD_NAME, errno, strerror(errno), msg);
-            ret = 0;
-        }
-    pthread_mutex_unlock(&io_lock);
+    if (nopoll_conn_send_text (conn, msg, size) != size) {
+        pu_log(LL_ERROR, "%s: RC = %d - %s. Unable to send %s to Web Socket.", AT_THREAD_NAME, errno, strerror(errno), msg);
+        ret = 0;
+    }
 
     return ret;
 }

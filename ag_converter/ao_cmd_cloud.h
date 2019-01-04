@@ -46,8 +46,8 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc);
       "alertId": "12345",
       "deviceId": "DEVICE_ID",
       "alertType": "motion",
-      "timestamp": 1418428568000,
-      "params": [					-- will be empty if no file uploaded!!
+      "timesec": 1418428568000,
+      "params": [					-- will not be presented be empty if no file uploaded!!
         {
           "name": "fileRef",
           "value": "1234567"
@@ -56,7 +56,7 @@ cJSON* ao_cmd_cloud_responses(int command_id, int rc);
     }
   ]
  */
-cJSON* ao_cmd_cloud_alerts(const char* deviceID, const char* alert_no, t_ac_cam_events ev, const char* fileRef);
+cJSON* ao_cmd_cloud_alerts(const char* deviceID, t_ac_cam_events ev, time_t event_time, const char* fileRef);
 
 /*
  * report is cJSON array object like [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]

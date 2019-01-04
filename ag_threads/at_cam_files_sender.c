@@ -252,13 +252,14 @@ static struct curl_slist* make_SFupdate_header(struct curl_slist* sl, const char
 
 static const char* make_getSF_url(char* buf, size_t size, fd_t* in_par) {
     snprintf(buf, size,
-             "%s/%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%zu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
+             "%s/%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%zu&timesec=%lu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
              ag_getMainURL(),
              DEFAULT_FILES_UPL_PATH,
              ag_getProxyID(),
              ag_getProxyID(),
              in_par->ext,
              in_par->size,
+             in_par->event_time,
              (type2cloud(in_par->type[0])==2)?180:0,       /* Turn on 180 if image */
              type2cloud(in_par->type[0])
     );
@@ -651,46 +652,6 @@ static const sf_rc_t send_file(fd_t* fd) {
     }
     return ret;
 }
-
-
-static int alert_number = 1;
-static const char* inc_alert_number(char* buf, size_t size) {
-    snprintf(buf, size, "%d", alert_number++);
-    return buf;
-}
-static void send_alert_to_proxy(char type, unsigned long fileRef) {
-    t_ac_cam_events ev;
-    switch (type) {
-        case 'M':
-            ev = AC_CAM_STOP_MD;
-            break;
-        case 'S':
-            ev = AC_CAM_STOP_SD;
-            break;
-        default:
-            /* Not our case - get out of here */
-            return;
-    }
-    char a_buf[20]={0};
-    const char* a_num = inc_alert_number(a_buf, sizeof(a_buf) - 1);
-
-    char f_buf[20]={0};
-    const char* f_num;
-    if(fileRef) {
-        snprintf(f_buf, sizeof(f_buf), "%lu", fileRef);
-        f_num = f_buf;
-    }
-    else {
-        f_num = NULL;
-    }
-    char buf[LIB_HTTP_MAX_MSG_SIZE];
-    const char *msg = ao_cmd_cloud_msg(ag_getProxyID(), ao_cmd_cloud_alerts(ag_getProxyID(), a_num, ev, f_num), NULL, NULL, buf, sizeof(buf));
-    if(!msg) {
-        pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
-        return;
-    }
-    pu_queue_push(to_proxy, msg, strlen(msg)+1);
-}
 /**********************************************************************************/
 static int ymd_tm2int(struct tm* date) {
 /*     int dir_time =  */
@@ -698,14 +659,6 @@ static int ymd_tm2int(struct tm* date) {
 }
 static int ymd2int(int y, int m, int d) {
     return (y-1900)*10000 + (m-1)*100 + d;
-}
-static int hms_time_t2int(time_t t) {
-    struct tm d;
-    gmtime_r(&t, &d);
-    return d.tm_sec + d.tm_min*100 + d.tm_hour*10000;
-}
-static int hms2int(int h, int m, int s) {
-    return s + m*100 + h*10000;
 }
 static time_t ymdhms2ts(int y, int mon, int day, int hr, int min, int sec) {
     struct tm t;
@@ -929,7 +882,6 @@ static int json2fd(cJSON* item, fd_t* step) {
 static const char* g_prefix;
 static const char* g_postfix;
 static const char* g_ext;
-
 /*
  *
  * <pref>HHMMSS[<postf>].<ext>
@@ -1047,7 +999,7 @@ static int pn2fd(const char* path, const char* name, fd_t* step) {
         mon = t.tm_mon+1;
         day = t.tm_mday;
     }
-    else if(!parse_dname(last_dir, &yr, &mon, &day) {
+    else if(!parse_dname(last_dir, &yr, &mon, &day)) {
         pu_log(LL_ERROR, "%s: error parsing dir name %s", __FUNCTION__, last_dir);
         return 0;
     }
@@ -1071,8 +1023,8 @@ static cJSON* insert_task(cJSON* item, cJSON* queue) {
     time_t item_send_time = cJSON_GetObjectItem(item, ATI_SEND_TIME)->valueint;
 /******/
     if(!item_send_time) {   /* Set item first */
-        item->prev = queue->child;
-        item->next = NULL;
+        item->prev = NULL;
+        item->next = queue->child;
         if(queue->child) queue->child->prev = item;
         queue->child = item;
     }
@@ -1336,12 +1288,12 @@ static void file_delete(const char* dir, const char* name) {
  * If the file can't be sent - put it to the end of queue
  */
 static cJSON* sendFromQueue(cJSON* rq) {
-    print_queue("sendFromQueue on entry", rq);
     if(!rq) return NULL;
     if(!cJSON_GetArraySize(rq)) {
         cJSON_Delete(rq);
         return NULL;
     }
+    print_queue("sendFromQueue on entry", rq);
     cJSON* item = cJSON_GetArrayItem(rq,0);
     if(cJSON_GetObjectItem(item, ATI_SEND_TIME)->valueint > time(NULL)) {
         pu_log(LL_DEBUG, "%s: 1st in queue %s/%s is to early to send", __FUNCTION__, cJSON_GetObjectItem(item, ATI_PATH)->valuestring, cJSON_GetObjectItem(item, ATI_FILE_NAME)->valuestring);
@@ -1358,21 +1310,20 @@ static cJSON* sendFromQueue(cJSON* rq) {
     sf_rc_t rc = send_file(&task);
     switch (rc) {
         case SF_RC_SENT_OK:
-            send_alert_to_proxy(task.type[0], task.fileRef);
         case SF_RC_NO_SPACE:
         case SF_RC_BAD_FILE:
             file_delete(task.path, task.name);
             empty_dir_delete(task.path);
             break;
         case SF_RC_EARLY:
-        case SF_RC_1_FAIL:
-        case SF_RC_2_FAIL:
-        case SF_RC_3_FAIL:
+        case SF_RC_GET_URL_FAIL:
+        case SF_RC_UPLOAD_FAIL:
+        case SF_RC_UPDATE_FAIL:
         case SF_RC_URL_TOO_OLD:
         case SF_RC_FREF_TOO_OLD: {
+            task.action = calc_action(rc);                      /* Update the action regarding the operation result */
             cJSON *new_item = NULL;
             fd2json(&task, &new_item);                          /* Make new item with task */
-            task.action = calc_action(rc);                      /* Update the action regarding the operation result */
             if(new_item) insert_task(new_item, rq);         /* Append the queue by new task */
         }
             break;
@@ -1429,6 +1380,7 @@ static void* thread_function(void* params) {
             }
                 break;
             case AQ_Timeout:
+                send_queue = sendFromQueue(send_queue);
                 break;
             case AQ_STOP:
                 is_stop = 1;
@@ -1438,9 +1390,8 @@ static void* thread_function(void* params) {
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait (to server)!", PT_THREAD_NAME, ev);
                 break;
         }
-/* if got smth in send queue - send it */
+/* if got smth in send all queue - send it */
         if(lib_timer_alarm(files_resend_clock)) {
-            send_queue = sendFromQueue(send_queue);
             send_all_queue = sendFromQueue(send_all_queue);
             lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
         }
