@@ -27,6 +27,7 @@
 #include <pthread.h>
 #include <memory.h>
 #include <stdio.h>
+#include <ag_config/ag_settings.h>
 
 #include "pu_logger.h"
 
@@ -143,13 +144,26 @@ static int get_input_params(int argc, char* argv[], input_params_t* p) {
                     goto on_exit;
                 }
                 break;
+            case MON_CONTACT_URL:
+                ag_saveMainURL(argv[i]);
+                break;
+            case MON_PROXY_ID:
+                ag_saveProxyID(argv[i]);
+                break;
+            case MON_AUTH_TOKEN:
+                ag_saveProxyAuthToken(argv[i]);
+                break;
             default:
                 pu_log(LL_ERROR, "%s: Wrong input parameters number %d. Expected %d: name agent_ip agent_port cam_ip cam_login cam_password", __FUNCTION__, argc, MON_SIZE);
                 exit(-1);
         }
     }
-    pu_log(LL_INFO, "Input parameters are: \nname\t\t%s\nagent_ip\t\t%s\nagent_port\t\t%d\ncam_ip\t\t%s\ncam_port\t\t%d\ncam_login\t\t%s\ncam_password\t\t%s",
-           p->process_name, p->agent_ip, p->agent_port, p->cam_ip, p->cam_port, p->cam_login, p->cam_password);
+    pu_log(LL_INFO, "Input parameters are: "
+                    "\nname\t\t%s\nagent_ip\t\t%s\nagent_port\t\t%d\ncam_ip\t\t%s\ncam_port\t\t%d\ncam_login\t\t%s\ncam_password\t\t%s"
+                    "\ncontact_url\t\t%s\nproxy_id\t\t%s\nauth_token\t\t%s",
+                     p->process_name, p->agent_ip, p->agent_port, p->cam_ip, p->cam_port, p->cam_login, p->cam_password, 
+                     ag_getMainURL(), ag_getProxyID(), ag_getProxyAuthToken()
+            );
     ret = 1;
 on_exit:
     return ret;
@@ -165,7 +179,7 @@ int main(int argc, char* argv[]) {
 
     pu_start_logger("../log/monitor.log", 50000, LL_DEBUG);
 
-
+    if(!ag_load_config(DEFAULT_CFG_FILE_NAME)) exit(-1);
 
     input_params_t pars;
     if (get_input_params(argc, argv, &pars)) at_mon_function(&pars); /* Endless loop inside the function */

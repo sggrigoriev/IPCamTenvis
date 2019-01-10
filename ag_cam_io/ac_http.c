@@ -144,8 +144,8 @@ out:
 
 void ac_http_close_conn(t_ac_http_handler* h) {
     if(h) {
-        if (h->slist) curl_slist_free_all(h->slist);
         if (h->h) (curl_easy_cleanup(h->h), h->h = NULL);
+        if (h->slist) curl_slist_free_all(h->slist);
         if (h->wr_buf.buf) free(h->wr_buf.buf);
         free(h);
         h = NULL;

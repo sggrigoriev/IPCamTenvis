@@ -105,6 +105,6 @@
 
 #define DEFAULT_CAM_MON_PORT    8889
 
-#define IP_CTX_(a) sht_add(a);
+#define IP_CTX_(a) /*pu_log(LL_DEBUG, "%s: %lu", __FUNCTION__, a) */ sht_add(a)
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H  */

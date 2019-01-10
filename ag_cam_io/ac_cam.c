@@ -38,6 +38,8 @@
 #include "ag_db_mgr.h"
 #include "ac_cam.h"
 
+extern void sht_add(uint32_t ctx);
+
 /***************************************************************************************************************/
 /*
  * AC_CAM_STOP_MD -> DEFAULT_MD_FILE_POSTFIX
@@ -127,12 +129,12 @@ static CURL *open_curl_session(){
     if(res = curl_easy_setopt(curl, CURLOPT_PASSWORD, ag_getCamPassword()), res != CURLE_OK) goto on_error;
 /*    if(res = curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, 0L), res != CURLE_OK) goto on_error; */
     return curl;
-    on_error:
+on_error:
     curl_easy_cleanup(curl);
     return NULL;
 }
 static void close_curl_session(CURL* curl) {
-    curl_easy_cleanup(curl);
+    if(curl) curl_easy_cleanup(curl);
 }
 static int send_command(const char* url_cmd, const char* params) {
     int ret = 0;
@@ -173,11 +175,12 @@ static int send_command(const char* url_cmd, const char* params) {
     }
 
     ret = 1;
-    on_error:
+on_error:
+    close_curl_session(crl);
     if(hs) curl_slist_free_all(hs);
     if(fpw) fclose(fpw);
     if(ptrw) free(ptrw);
-    close_curl_session(crl);
+
     return ret;
 }
 /* Return name value\n...name value\n string. */
@@ -214,10 +217,10 @@ static char* get_current_params(const char* url_cmd) {
     ret = calloc(sz+1, 1);
     memcpy(ret, ptr, sz);
     ret[sz] = '\0';   /* to be sure about NULL-termination */
-    on_error:
+on_error:
+    close_curl_session(crl);
     if(fp)fclose(fp);
     if(ptr)free(ptr);
-    close_curl_session(crl);
     return ret;
 }
 /*
@@ -317,6 +320,7 @@ void ac_cam_deinit() {
  * Return 1 if OK
  */
 int ac_cam_make_snapshot(const char* full_path) {
+    pu_log(LL_DEBUG, "%s: on entry", __FUNCTION__);
     int ret = 0;
     CURLcode res;
     FILE* fp=NULL;
@@ -339,13 +343,18 @@ int ac_cam_make_snapshot(const char* full_path) {
         pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
         goto on_error;
     }
-
+    IP_CTX_(300);
     pu_log(LL_INFO, "%s: Got the picture!\n", __FUNCTION__);
     ret = 1;
-    on_error:
-    if(fp)fclose(fp);
-    if(uri) free(uri);
+on_error:
+    IP_CTX_(301);
     close_curl_session(crl);
+    IP_CTX_(304);
+    if(fp)fclose(fp);
+    IP_CTX_(302);
+    if(uri) free(uri);
+    IP_CTX_(303);
+    pu_log(LL_DEBUG, "%s: on exit", __FUNCTION__);
     return ret;
 }
 int ac_cam_make_video() {
@@ -377,7 +386,8 @@ int ac_cam_make_video() {
     fflush(fpw);
 
     ret = 1;
-    on_error:
+on_error:
+    close_curl_session(crl);
     if(fpw) fclose(fpw);
     if(ptrw) free(ptrw);
     return ret;
@@ -386,6 +396,7 @@ int ac_cam_make_video() {
  * on could be -1,0,1,2
  */
 int ac_set_md(int on) {
+    pu_log(LL_DEBUG, "%s: on entry. On = %d", __FUNCTION__, on);
     int new_val = update_one_parameter(AO_CAM_CMD_MD, AO_CAM_PAR_MD_ON, (on > 0)?1:0);
     switch (on) {
         case -1:
@@ -401,6 +412,7 @@ int ac_set_md(int on) {
         default:
             break;
     }
+    pu_log(LL_DEBUG, "%s: on exit. new_val = %d", __FUNCTION__, new_val);
     return new_val;
 }
 int ac_set_sd(int on) {

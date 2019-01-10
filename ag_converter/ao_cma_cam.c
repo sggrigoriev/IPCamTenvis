@@ -335,7 +335,7 @@ static char* make_cfgrec_params() { /* Each (almost) command got it's own unique
 
 char* ao_make_cam_uri(int cmd_id, int read_pars) {
     char buf[128]={0};
-    char* name;
+    const char* name;
     char* ret=NULL;
     switch(cmd_id) {
         case AO_CAM_CMD_SNAPSHOT:

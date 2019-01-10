@@ -196,12 +196,12 @@ void CString::_Alloc(int size, bool bShrink)
 	{
 		if(m_nSize < size)
 		{
-			m_nSize = size;
+			m_nSize = (unsigned int)size;
 			m_pData->pszData = (char*)realloc(m_pData->pszData, m_nSize);
 		}
 		else if(bShrink)
 		{
-			m_nSize = size;
+			m_nSize = (unsigned int)size;
 			m_pData->pszData = (char*)realloc(m_pData->pszData, m_nSize);
 			if(m_nLength >= m_nSize)
 				m_nLength = m_nSize - 1;

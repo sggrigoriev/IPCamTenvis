@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <lib_tcp.h>
 
 #include "lib_timer.h"
 #include "pu_queue.h"
@@ -39,7 +40,6 @@
 #include "at_proxy_rw.h"
 #include "at_wud_write.h"
 #include "at_ws.h"
-#include "at_cam_files_sender.h"
 
 #include "ao_cmd_data.h"
 #include "ao_cmd_proxy.h"
@@ -53,6 +53,7 @@
 #include "au_string.h"
 
 #include "at_main_thread.h"
+#include "at_proxy_read.h"
 
 #define AT_THREAD_NAME  "IPCamTenvis"
 
@@ -74,7 +75,6 @@ static pu_queue_t* to_wud;          /* main_thread -> wud_write  */
 static pu_queue_t* from_cam;        /* cam -> main_thread */
 static pu_queue_t* from_ws;         /* WS -> main_thread */
 static pu_queue_t* from_stream_rw;  /* from streaming threads to main */
-static pu_queue_t* to_sf;           /* from main_thread to files sender */
 
 static volatile int main_finish;        /* stop flag for main thread */
 
@@ -124,6 +124,19 @@ static int send_to_ws(const char* msg) {
         return 0;
     }
     IP_CTX_(8003);
+    return 1;
+}
+/* To EM (SF) */
+static int send_to_sf(const char* msg) {
+    int sock = at_get_sf_write_sock();
+    if(sock < 0) {
+        pu_log(LL_ERROR, "%s: invalid socket to write to SF!", __FUNCTION__);
+        return 0;
+    }
+    ssize_t ret;
+    int repeats = 5;
+    while(ret = lib_tcp_write(sock, msg, strlen(msg)+1, 1), !ret&&(repeats--));
+    if (ret < 0) return 0;
     return 1;
 }
 
@@ -188,17 +201,42 @@ static void stop_ws() {
     IP_CTX_(27001);
 }
 /* EM */
+static void free_cmd_string(char** cmd_string) {
+    if(!cmd_string) return;
+
+    int i;
+    for(i = 0; cmd_string[i] != NULL; i++) free(cmd_string[i]);
+
+    free(cmd_string);
+}
+/*
+ * NB! return should be freed!
+ */
+static char** make_cmd_string() {
+    char** ret = calloc(11, sizeof(char*));
+    if(!ret) goto on_error;
+
+    if(ret[0] = strdup("/root/presto/bin/Monitor"), !ret[0]) goto on_error; /* Process name */
+    if(ret[1] = strdup("127.0.0.1"), !ret[1]) goto on_error;                /* Process IP */
+    if(ret[2] = strdup("8889"), !ret[2]) goto on_error;                     /* Process Port */
+    if(ret[3] = strdup("127.0.0.1"), !ret[3]) goto on_error;                /* Cam IP */
+    if(ret[4] = strdup("8001"), !ret[4]) goto on_error;                     /* Cam port */
+    if(ret[5] = strdup("admin"), !ret[5]) goto on_error;                    /* Cam login */
+    if(ret[6] = strdup("admin"), !ret[6]) goto on_error;                    /* Cam password */
+    if(ret[7] = strdup(ag_getMainURL()), !ret[7]) goto on_error;
+    if(ret[8] = strdup(ag_getProxyID()), !ret[8]) goto on_error;
+    if(ret[9] = strdup(ag_getProxyAuthToken()), !ret[9]) goto on_error;
+    ret[10] = NULL;
+    return ret;
+on_error:
+    pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
+    free_cmd_string(ret);
+    return NULL;
+}
 static pid_t start_events_monitor() {
-    char* const cmd_string[] = {
-            "/root/presto/bin/Monitor",                /* Process name */
-            "127.0.0.1",                /* Process IP */
-            "8889",                     /* Process Port */
-            "127.0.0.1",                /* Cam IP */
-            "8001",                     /* Cam port */
-            "admin",                    /* Cam login */
-            "admin",
-            NULL
-    };
+    char** cmd_string = make_cmd_string();
+    if(!cmd_string) return -1;
+
     if(access( cmd_string[0], F_OK ) == -1 ) {
         pu_log(LL_ERROR, "%s: %s file doesn't exist. Abort", __FUNCTION__, cmd_string[0]);
         return -1;
@@ -210,14 +248,16 @@ static pid_t start_events_monitor() {
     pid_t pid = 0;
 
     if((pid = fork())) {
-        return pid;     /* Parent return */
+        free_cmd_string(cmd_string);
+        pu_log(LL_INFO, "%s: Ok", __FUNCTION__);
+        return pid;                                 /* Parent return */
     }
     else {
         chdir("/root/presto/bin");
         execv(cmd_string[0], cmd_string);  /* launcher exits and disapears... */
         pu_log(LL_ERROR, "%s: Error execv run: %d - %s", __FUNCTION__, errno, strerror(errno));
     }
-    pu_log(LL_INFO, "%s: Ok", __FUNCTION__);
+
     return pid;
 }
 static pid_t stop_events_monitor(pid_t pid_id) {
@@ -234,13 +274,6 @@ static void restart_events_monitor() {
     if(event_monitor_pid > 0) event_monitor_pid = stop_events_monitor(event_monitor_pid);
     if(event_monitor_pid = start_events_monitor(), start_events_monitor < 0) {
         pu_log(LL_ERROR, "%s: Can't restart Events Monitor. Reboot.", __FUNCTION__);
-        send_reboot();
-    }
-/* Restart files sender */
-    at_stop_sf();
-    if(!at_start_sf()) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot", __FUNCTION__, "FILES_SENDER", strerror(errno));
-        IP_CTX_(22001);
         send_reboot();
     }
     pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
@@ -260,22 +293,30 @@ static void make_snapshot() {
     char name[30]={0};
     char path[256]={0};
     char buf[512]={0};
-
+    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     ac_make_name_from_date(DEFAULLT_SNAP_FILE_PREFIX, time(NULL), DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, name, sizeof(name)-1);
+    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
+    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     if (!ac_cam_make_snapshot(path)) {
         pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
         IP_CTX_(16001);
         return;
     }
-
-    ao_make_got_files(path, buf, sizeof(buf));
-    pu_queue_push(to_sf, buf, strlen(buf) + 1);
-    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, buf);
-
-    ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
     IP_CTX_(16002);
+    ao_make_got_files(path, buf, sizeof(buf));
+    IP_CTX_(16003);
+    if(send_to_sf(buf)) {
+        IP_CTX_(16004);
+        pu_log(LL_DEBUG, "%s: files %s sent to SF_thread", __FUNCTION__, buf);
+    }
+    else {
+        restart_events_monitor();
+    }
+    IP_CTX_(16005);
+    ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
+    IP_CTX_(16006);
 }
 /* TODO! Sgift these to IMdB */
 static time_t capture_start=0;
@@ -314,17 +355,18 @@ static void run_agent_actions() {
             break;
         case AG_DB_BIN_ON_OFF:
             IP_CTX_(12002);
-            at_stop_sf();           /* Stop Files Sender - no connection! */
+            event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
             IP_CTX_(12003);
             pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
             IP_CTX_(12004);
             ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);   /* Stop WS if it is running */
             break;
         case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
-            at_stop_sf();
+            event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
         case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
             IP_CTX_(12005);
-            if(!at_start_sf()) {
+            event_monitor_pid = start_events_monitor();
+            if(event_monitor_pid < 0) {
                 IP_CTX_(12006);
                 pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot.", __FUNCTION__, "FILES_SENDER", strerror(errno));
                 IP_CTX_(12007);
@@ -500,7 +542,9 @@ static void run_cam_actions() {
 /* Change Video sensitivity */
 /* Make snapshit */
     IP_CTX_(15000);
+    pu_log(LL_DEBUG, "%s:before ag_db_update_changed_cam_parameters()");
     ag_db_update_changed_cam_parameters();
+    pu_log(LL_DEBUG, "%s:after ag_db_update_changed_cam_parameters()");
     make_snapshot();
     capture_video();
     IP_CTX_(15001);
@@ -698,10 +742,12 @@ static void process_em_message(msg_obj_t* obj_msg) {
         case AC_CAM_GOT_FILE: {                         /* Just forward it to SF */
             char* txt = cJSON_PrintUnformatted(obj_msg);
             if(txt) {
-                pu_queue_push(to_sf, txt, strlen(txt) + 1);
-                pu_log(LL_DEBUG, "%s: %s forwarded to SF_thread", __FUNCTION__, txt);
+                if(send_to_sf(txt))
+                    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, txt);
+                else {
+                    restart_events_monitor();
+                }
                 free(txt);
-
             }
         }
             break;
@@ -796,8 +842,6 @@ static int main_thread_startup() {
     from_cam = aq_get_gueue(AQ_FromCam);                /* cam_control -> main_thread */
     from_ws = aq_get_gueue(AQ_FromWS);                  /* WS -> main_thread */
     from_stream_rw = aq_get_gueue(AQ_FromRW);           /* Streaming RW tread(s) -> main */
-    to_sf = aq_get_gueue(AQ_ToSF);                      /* main -> SF thread */
-
 
     events = pu_add_queue_event(pu_create_event_set(), AQ_FromProxyQueue);
     events = pu_add_queue_event(events, AQ_FromCam);
@@ -817,14 +861,6 @@ static int main_thread_startup() {
         return 0;
     }
     pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
-/* Process start */
-    if(event_monitor_pid = start_events_monitor(), event_monitor_pid < 0) {
-        pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "CAM_ALERT_READED", strerror(errno));
-        IP_CTX_(24006);
-        return 0;
-    }
-    pu_log(LL_INFO, "%s: started", "CAM_ALERT_READER", __FUNCTION__);
-
 /* Threads start */
     if(!at_start_proxy_rw()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "PROXY_RW", strerror(errno));

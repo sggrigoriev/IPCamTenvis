@@ -22,7 +22,7 @@
 #ifndef IPCAMTENVIS_AT_CAM_FILES_SENDER_H
 #define IPCAMTENVIS_AT_CAM_FILES_SENDER_H
 
-int at_start_sf();
+int at_start_sf(int rd_sock);
 void at_stop_sf();
 void at_set_stop_sf();
 

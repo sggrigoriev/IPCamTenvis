@@ -129,8 +129,8 @@ typedef struct {
 #define AG_FIRST_CAM_PAR_IDX 10 /* AG_DB_STATE_VIEWERS_COUNT */
 
 static const ag_db_record_t SCHEME[] = {
-/*  1                       2   3   4   5   6    8   9   10                   11                  12  */
-/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
+/*          1                       2   3   4   5   6   7   8   9                   10                  11  */
+/*         name                    val chf str chd chr prs dfv clcam               camcl               camm */
         {AG_DB_STATE_AGENT_ON,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
         {AG_DB_CMD_CONNECT_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
         {AG_DB_CMD_SEND_WD_AGENT,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
@@ -144,8 +144,8 @@ static const ag_db_record_t SCHEME[] = {
         {AG_DB_CMD_CONNECT_RW,      0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
         {AG_DB_CMD_DISCONNECT_RW,   0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
 /* Cam-related properties start from here */
-/*  1                       2   3   4   5   6    8   9   10                   11                  12  */
-/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
+/*          1                       2   3   4   5   6   7   8   9                   10                  11  */
+/*         name                    val chf str chd chr prs dfv clcam               camcl               camm */
         {AG_DB_STATE_VIEWERS_COUNT, 0,  0,  0,  0,  0,  0,  0,  NULL,               NULL,               NULL},
         {AG_DB_STATE_PING_INTERVAL, 0,  0,  0,  0,  0,  1,  30, NULL,               NULL,               NULL},
         {AG_DB_STATE_STREAM_STATUS, 0,  0,  0,  0,  1,  0,  0,  NULL,               NULL,               NULL},
@@ -167,8 +167,8 @@ static const ag_db_record_t SCHEME[] = {
         {AG_DB_STATE_SNAPSHOT,      0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL},
         {AG_DB_STATE_SD_SENSITIVITY,0,  0,  1,  0,  1,  1,  30, SS_cloud_2_cam,     SS_cam_2_cloud,     ac_set_sd_sensitivity},
         {AG_DB_STATE_CAPTURE_VIDEO, 0,  0,  1,  0,  1,  0,  0,  NULL,               NULL,               NULL}
-/*  name                    val chf str chd chr prs dfv clcam               camcl               camm */
-/*  1                       2   3   4   5   6   8   9   10                  11                  12   */
+/*         name                    val chf str chd chr prs dfv clcam               camcl               camm */
+/*          1                       2   3   4   5   6   7   8   9                   10                  11   */
 };
 
 static ag_db_record_t *IMDB = 0;
@@ -277,12 +277,11 @@ static int create_imdb() {
 /*04*/  IMDB[i].in_startup_report = SCHEME[i].in_startup_report;
 /*05*/  /* changed = 0 */
 /*06*/  IMDB[i].in_changes_report = SCHEME[i].in_changes_report;
-/*07*/  /* updated = 0 */
-/*08*/  IMDB[i].persistent = SCHEME[i].persistent;
-/*09*/  /* default_value not needed and not used */
-/*10*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
-/*11*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
-/*12*/  IMDB[i].cam_method = SCHEME[i].cam_method;
+/*07*/  IMDB[i].persistent = SCHEME[i].persistent;
+/*08*/  /* default_value not needed and not used */
+/*09*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
+/*10*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
+/*11*/  IMDB[i].cam_method = SCHEME[i].cam_method;
     }
     return 1;
     on_error:

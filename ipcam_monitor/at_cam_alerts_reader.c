@@ -35,13 +35,14 @@
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
-#include <lib_tcp.h>
 
 #include "pu_logger.h"
 #include "lib_timer.h"
+#include "lib_tcp.h"
 
 #include "ag_defaults.h"
 #include "ao_cmd_data.h"
+#include "at_cam_files_sender.h"
 #include "event_monitor_module.h"
 #include "at_cam_alerts_reader.h"
 
@@ -55,6 +56,7 @@ extern volatile uint32_t contextId;
 static char out_buf[512]; /* buffer for sending data */
 
 static int to_agent = -1;                /* transport here */
+static int from_agent = -1;             /* for SF thread */
 static int server_socket = -1;
 
 static lib_timer_clock_t em_restart_to={0};
@@ -291,7 +293,9 @@ static void monitor() {
 }
 /**********************************************************************/
 void at_mon_stop() {
+    at_stop_sf();
     if(to_agent > 0) lib_tcp_client_close(to_agent);
+    if(from_agent > 0) lib_tcp_client_close(from_agent);
     if(server_socket > 0) lib_tcp_client_close(server_socket);
     em_deinit();
 }
@@ -305,6 +309,7 @@ void at_mon_function(const input_params_t* params) {
         pu_log(LL_ERROR, "%s: Error Cam's Events Monitor setup", AT_THREAD_NAME);
         goto on_exit;
     }
+    at_start_sf(dup(to_agent));
     monitor();
 
     on_exit:

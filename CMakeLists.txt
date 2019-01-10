@@ -7,6 +7,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(IPCamTenvis)
 
+
+
 set(AGENT_PLATFORM $ENV{PLATFORM})
 set(PP_SDK_PATH $ENV{SDK_PATH})
 set(GCC_STANDARD $ENV{STANDARD})
@@ -127,7 +129,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     add_definitions(-DEXTERN=)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../build_tenvis/${AGENT_PLATFORM})
 
-    #    set(CMAKE_VERBOSE_MAKEFILE ON)
+#    set(CMAKE_VERBOSE_MAKEFILE ON)
     set(CMAKE_SYSTEM_NAME Linux)
     set(TOOLCHAIN_PATH $ENV{TOOLCHAIN})
     set(SYSROOT_PATH $ENV{SYSROOT})
@@ -136,7 +138,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
     set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}g++)
     set(CMAKE_FORCE_C_COMPILER ${TOOLCHAIN_PATH}/bin/${COMPILER_PREFIX}gcc GNU)
 
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE")
+#    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE")
     if(BUILD_TYPE STREQUAL "Development")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0 -Wall")
     else()
@@ -146,6 +148,7 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
 
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${SYSROOT_PATH}/usr/include/libcam -I${SYSROOT_PATH}/usr/include/nopoll -I${SYSROOT_PATH}/usr/include/gstreamer-1.0 -I${SYSROOT_PATH}/usr/include/glib-2.0 -I${SYSROOT_PATH}/usr/include -D_BSD_SOURCE -L${SYSROOT_PATH}/usr/lib -D_GNU_SOURCE -O0 -Wall -g -ldl -lz")
+    set(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS})
 
     set(REQUIRED_LIBRARIES
             curl
@@ -157,11 +160,11 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
             #            stdc++
             )
     set(MON_REQUIRED_LIBRARIES
+            curl
             m
             pthread
             stdc++
             )
-
 
     include_directories(
             ./
@@ -216,7 +219,11 @@ file (GLOB SOURCE_FILES
 file(GLOB SOURCE_FILES_IPCAM_MONITOR
         ipcam_monitor/*.c
         ag_converter/ao_cmd_data.c
+        au_string/*.c
+        ag_config/ag_settings.c
+        ${PROXY_LIBS_PATH}/pc_config/pc_config.c
         ${PROXY_LIBS_PATH}/pu_logger/*.c
+        ${PROXY_LIBS_PATH}/json/*.c
         ${PROXY_LIBS_PATH}/libtimer/*.c
         ${PROXY_LIBS_PATH}/libtcp/*.c
         libs/ipcam_src/*.cpp
@@ -236,7 +243,6 @@ if(AGENT_PLATFORM STREQUAL "ubuntu")
     #${PROXY_LIBS_PATH}/libipcam.a
 
 elseif(AGENT_PLATFORM STREQUAL "hisilicon")
-
 
     add_executable(jq json_parser/jq.c ${PROXY_LIBS_PATH}/json/cJSON.c)
     target_link_libraries(jq m)
@@ -272,23 +278,22 @@ elseif(AGENT_PLATFORM STREQUAL "hisilicon")
 
             ${SYSROOT_PATH}/usr/lib/libintl.a
             ${SYSROOT_PATH}/usr/lib/libffi.a
-            ${SYSROOT_PATH}/usr/lib/libcurl.a
+#            ${SYSROOT_PATH}/usr/lib/libcurl.a
             )
 
     add_executable(Monitor ${SOURCE_FILES_IPCAM_MONITOR})
     target_link_libraries(Monitor ${MON_REQUIRED_LIBRARIES}
-            #                    ${SYSROOT_PATH}/usr/lib/libipcam.a
             )
 
     set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
     set_property(TARGET jq PROPERTY C_STANDARD 90)
     #            set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
-    set_property(TARGET Monitor PROPERTY C_STANDARD 90)
     set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)
+    set_property(TARGET Monitor PROPERTY C_STANDARD 90)
 endif()
 
 set_property(TARGET Tenvis PROPERTY C_STANDARD 90)
 set_property(TARGET jq PROPERTY C_STANDARD 90)
 #set_property(TARGET ipcam PROPERTY CXX_STANDARD 98)
-set_property(TARGET Monitor PROPERTY C_STANDARD 90)
 set_property(TARGET Monitor PROPERTY CXX_STANDARD 98)
+set_property(TARGET Monitor PROPERTY C_STANDARD 90)

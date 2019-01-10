@@ -30,5 +30,7 @@ int at_start_proxy_read(int read_socket);
 /* stop the thread */
 void at_stop_proxy_read();
 
+int at_get_sf_write_sock();
+
 
 #endif /* IPCAMTENVIS_AT_PROXY_READ_H */

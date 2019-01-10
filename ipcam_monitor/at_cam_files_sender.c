@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <curl/curl.h>
+#include <lib_tcp.h>
 
 
 #include "cJSON.h"
@@ -68,9 +69,8 @@ static volatile int is_stop = 1;
 static pthread_t thread_id;
 static pthread_attr_t thread_attr;
 
-static pu_queue_t* from_main;
-static pu_queue_t* to_proxy;
-static pu_queue_msg_t q_msg[LIB_HTTP_MAX_MSG_SIZE];    /* Buffer for messages received */
+lib_tcp_conn_t* connections = NULL;
+lib_tcp_rd_t* from_agent = NULL;
 
 typedef enum {
     SF_ACT_UNDEF= 0, SF_ACT_SEND=1, SF_ACT_RESEND=2, SF_ACT_UPLOAD=3, SF_ACT_UPDATE=4, SF_ACT_SIZE
@@ -316,10 +316,10 @@ static char* post_n_reply(const struct curl_slist *hs, const char* url) {
         goto on_error;
     }
     pu_log(LL_DEBUG, "%s: Answer = %s", __FUNCTION__, ret);
-    on_error:
+on_error:
+    curl_easy_cleanup(curl);
     if(fp)fclose(fp);
     if(ptr)free(ptr);
-    curl_easy_cleanup(curl);
     return ret;
 }
 
@@ -371,13 +371,12 @@ static char* put_n_reply(const struct curl_slist *hs, const char* url) {
         goto on_error;
     }
     pu_log(LL_DEBUG, "%s: Answer = %s", __FUNCTION__, ret);
-    on_error:
+on_error:
+    curl_easy_cleanup(curl);
     if(fpr)fclose(fpr);
     if(ptrr)free(ptrr);
     if(fpw)fclose(fpw);
     if(ptrw)free(ptrw);
-
-    curl_easy_cleanup(curl);
     return ret;
 }
 /*
@@ -550,12 +549,12 @@ static int sendFile(fd_t* in_par) {
     pu_log(LL_DEBUG, "%s: Answer = %s", __FUNCTION__, ptr);
 
     ret = 1;
-    on_exit:
+on_exit:
+    curl_easy_cleanup(curl);
+    if(hs) curl_slist_free_all(hs);
     if(fd) fclose(fd);
     if(fp) fclose(fp);
     if(ptr) free(ptr);
-    curl_easy_cleanup(curl);
-    if(hs) curl_slist_free_all(hs);
     return ret;
 }
 static int sendSF_update(fd_t* in_par) {
@@ -1301,10 +1300,15 @@ static cJSON* sendFromQueue(cJSON* rq) {
     }
 
     item = cJSON_DetachItemFromArray(rq, 0); /* Get first, remove it from array */
+    if(!item) {
+        pu_log(LL_ERROR, "%s, error in files queue structure! The queue will be deleted", __FUNCTION__);
+        cJSON_Delete(rq);
+        return NULL;
+    }
     fd_t task;
     int ret = json2fd(item, &task);
 
-    if(item) cJSON_Delete(item);
+    cJSON_Delete(item);
     if(!ret) return rq;
 
     sf_rc_t rc = send_file(&task);
@@ -1339,9 +1343,6 @@ static cJSON* sendFromQueue(cJSON* rq) {
 static void* thread_function(void* params) {
     pu_log(LL_INFO, "%s: started", AT_THREAD_NAME);
     is_stop = 0;
-    from_main = aq_get_gueue(AQ_ToSF);
-    to_proxy = aq_get_gueue(AQ_ToProxyQueue);   /* Send alerts if the file sent */
-    pu_queue_event_t events = pu_add_queue_event(pu_create_event_set(), AQ_ToSF);
 
     lib_timer_clock_t files_resend_clock = {0};
     lib_timer_init(&files_resend_clock, DEFAULT_TO_FOR_FILES_RESEND);
@@ -1361,34 +1362,34 @@ static void* thread_function(void* params) {
     send_all_queue = fill_queue(&task, send_all_queue);
 
     while(!is_stop) {
-        pu_queue_event_t ev;
-
-        switch (ev = pu_wait_for_queues(events, 1)) {
-            case AQ_ToSF: {
-                size_t len = sizeof(q_msg);
-                while (pu_queue_pop(from_main, q_msg, &len)) {
-                    pu_log(LL_INFO, "%s: received from Agent: %s ", PT_THREAD_NAME, q_msg);
-                    if(!msg2type(q_msg, &task)) {
-                        pu_log(LL_ERROR, "%s: error parsing %s. Ignored", __FUNCTION__, q_msg);
-                    }
-                    else {
-                        send_queue = fill_queue(&task, send_queue);
-                        print_queue("send_queue after fill", send_queue);
-                    }
-                    len = sizeof(q_msg);
-                }
-            }
-                break;
-            case AQ_Timeout:
-                send_queue = sendFromQueue(send_queue);
-                break;
-            case AQ_STOP:
-                is_stop = 1;
-                pu_log(LL_INFO, "%s received STOP event. Terminated", PT_THREAD_NAME);
-                break;
-            default:
-                pu_log(LL_ERROR, "%s: Undefined event %d on wait (to server)!", PT_THREAD_NAME, ev);
-                break;
+        int rc;
+        lib_tcp_rd_t *conn = lib_tcp_read(connections, 1, &rc); /* connection removed inside */
+        if(rc == LIB_TCP_READ_EOF) {
+            pu_log(LL_ERROR, "%s. Read op failed. Nobody on remote side (EOF). Reconnect", AT_THREAD_NAME);
+            break;
+        }
+        if (rc == LIB_TCP_READ_NO_READY_CONNS) {
+            pu_log(LL_ERROR, "%s: internal error - no ready sockets. Reconnect", AT_THREAD_NAME);
+            break;
+        }
+        if (rc == LIB_TCP_READ_TIMEOUT) {
+            send_queue = sendFromQueue(send_queue);
+            continue;   /* timeout */
+        }
+        if (!conn) {
+            pu_log(LL_ERROR, "%s. Undefined error - connection not found. Reconnect", AT_THREAD_NAME);
+            break;
+        }
+        char out_buf[1024]={0};
+        while (lib_tcp_assemble(conn, out_buf, sizeof(out_buf))) {     /* Read all fully incoming messages */
+            pu_log(LL_INFO, "%s: message received: %s", AT_THREAD_NAME, out_buf);
+        }
+        if(!msg2type(out_buf, &task)) {
+            pu_log(LL_ERROR, "%s: error parsing %s. Ignored", __FUNCTION__, out_buf);
+        }
+        else {
+            send_queue = fill_queue(&task, send_queue);
+            print_queue("send_queue after fill", send_queue);
         }
 /* if got smth in send all queue - send it */
         if(lib_timer_alarm(files_resend_clock)) {
@@ -1405,15 +1406,19 @@ static void* thread_function(void* params) {
     }
     if(send_queue) cJSON_Delete(send_queue);
     if(send_all_queue) cJSON_Delete(send_all_queue);
+    lib_tcp_destroy_conns(connections);
+    is_stop = 1;
     pu_log(LL_INFO, "%s: stop", AT_THREAD_NAME);
     return NULL;
 }
 
-int at_start_sf() {
+int at_start_sf(int rd_sock) {
     if(!is_stop) {
         pu_log(LL_WARNING, "%s: %s is already runs!", __FUNCTION__, PT_THREAD_NAME);
         return 1;
     }
+    connections = lib_tcp_init_conns(1, LIB_HTTP_MAX_MSG_SIZE-LIB_HTTP_HEADER_SIZE);
+    from_agent = lib_tcp_add_new_conn(rd_sock, connections);
     if(pthread_attr_init(&thread_attr)) return 0;
     if(pthread_create(&thread_id, &thread_attr, &thread_function, NULL)) return 0;
     is_stop = 0;

@@ -41,18 +41,41 @@
 
 #define AT_THREAD_NAME  "WS Thread"
 
+
+extern void sht_add(uint32_t ctx);
+
 static noPollCtx *ctx;
 static noPollConn * conn;
-
-static volatile unsigned int viewers_counter;
-
-static pthread_mutex_t io_lock;
 
 static volatile int stop = 1;
 static pthread_t ws_thread_id;
 static pthread_attr_t threadAttr;
 
 pu_queue_t* from_ws;
+
+/* Locking handlers */
+static noPollPtr mutex_create() {
+    pthread_mutex_t* ret;
+    ret = calloc(1, sizeof(pthread_mutex_t));
+    pthread_mutex_init(ret, NULL);
+    return ret;
+}
+static void mutex_destroy(noPollPtr mutex) {
+    if(mutex) {
+        pthread_mutex_destroy(mutex);
+        free(mutex);
+    }
+}
+static void mutex_lock(noPollPtr mutex) {
+    if(mutex) {
+        pthread_mutex_lock(mutex);
+    }
+}
+static void mutex_unlock(noPollPtr mutex) {
+    if(mutex) {
+        pthread_mutex_unlock(mutex);
+    }
+}
 
 static int is_secure_conn(const char* host) {
     char prefix[4]={0};
@@ -71,24 +94,35 @@ static const char* cut_head(const char* host) {
  * this handler fires on every message
 */
 static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, noPollPtr user_data) {
+    IP_CTX_(500);
     char buf[1024] = {0};
 
-    size_t len = AU_MIN(msg->payload_size, sizeof(buf)-1);
-    memcpy(buf, msg->payload, len);
+    const char* pld = (const char *) nopoll_msg_get_payload(msg);
+    if(!pld) {
+        pu_log(LL_ERROR, "%s: No message received!", __FUNCTION__);
+        return;
+    }
+
+    size_t len = AU_MIN(nopoll_msg_get_payload_size(msg), sizeof(buf)-1);
+    memcpy(buf, pld, len);
     buf[len] = '\0';
+
+    nopoll_msg_unref(msg);
 
     pu_log(LL_DEBUG, "%s: From WS: %s, len = %d", AT_THREAD_NAME, buf, len);
 
     pu_queue_push(from_ws, buf, strlen(buf)+1);
+    IP_CTX_(501);
 }
 
 static void *ws_thread(void *pvoid) {
-
+    IP_CTX_(502);
     pu_log(LL_DEBUG,"%s: start", AT_THREAD_NAME);
     // wait for messages
-    while (!stop) {
+    while (!stop && nopoll_conn_is_ok(conn)) {
+        IP_CTX_(503);
         char buf[512];
-        int ret = nopoll_loop_wait(ctx, 100);
+        int ret = nopoll_loop_wait(ctx, 1000);
         switch (ret) {
             case 0:         //No error
             case -3:        //Timeout
@@ -107,7 +141,7 @@ static void *ws_thread(void *pvoid) {
                 pu_log(LL_ERROR, "%s: nopoll_loop_wait undrcognized error: %d. Ignored.", AT_THREAD_NAME, ret);
                 break;
         }
-
+        IP_CTX_(504);
     }
     pu_log(LL_DEBUG,"%s: exiting\n", AT_THREAD_NAME);
 
@@ -129,11 +163,10 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
 
 
 // Initiation section
-    pthread_mutex_init(&io_lock, NULL);
+    nopoll_thread_handlers(mutex_create, mutex_destroy, mutex_lock, mutex_unlock);
 
     pu_log(LL_DEBUG, "%s: host = %s port = %d path = %s session_id = %s", AT_THREAD_NAME, host, port, path, session_id);
 
-    viewers_counter = 0;
     ctx = NULL;
     ctx = nopoll_ctx_new ();
     if (!ctx) {
@@ -153,6 +186,7 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
     pu_log(LL_DEBUG,"%s: connecting to %s:%d%s", AT_THREAD_NAME, host, port, path);
     char s_port[20];
     sprintf(s_port, "%d", port);
+
     conn = NULL;
     if(!is_secure_conn(host)) {
         conn = nopoll_conn_new (ctx, cut_head(host), s_port, NULL, path, NULL, NULL);
@@ -185,7 +219,6 @@ on_error:
     if(conn) nopoll_conn_close(conn);
     if(ctx) nopoll_ctx_unref(ctx);
     nopoll_cleanup_library();
-    pthread_mutex_destroy(&io_lock);
     return 0;
 }
 
@@ -210,7 +243,11 @@ int at_is_ws_run() {
 }
 
 int at_ws_send(const char* msg) {
-    assert(msg);
+    IP_CTX_(505);
+    if(!msg) {
+        pu_log(LL_ERROR, "%s: Null pointer passed, send ignored", __FUNCTION__);
+        return 0;
+    }
     pu_log(LL_DEBUG, "%s: sending to Web Socket %s", AT_THREAD_NAME, msg);
     long size = (long)strlen(msg)+1;
     int ret = 1;
@@ -219,7 +256,7 @@ int at_ws_send(const char* msg) {
         pu_log(LL_ERROR, "%s: RC = %d - %s. Unable to send %s to Web Socket.", AT_THREAD_NAME, errno, strerror(errno), msg);
         ret = 0;
     }
-
+    IP_CTX_(506);
     return ret;
 }
 

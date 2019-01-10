@@ -30,6 +30,9 @@ typedef enum {
     MON_CAM_PORT=4,
     MON_CAM_LOGIN=5,
     MON_CAM_PASSWORD=6,
+    MON_CONTACT_URL=7,
+    MON_PROXY_ID=8,
+    MON_AUTH_TOKEN=9,
     MON_SIZE
 } mon_params_t;
 

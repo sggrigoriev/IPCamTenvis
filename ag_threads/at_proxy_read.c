@@ -41,8 +41,11 @@ static pthread_attr_t attr;
 
 static char out_buf[LIB_HTTP_MAX_MSG_SIZE] = {0};   /* buffer to receive the data */
 
-int read_proxy_socket = -1;                              /* socket to read from Proxy */
-int read_mon_socket = -1;                                /* socket to read from camera events monitor */
+static int read_proxy_socket = -1;                              /* socket to read from Proxy */
+static int read_mon_socket = -1;                                /* socket to read from camera events monitor */
+
+pthread_mutex_t wms_mutex = PTHREAD_MUTEX_INITIALIZER;
+volatile static int write_mon_socket = -1;                      /* socket to write from Agent to SF */
 
 static pu_queue_t* from_proxy;             /* main queue pointer - local transport */
 static pu_queue_t* from_mon;
@@ -66,6 +69,10 @@ static void* proxy_read(void* params) {
     }
 
 monitor_connect:
+    pthread_mutex_lock(&wms_mutex);
+    if(write_mon_socket > 0) {close(write_mon_socket); write_mon_socket = -1;}
+    pthread_mutex_unlock(&wms_mutex);
+
     if(read_mon_socket = lib_tcp_get_client_socket(DEFAULT_CAM_MON_PORT, 1), read_mon_socket > 0) {
         mon_conn = lib_tcp_add_new_conn(read_mon_socket, all_conns);
         if(!mon_conn) {
@@ -73,6 +80,10 @@ monitor_connect:
             goto allez;
         }
         pu_log(LL_INFO, "%s: EM connected by socket# %d", AT_THREAD_NAME, read_mon_socket);
+
+        pthread_mutex_lock(&wms_mutex);
+        write_mon_socket = dup(read_mon_socket);
+        pthread_mutex_unlock(&wms_mutex);
     }
     else {
         pu_log(LL_WARNING, "%s: Connection to EM failed. Reconnect.", AT_THREAD_NAME);
@@ -119,6 +130,11 @@ allez:
 
     at_set_stop_proxy_rw_children();
     lib_tcp_destroy_conns(all_conns);
+
+    pthread_mutex_lock(&wms_mutex);
+    if(write_mon_socket > 0) {close(write_mon_socket); write_mon_socket = -1;}
+    pthread_mutex_unlock(&wms_mutex);
+
     pu_log(LL_INFO, "%s is finished", AT_THREAD_NAME);
     pthread_exit(NULL);
 }
@@ -139,4 +155,10 @@ void at_stop_proxy_read() {
     at_set_stop_proxy_rw_children();
 }
 
-
+int at_get_sf_write_sock() {
+    int ret;
+    pthread_mutex_lock(&wms_mutex);
+    ret = write_mon_socket;
+    pthread_mutex_unlock(&wms_mutex);
+    return ret;
+}
