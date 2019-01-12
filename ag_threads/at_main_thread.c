@@ -66,8 +66,6 @@ extern void sht_add(uint32_t ctx);
 static pid_t event_monitor_pid = -1;
 lib_timer_clock_t em_clock = {0};           /* timer for event monitor msgs receiving */
 
-
-static pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
 static pu_queue_event_t events;     /* main thread events set */
 static pu_queue_t* from_poxy;       /* proxy_read -> main_thread */
 static pu_queue_t* to_proxy;        /* main_thread->proxy */
@@ -90,44 +88,44 @@ typedef enum {
     MT_PROTO_STREAMING  /* from streamer */
 } protocol_type_t;
 static void send_wd() {
-    IP_CTX_(2000);
+    IP_CTX_(1000);
     char buf[LIB_HTTP_MAX_MSG_SIZE];
 
     pr_make_wd_alert4WUD(buf, sizeof(buf), ag_getAgentName(), ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf)+1);
-    IP_CTX_(2001);
+    IP_CTX_(1001);
 }
 static void send_reboot() {
-    IP_CTX_(3000);
+    IP_CTX_(2000);
     char buf[LIB_HTTP_MAX_MSG_SIZE] = {0};
 
     pu_log(LL_INFO, "%s: Cam Agent requests for reboot", __FUNCTION__);
     pr_make_reboot_command(buf, sizeof(buf), ag_getProxyID());
     pu_queue_push(to_wud, buf, strlen(buf) + 1);
-    IP_CTX_(3001);
+    IP_CTX_(2001);
 }
 static void send_ACK_to_Proxy(int command_number) {
-    IP_CTX_(4000);
+    IP_CTX_(3000);
     char buf[128];
     ao_cmd_cloud_msg(ag_getProxyID(), NULL, ao_cmd_cloud_responses(command_number, 0), NULL, buf, sizeof(buf));
     pu_queue_push(to_proxy, buf, strlen(buf) + 1);
-    IP_CTX_(4001);
+    IP_CTX_(3001);
 }
 /*
  * To WS
  */
 static int send_to_ws(const char* msg) {
-    IP_CTX_(8000);
+    IP_CTX_(4000);
     if(!at_ws_send(msg)) {
         pu_log(LL_ERROR, "%s: Error sending  %s to WS. Restart WS required", __FUNCTION__, msg);
-        IP_CTX_(8002);
         return 0;
     }
-    IP_CTX_(8003);
+    IP_CTX_(4001);
     return 1;
 }
 /* To EM (SF) */
 static int send_to_sf(const char* msg) {
+    IP_CTX_(5000);
     int sock = at_get_sf_write_sock();
     if(sock < 0) {
         pu_log(LL_ERROR, "%s: invalid socket to write to SF!", __FUNCTION__);
@@ -137,6 +135,7 @@ static int send_to_sf(const char* msg) {
     int repeats = 5;
     while(ret = lib_tcp_write(sock, msg, strlen(msg)+1, 1), !ret&&(repeats--));
     if (ret < 0) return 0;
+    IP_CTX_(5001);
     return 1;
 }
 
@@ -144,7 +143,7 @@ static int send_to_sf(const char* msg) {
  * To Proxy & WS
  */
 static void send_startup_reports() {
-    IP_CTX_(1000);
+    IP_CTX_(6000);
     pu_log(LL_DEBUG, "%s: Startup report preparing", __FUNCTION__);
     cJSON* report = ag_db_get_startup_report();
     if(report) {
@@ -152,7 +151,6 @@ static void send_startup_reports() {
         const char* cloud_msg = ao_cmd_cloud_msg(ag_getProxyID(), NULL, NULL, ao_cmd_cloud_measures(report, ag_getProxyID()), buf, sizeof(buf));
         if(!cloud_msg) {
             pu_log(LL_ERROR, "%s: message to cloud exceeds max size %d. Ignored", __FUNCTION__, LIB_HTTP_MAX_MSG_SIZE);
-            IP_CTX_(1001);
             cJSON_Delete(report);
             return;
         }
@@ -166,20 +164,20 @@ static void send_startup_reports() {
     else {
         pu_log(LL_ERROR, "%s: Error startup report creation. Nothing was sent.", __FUNCTION__);
     }
-    IP_CTX_(1002);
+    IP_CTX_(6001);
 }
 
 static int send_active_viewers_reqiest(){
-    IP_CTX_(10000);
+    IP_CTX_(7000);
     char sess[128] = {0};
     char buf[256] = {0};
-    IP_CTX_(10001);
+    IP_CTX_(7001);
     return send_to_ws(
             ao_cmd_ws_active_viewers_request(ac_get_session_id(sess, sizeof(sess)-1), buf, sizeof(buf)-1)
     );
 }
 static int send_stream_error() {
-    IP_CTX_(11000);
+    IP_CTX_(8000);
     char buf[512] = {0};
     char err[128] = {0};
     char sess[128] = {0};
@@ -190,29 +188,32 @@ static int send_stream_error() {
                                              buf, sizeof(buf)-1)
     );
     ac_clear_stream_error();
-    IP_CTX_(11001);
+    IP_CTX_(8001);
     return ret;
 }
 static void stop_ws() {
-    IP_CTX_(27000);
+    IP_CTX_(9000);
     ac_stop_video();
     ac_disconnect_video();
     ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);
-    IP_CTX_(27001);
+    IP_CTX_(9001);
 }
 /* EM */
 static void free_cmd_string(char** cmd_string) {
+    IP_CTX_(10000);
     if(!cmd_string) return;
 
     int i;
     for(i = 0; cmd_string[i] != NULL; i++) free(cmd_string[i]);
 
     free(cmd_string);
+    IP_CTX_(10001);
 }
 /*
  * NB! return should be freed!
  */
 static char** make_cmd_string() {
+    IP_CTX_(11000);
     char** ret = calloc(11, sizeof(char*));
     if(!ret) goto on_error;
 
@@ -231,9 +232,11 @@ static char** make_cmd_string() {
 on_error:
     pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
     free_cmd_string(ret);
+    IP_CTX_(11001);
     return NULL;
 }
 static pid_t start_events_monitor() {
+    IP_CTX_(12000);
     char** cmd_string = make_cmd_string();
     if(!cmd_string) return -1;
 
@@ -257,19 +260,21 @@ static pid_t start_events_monitor() {
         execv(cmd_string[0], cmd_string);  /* launcher exits and disapears... */
         pu_log(LL_ERROR, "%s: Error execv run: %d - %s", __FUNCTION__, errno, strerror(errno));
     }
-
+    IP_CTX_(12001);
     return pid;
 }
 static pid_t stop_events_monitor(pid_t pid_id) {
+    IP_CTX_(13000);
     kill(event_monitor_pid, SIGTERM);
     sleep(2);
     kill(event_monitor_pid, SIGKILL);          //In case the process didn't listen SIGTERM carefully...
     waitpid(event_monitor_pid, 0, 0);
     pu_log(LL_INFO, "%s: Ok", __FUNCTION__);
+    IP_CTX_(13001);
     return -1;
 }
 static void restart_events_monitor() {
-    IP_CTX_(22000);
+    IP_CTX_(14000);
     pu_log(LL_INFO, "%s: requested", __FUNCTION__);
     if(event_monitor_pid > 0) event_monitor_pid = stop_events_monitor(event_monitor_pid);
     if(event_monitor_pid = start_events_monitor(), start_events_monitor < 0) {
@@ -279,7 +284,7 @@ static void restart_events_monitor() {
     pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
 
     lib_timer_init(&em_clock, DEFAULT_EM_TO);
-    IP_CTX_(22002);
+    IP_CTX_(14001);
 }
 /*
  * Agent actions: agent->WS->streaming
@@ -287,42 +292,35 @@ static void restart_events_monitor() {
  * cam parameters change + change report 2 WS
  */
 static void make_snapshot() {
-    IP_CTX_(16000);
+    IP_CTX_(15000);
     if (ag_db_get_int_property(AG_DB_STATE_SNAPSHOT) < 1) return;
 
     char name[30]={0};
     char path[256]={0};
     char buf[512]={0};
-    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     ac_make_name_from_date(DEFAULLT_SNAP_FILE_PREFIX, time(NULL), DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, name, sizeof(name)-1);
-    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
     pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
     if (!ac_cam_make_snapshot(path)) {
         pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
-        IP_CTX_(16001);
         return;
     }
-    IP_CTX_(16002);
     ao_make_got_files(path, buf, sizeof(buf));
-    IP_CTX_(16003);
     if(send_to_sf(buf)) {
-        IP_CTX_(16004);
         pu_log(LL_DEBUG, "%s: files %s sent to SF_thread", __FUNCTION__, buf);
     }
     else {
         restart_events_monitor();
     }
-    IP_CTX_(16005);
     ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
-    IP_CTX_(16006);
+    IP_CTX_(15001);
 }
 /* TODO! Sgift these to IMdB */
 static time_t capture_start=0;
 static time_t capture_stop=0;
 static void capture_video() {
-    IP_CTX_(16100);
+    IP_CTX_(16000);
     if(ag_db_get_int_property(AG_DB_STATE_CAPTURE_VIDEO) > 0) { /* Process capturing */
         if(!capture_start) {
             capture_start = time(NULL);
@@ -330,7 +328,6 @@ static void capture_video() {
                 pu_log(LL_ERROR, "%s: Error video capture", __FUNCTION__);
                 ag_db_set_int_property(AG_DB_STATE_CAPTURE_VIDEO, 0);
                 capture_start = 0;
-                IP_CTX_(16101);
                 return;
             }
             capture_stop = capture_start + DEFAULT_CAPTURE_VIDEO_LEN;
@@ -343,65 +340,47 @@ static void capture_video() {
             if(ag_db_get_int_property(AG_DB_STATE_RECORDING)) ag_db_set_int_property(AG_DB_STATE_RECORDING, 0);
         }
     }
-    IP_CTX_(16102);
+    IP_CTX_(16001);
 }
 static void run_agent_actions() {
-    IP_CTX_(12000);
+    IP_CTX_(17000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_AGENT_ON);
-    IP_CTX_(12001);
     switch(variant) {
         case AG_DB_BIN_NO_CHANGE:   /* nothing to do */
         case AG_DB_BIN_OFF_OFF:     /* nothing to do */
             break;
         case AG_DB_BIN_ON_OFF:
-            IP_CTX_(12002);
             event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
-            IP_CTX_(12003);
             pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
-            IP_CTX_(12004);
             ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);   /* Stop WS if it is running */
             break;
         case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
             event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
         case AG_DB_BIN_OFF_ON:      /* Was disconneced, now connected */
-            IP_CTX_(12005);
             event_monitor_pid = start_events_monitor();
             if(event_monitor_pid < 0) {
-                IP_CTX_(12006);
                 pu_log(LL_ERROR, "%s: Creating %s failed: %s. Reboot.", __FUNCTION__, "FILES_SENDER", strerror(errno));
-                IP_CTX_(12007);
                 send_reboot();
-                IP_CTX_(12008);
             }
             else {
-                IP_CTX_(12009);
                 pu_log(LL_INFO, "%s: %s started", __FUNCTION__, "FILES_SENDER");
-                IP_CTX_(12010);
             }
             ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);   /* Kick WD for (re)connection */
             break;
         default:
-            IP_CTX_(12014);
             pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
-            IP_CTX_(12015);
             break;
     }
-    IP_CTX_(12016);
     if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
-        IP_CTX_(12017);
         if (ag_db_get_int_property(AG_DB_CMD_SEND_WD_AGENT)) {  /* PING processing */
-            IP_CTX_(12018);
             send_wd();
-            IP_CTX_(12019);
             ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 0);
-            IP_CTX_(12020);
         }
-        IP_CTX_(12021);
     }
-    IP_CTX_(12025);
+    IP_CTX_(17001);
 }
 static void run_ws_actions() {
-    IP_CTX_(13000);
+    IP_CTX_(18000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_WS_ON);
     switch(variant) {
         case AG_DB_BIN_NO_CHANGE:
@@ -461,10 +440,10 @@ static void run_ws_actions() {
     else {  /* And actions if WS disconnected */
         ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);   /* Ask for streaming disconnect */
     }
-    IP_CTX_(13001);
+    IP_CTX_(18001);
 }
 static void switch_streaming_on() {
-    IP_CTX_(28000);
+    IP_CTX_(19000);
     if (!ac_start_video(ag_db_get_int_property(AG_DB_STATE_VIDEO), ag_db_get_int_property(AG_DB_STATE_AUDIO))) {
         pu_log(LL_ERROR, "%s: Error RW start. RW inactive.", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
@@ -473,11 +452,11 @@ static void switch_streaming_on() {
         pu_log(LL_DEBUG, "%s: Start streaming", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_RW_ON, 1);
     }
-    IP_CTX_(28001);
+    IP_CTX_(19001);
 }
 /* on/off audio/video */
 static void switch_control_streams() {
-    IP_CTX_(29000);
+    IP_CTX_(20000);
     ag_db_bin_state_t video_state = ag_db_bin_anal(AG_DB_STATE_VIDEO);
     ag_db_bin_state_t audio_state = ag_db_bin_anal(AG_DB_STATE_AUDIO);
 
@@ -487,10 +466,10 @@ static void switch_control_streams() {
         ac_stop_video();
         switch_streaming_on();
     }
-    IP_CTX_(29002);
+    IP_CTX_(20001);
 }
 static void run_streaming_actions() {
-    IP_CTX_(14000);
+    IP_CTX_(21000);
     ag_db_bin_state_t variant = ag_db_bin_anal(AG_DB_STATE_RW_ON);
     switch (variant) {
         case AG_DB_BIN_NO_CHANGE:    /* no changes */
@@ -533,7 +512,7 @@ static void run_streaming_actions() {
                 break;
         }
     }
-    IP_CTX_(14001);
+    IP_CTX_(21001);
 }
 static void run_cam_actions() {
 /* Switch On/Off MD */
@@ -541,16 +520,14 @@ static void run_cam_actions() {
 /* Change Audio sensitivity */
 /* Change Video sensitivity */
 /* Make snapshit */
-    IP_CTX_(15000);
-    pu_log(LL_DEBUG, "%s:before ag_db_update_changed_cam_parameters()");
+    IP_CTX_(22000);
     ag_db_update_changed_cam_parameters();
-    pu_log(LL_DEBUG, "%s:after ag_db_update_changed_cam_parameters()");
     make_snapshot();
     capture_video();
-    IP_CTX_(15001);
+    IP_CTX_(22001);
 }
 static void send_changes_reports() {
-    IP_CTX_(30000);
+    IP_CTX_(23000);
 /* Make changes report */
     char buf[LIB_HTTP_MAX_MSG_SIZE];
     cJSON* changes_report = ag_db_get_changes_report();
@@ -566,11 +543,11 @@ static void send_changes_reports() {
         }
     }
     if(changes_report) cJSON_Delete(changes_report);
-    IP_CTX_(30001);
+    IP_CTX_(23001);
 }
 
 static void run_actions() {
-    IP_CTX_(17000);
+    IP_CTX_(24000);
     run_agent_actions();        /* Agent connet/reconnect */
     run_ws_actions();           /* WS connect/reconnect */
     run_streaming_actions();    /* start/stop streaming */
@@ -578,30 +555,25 @@ static void run_actions() {
     send_changes_reports();     /* Send changes report to the cloud and to WS */
     ag_db_save_persistent();    /* Save persistent data on disk */
     ag_clear_flags();           /* clear change flags to be prepared to the next cycle */
-    IP_CTX_(17001);
+    IP_CTX_(24001);
 }
 
 static protocol_type_t get_protocol_number(pu_queue_event_t ev, msg_obj_t* obj) {
-    IP_CTX_(18000);
+    IP_CTX_(25000);
     if(!obj) return MT_PROTO_UNDEF;
-    IP_CTX_(18001);
     if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return MT_PROTO_OWN;
-    IP_CTX_(18002);
     if(cJSON_GetObjectItem(obj, "commands") != NULL) return MT_PROTO_CLOUD;
-    IP_CTX_(18003);
     if(ev == AQ_FromWS) return MT_PROTO_WS;
-    IP_CTX_(18004);
     if(ev == AQ_FromRW) return MT_PROTO_STREAMING;
-    IP_CTX_(18005);
     if(ev == AQ_FromCam) return MT_PROTO_EM;
-    IP_CTX_(18006);
+    IP_CTX_(25001);
     return MT_PROTO_UNDEF;
 }
 /*
  * TODO Change to common ag_db staff
  */
 static void process_own_proxy_message(msg_obj_t* own_msg) {
-    IP_CTX_(19000);
+    IP_CTX_(26000);
     t_ao_msg data;
 
     ao_proxy_decode(own_msg, &data);
@@ -611,20 +583,20 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
 
             if(data.in_connection_state.is_online) {
                 if (strcmp(ag_getProxyID(), data.in_connection_state.proxy_device_id) != 0) {
-                    pu_log(LL_INFO, "%s:Proxy sent new ProxyID. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                           ag_getProxyID(), data.in_connection_state.proxy_device_id);
+                    pu_log(LL_INFO, "%s:Proxy sent new ProxyID. Old one = %s, New one = %s.",
+                            AT_THREAD_NAME, ag_getProxyID(), data.in_connection_state.proxy_device_id);
                     ag_saveProxyID(data.in_connection_state.proxy_device_id);
                     info_changed = 1;
                 }
                 if (strcmp(ag_getProxyAuthToken(), data.in_connection_state.proxy_auth) != 0) {
-                    pu_log(LL_INFO, "%s:Proxy sent new Auth token. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                           ag_getProxyAuthToken(), data.in_connection_state.proxy_auth);
+                    pu_log(LL_INFO, "%s:Proxy sent new Auth token. Old one = %s, New one = %s.",
+                            AT_THREAD_NAME, ag_getProxyAuthToken(), data.in_connection_state.proxy_auth);
                     ag_saveProxyAuthToken(data.in_connection_state.proxy_auth);
                     info_changed = 1;
                 }
                 if (strcmp(ag_getMainURL(), data.in_connection_state.main_url) != 0) {
-                    pu_log(LL_INFO, "%s:Proxy sent new Main URL. Old one = %s, New one = %s.", AT_THREAD_NAME,
-                           ag_getMainURL(), data.in_connection_state.main_url);
+                    pu_log(LL_INFO, "%s:Proxy sent new Main URL. Old one = %s, New one = %s.",
+                            AT_THREAD_NAME, ag_getMainURL(), data.in_connection_state.main_url);
                     ag_saveMainURL(data.in_connection_state.main_url);
                     info_changed = 1;
                 }
@@ -635,10 +607,10 @@ static void process_own_proxy_message(msg_obj_t* own_msg) {
         default:
             pu_log(LL_INFO, "%s: Message type = %d. Message ignored", AT_THREAD_NAME, data.command_type);
     }
-    IP_CTX_(19001);
+    IP_CTX_(26001);
 }
 static void process_cloud_message(msg_obj_t* obj_msg) {
-    IP_CTX_(20007);
+    IP_CTX_(27000);
     int is_ack = ao_proxy_ack_required(obj_msg);
     msg_obj_t* commands = pr_get_cmd_array(obj_msg);
     size_t i;
@@ -654,10 +626,10 @@ static void process_cloud_message(msg_obj_t* obj_msg) {
             ag_db_set_property(param_name, param_value);
         }
     }
-    IP_CTX_(20008);
+    IP_CTX_(27001);
 }
 static void process_ws_message(msg_obj_t* obj_msg) {
-    IP_CTX_(20021);
+    IP_CTX_(27000);
     msg_obj_t* result_code = cJSON_GetObjectItem(obj_msg, "resultCode");
     if(result_code) {
         if(result_code->valueint == AO_WS_PING_RC) {
@@ -709,10 +681,10 @@ static void process_ws_message(msg_obj_t* obj_msg) {
     if(viewers_count) {
         ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, viewers_count->valueint);
     }
-    IP_CTX_(20022);
+    IP_CTX_(27001);
 }
 static void process_em_message(msg_obj_t* obj_msg) {
-    IP_CTX_(23000);
+    IP_CTX_(28000);
     t_ao_cam_alert data = ao_cam_decode_alert(obj_msg);
     pu_log(LL_DEBUG, "%s: Camera alert %d came", __FUNCTION__, data.cam_event);
 
@@ -743,7 +715,7 @@ static void process_em_message(msg_obj_t* obj_msg) {
             char* txt = cJSON_PrintUnformatted(obj_msg);
             if(txt) {
                 if(send_to_sf(txt))
-                    pu_log(LL_DEBUG, "%s: %s files %s sent to SF_thread", __FUNCTION__, txt);
+                    pu_log(LL_DEBUG, "%s: files %s sent to SF_thread", __FUNCTION__, txt);
                 else {
                     restart_events_monitor();
                 }
@@ -775,10 +747,10 @@ static void process_em_message(msg_obj_t* obj_msg) {
             pu_log(LL_ERROR, "%s: alert %s was not sent to the Cloud (Proxy)", __FUNCTION__, buf);
         }
     }
-    IP_CTX_(23001);
+    IP_CTX_(28001);
 }
 static void process_streaming_message(msg_obj_t* obj_msg) {
-    IP_CTX_(21000);
+    IP_CTX_(29000);
     char error_code[10] = {0};
     char err_message[256] = {0};
     msg_obj_t* rc = cJSON_GetObjectItem(obj_msg, "resultCode");
@@ -795,13 +767,13 @@ static void process_streaming_message(msg_obj_t* obj_msg) {
     ac_set_stream_error(err_message);
 /* Set the Off state for streamer */
     ag_db_set_int_property(AG_DB_STATE_RW_ON, 0);
-    IP_CTX_(21001);
+    IP_CTX_(29001);
 }
 /*
  * Process PROXY(CLOUD) & WS messages: OWN from Proxy or parameter by parameter from CLOUD/WS
  */
 static void process_message(pu_queue_event_t ev, const char* msg) {
-    IP_CTX_(20000);
+    IP_CTX_(30000);
     msg_obj_t *obj_msg = cJSON_Parse(msg);
     if (obj_msg == NULL) {
         pu_log(LL_ERROR, "%s: Error JSON parser on %s. Message ignored.", __FUNCTION__, msg);
@@ -829,11 +801,11 @@ static void process_message(pu_queue_event_t ev, const char* msg) {
             break;
     }
     cJSON_Delete(obj_msg);
-    IP_CTX_(20001);
+    IP_CTX_(300001);
 }
 
 static int main_thread_startup() {
-    IP_CTX_(24000);
+    IP_CTX_(31000);
     aq_init_queues();
 
     from_poxy = aq_get_gueue(AQ_FromProxyQueue);        /* proxy_read -> main_thread */
@@ -851,36 +823,32 @@ static int main_thread_startup() {
 /* Camera initiation & settings upload */
     if(!ac_cam_init()) {
         pu_log(LL_ERROR, "%s, Error Camera initiation", __FUNCTION__);
-        IP_CTX_(24001);
         return 0;
     }
     pu_log(LL_INFO, "%s: Camera initiaied", __FUNCTION__);
     if(!ag_db_load_cam_properties()) {
         pu_log(LL_ERROR, "%s: Error load camera properties", __FUNCTION__);
-        IP_CTX_(24002);
         return 0;
     }
     pu_log(LL_INFO, "%s: Settings are loaded, Camera initiated", __FUNCTION__);
 /* Threads start */
     if(!at_start_proxy_rw()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "PROXY_RW", strerror(errno));
-        IP_CTX_(24003);
         return 0;
     }
     pu_log(LL_INFO, "%s: started", "PROXY_RW");
 
     if(!at_start_wud_write()) {
         pu_log(LL_ERROR, "%s: Creating %s failed: %s", __FUNCTION__, "WUD_WRITE", strerror(errno));
-        IP_CTX_(24004);
         return 0;
     }
     pu_log(LL_INFO, "%s: started", "WUD_WRITE");
 
-    IP_CTX_(24007);
+    IP_CTX_(31001);
     return 1;
 }
 static void main_thread_shutdown() {
-    IP_CTX_(25000);
+    IP_CTX_(32000);
     ac_stop_video();
     ac_disconnect_video();
 
@@ -895,12 +863,13 @@ static void main_thread_shutdown() {
     ac_cam_deinit();
 
     aq_erase_queues();
+    IP_CTX_(32001);
 }
 /****************************************************************************************
     Global function definition
 */
 void at_main_thread() {
-    IP_CTX_(26000);
+    IP_CTX_(33000);
     main_finish = 0;
 
     if(!main_thread_startup()) {
@@ -923,53 +892,44 @@ void at_main_thread() {
     pu_log(LL_DEBUG, "%s: Main thread starts", __FUNCTION__);
 
     while(!main_finish) {
-        IP_CTX_(26001);
+        IP_CTX_(33001);
+        pu_queue_msg_t mt_msg[LIB_HTTP_MAX_MSG_SIZE];    /* The only main thread's buffer! */
         pu_queue_event_t ev;
         pu_queue_t** q=NULL;
         switch (ev=pu_wait_for_queues(events, events_timeout)) {
             case AQ_FromProxyQueue:
-                IP_CTX_(26002);
-                q = &from_poxy;
+                 q = &from_poxy;
                 break;
             case AQ_FromWS:
-                IP_CTX_(26003);
-                q = &from_ws;
+                 q = &from_ws;
                 break;
             case AQ_FromRW:
-                IP_CTX_(26004);
-                q = &from_stream_rw;
+                 q = &from_stream_rw;
                 break;
             case AQ_FromCam:
-                IP_CTX_(26005);
-                q = &from_cam;
+                 q = &from_cam;
                 break;
             case AQ_Timeout:
-                IP_CTX_(26006);
-                q = NULL;
+                 q = NULL;
                 break;
             case AQ_STOP:
-                IP_CTX_(26007);
-                q = NULL;
+                 q = NULL;
                 main_finish = 1;
                 pu_log(LL_INFO, "%s received STOP event. Terminated", AT_THREAD_NAME);
                 break;
             default:
-                IP_CTX_(26008);
                 q = NULL;
                 pu_log(LL_ERROR, "%s: Undefined event %d on wait. Message = %s", AT_THREAD_NAME, ev, mt_msg);
                 break;
         }
         if(q) {
-            IP_CTX_(26009);
             size_t len = sizeof(mt_msg);    /* (re)set max message lenght */
             while(pu_queue_pop(*q, mt_msg, &len)) {
-                IP_CTX_(26010);
                 pu_log(LL_DEBUG, "%s: got message from the %s: %s", AT_THREAD_NAME, aq_event_2_char(ev), mt_msg);
                 process_message(ev, mt_msg);
                 len = sizeof(mt_msg);
             }
-            IP_CTX_(26011);
-        }
+         }
         /* Place for own periodic actions */
         /*1. Wathchdog */
         if(lib_timer_alarm(wd_clock)) {
@@ -989,8 +949,10 @@ void at_main_thread() {
 
 /* Interpret changes made in properties */
         run_actions();
+        IP_CTX_(33002);
     }
     main_thread_shutdown();
     pu_log(LL_INFO, "%s: STOP. Terminated", AT_THREAD_NAME);
+    IP_CTX_(33003);
     pthread_exit(NULL);
 }

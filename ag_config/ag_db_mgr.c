@@ -109,7 +109,7 @@ static int MS_cam_2_cloud(int cam_value) {
 }
 
 typedef struct {
-/*01*/  char* name;             /*Cloud or own name */
+/*01*/  const char* name;             /*Cloud or own name */
 /*02*/  int value;              /* Value */
 /*03*/  int change_flag;        /* Value was updated. Maybe to the same value. */
 
@@ -207,7 +207,7 @@ static char* get_persistent_data(const char* file_name) {
         goto on_error;
     }
     ret = JSON_string;
-    on_error:
+on_error:
     if(fd) fclose(fd);
     return ret;
 }
@@ -269,24 +269,25 @@ static void replace_param_value(int idx, const char* value) {
 static int create_imdb() {
     IMDB = NULL;
     IMDB = calloc(sizeof(ag_db_record_t), NELEMS(SCHEME));
+    if(!IMDB) {
+        pu_log(LL_ERROR, "%s: Memory allocation error", __FUNCTION__);
+        return 0;
+    }
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
-/*01*/  IMDB[i].name = strdup(SCHEME[i].name); ANAL(IMDB[i].name);
+/*01*/  IMDB[i].name = SCHEME[i].name;
 /*02*/  IMDB[i].value = SCHEME[i].default_value;
-/*03*/  /*change_flag = 0 */
+/*03*/  IMDB[i].change_flag = 0;
 /*04*/  IMDB[i].in_startup_report = SCHEME[i].in_startup_report;
-/*05*/  /* changed = 0 */
+/*05*/  IMDB[i].changed = 0;
 /*06*/  IMDB[i].in_changes_report = SCHEME[i].in_changes_report;
 /*07*/  IMDB[i].persistent = SCHEME[i].persistent;
-/*08*/  /* default_value not needed and not used */
+/*08*/  IMDB[i].default_value = SCHEME[i].default_value;
 /*09*/  IMDB[i].cloud_cam_converter = SCHEME[i].cloud_cam_converter;
 /*10*/  IMDB[i].cam_cloud_converter = SCHEME[i].cam_cloud_converter;
 /*11*/  IMDB[i].cam_method = SCHEME[i].cam_method;
     }
     return 1;
-    on_error:
-    ag_db_unload_cam_properties();
-    return 0;
 }
 /*
  * Persistent data format: {"params_array":[{"name":"<name>", "value":"<value>"}, ...]}
@@ -378,9 +379,8 @@ static int sync_camera_param(int idx) {
 /* Convert Cam's one to the coud (IMDB) one */
     int new_cloud_value =(IMDB[idx].cam_cloud_converter)?IMDB[idx].cam_cloud_converter(cam_value):cam_value;
 /* Set it back to IMDB */
-    if(new_cloud_value != IMDB[idx].value) {            /* To avoid the change_flag raise */
-        replace_int_param_value(idx, new_cloud_value);
-    }
+    replace_int_param_value(idx, new_cloud_value);
+
     return new_cloud_value;
 }
 /*
@@ -391,6 +391,8 @@ static int sync_camera_data() {
     int i;
     for(i = 0; i < NELEMS(SCHEME); i++) {
         sync_camera_param(i);
+        IMDB[i].changed = 0;
+        IMDB[i].change_flag = 0;
     }
     return 1;
 }
@@ -423,11 +425,6 @@ int ag_db_load_cam_properties() {
  * Free CamDB
  */
 void ag_db_unload_cam_properties() {
-    if(!IMDB) return;
-    int i;
-    for(i = 0; i < NELEMS(SCHEME); i++) {
-        FREE(IMDB[i].name);
-    }
     FREE(IMDB);
 };
 /* Save persistent data to disk */
@@ -575,33 +572,20 @@ void ag_clear_flags() {
 ag_db_bin_state_t ag_db_bin_anal(const char* property_name) {
     IP_CTX_(500);
     ag_db_bin_state_t ret = AG_DB_BIN_UNDEF;
-    IP_CTX_(501);
     pthread_mutex_lock(&local_mutex);
-    IP_CTX_(502);
     int i = find_param(property_name);
-    IP_CTX_(503);
     if(i < 0) goto on_exit;
-    IP_CTX_(504);
     int value = IMDB[i].value;
-    IP_CTX_(505);
     int changed = IMDB[i].changed;
-    IP_CTX_(506);
     int change_flag = IMDB[i].change_flag;
-    IP_CTX_(507);
     if(          !changed && !change_flag) {ret = AG_DB_BIN_NO_CHANGE; goto on_exit;}   /* No change */
-    IP_CTX_(508);
     if(!value && !changed &&  change_flag) {ret = AG_DB_BIN_OFF_OFF; goto on_exit;}     /* 0->0 */
-    IP_CTX_(509);
     if( value &&  changed &&  change_flag) {ret = AG_DB_BIN_OFF_ON; goto on_exit;}      /* 0->1 */
-    IP_CTX_(510);
     if(!value &&  changed &&  change_flag) {ret = AG_DB_BIN_ON_OFF; goto on_exit;}      /* 1->0 */
-    IP_CTX_(511);
     if( value && !changed &&  change_flag) {ret = AG_DB_BIN_ON_ON; goto on_exit;}       /* 1->1 */
-    IP_CTX_(512);
 
-    on_exit:
-    IP_CTX_(513);
+on_exit:
     pthread_mutex_unlock(&local_mutex);
-    IP_CTX_(514);
+    IP_CTX_(501);
     return ret;
 }

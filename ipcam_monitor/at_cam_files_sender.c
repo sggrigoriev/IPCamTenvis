@@ -155,7 +155,7 @@ static int type2cloud(char t) {
         case 'S':
             return 3;
         default:
-            pu_log(LL_ERROR, "%s: Unknown media type %c", t);
+            pu_log(LL_ERROR, "%s: Unknown media type %c", __FUNCTION__, t);
             break;
     }
     return 0;
@@ -1208,7 +1208,7 @@ static int msg2type(pu_queue_msg_t* msg, task_t* task) {
         goto on_exit;
     }
     if(strcmp(i->valuestring, ac_cam_event2string(AC_CAM_GOT_FILE)) != 0) {
-        pu_log(LL_ERROR, "%s: wrong alert type %s. %s espected. Message ignored", __FUNCTION__, i->valuestring, ac_cam_event2string(AC_CAM_GOT_FILE));
+        pu_log(LL_ERROR, "%s: wrong alert type %s. %s expected. Message ignored", __FUNCTION__, i->valuestring, ac_cam_event2string(AC_CAM_GOT_FILE));
         goto on_exit;
     }
     if(i=cJSON_GetObjectItem(obj, AC_ALERT_MSG), !i) {

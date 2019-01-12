@@ -23,8 +23,6 @@
 #include <sys/types.h>
 
 #include <DvsConn.h>
-#include <libs/ipcam_inc/DvsConn.h>
-
 #include "event_monitor_module.h"
 
 /* TODO: change this patch to smth reasonable! */

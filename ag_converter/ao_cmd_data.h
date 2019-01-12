@@ -115,8 +115,6 @@ typedef struct {
     int                 timeout;       /* cloud pings period */
 } t_ao_ws_ping;
 
-typedef enum {AO_WHO_UNDEF, AO_WHO_WS, AO_WHO_PROXY} t_ao_who;
-
 typedef enum {
     AC_CAM_EVENT_UNDEF,
     AC_CAM_START_MD, AC_CAM_STOP_MD, AC_CAM_START_SD, AC_CAM_STOP_SD, AC_CAM_START_IO, AC_CAM_STOP_IO,

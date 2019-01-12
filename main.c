@@ -26,7 +26,6 @@
 
 #include <curl/curl.h>  /* for global init/deinit */
 #include <gst/gst.h>    /* for gloal init/deinit */
-#include <zconf.h>
 
 #include "pc_config.h"
 #include "pu_logger.h"

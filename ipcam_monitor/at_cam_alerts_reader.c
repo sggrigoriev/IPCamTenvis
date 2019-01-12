@@ -59,8 +59,6 @@ static int to_agent = -1;                /* transport here */
 static int from_agent = -1;             /* for SF thread */
 static int server_socket = -1;
 
-static lib_timer_clock_t em_restart_to={0};
-
 static lib_timer_clock_t alarm_to_io={0};              /* 'Alarm over' clocks */
 static lib_timer_clock_t alarm_to_md={0};
 static lib_timer_clock_t alarm_to_sd={0};
@@ -172,7 +170,7 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec, char* msg, 
             if(process_file_message(msg, size))
                 return AC_CAM_GOT_FILE;
             else
-                pu_log(LL_INFO, "%s: Wrong message - ignored", __FUNCTION__, msg);
+                pu_log(LL_INFO, "%s: Wrong message %s - ignored", __FUNCTION__, msg);
             break;
         case EMM_CAM_TO:    /* Cam's monitor timeout */
             break;
@@ -233,7 +231,6 @@ static void monitor() {
 
     time_t md_start=0, sd_start=0, io_start=0;
     lib_timer_init(&wd_clock, 60);
-    lib_timer_init(&em_restart_to, 24*3600);
 
     while(1) {
         char buf[256]={0};
@@ -282,11 +279,6 @@ static void monitor() {
             goto on_exit;
         }
         pu_log(LL_DEBUG, "%s: %s was sent to the Agent", AT_THREAD_NAME, out_buf);
-
-        if(lib_timer_alarm(em_restart_to)) {
-            pu_log(LL_INFO, "%s: Time to reboot. Just on case...", AT_THREAD_NAME);
-            goto on_exit;
-        }
     }
     on_exit:
     pu_log(LL_INFO, "%s stops", AT_THREAD_NAME);
@@ -312,6 +304,6 @@ void at_mon_function(const input_params_t* params) {
     at_start_sf(dup(to_agent));
     monitor();
 
-    on_exit:
+on_exit:
     at_mon_stop();
 }

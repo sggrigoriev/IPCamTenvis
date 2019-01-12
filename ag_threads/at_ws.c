@@ -94,7 +94,7 @@ static const char* cut_head(const char* host) {
  * this handler fires on every message
 */
 static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, noPollPtr user_data) {
-    IP_CTX_(500);
+    IP_CTX_(600);
     char buf[1024] = {0};
 
     const char* pld = (const char *) nopoll_msg_get_payload(msg);
@@ -112,15 +112,14 @@ static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, no
     pu_log(LL_DEBUG, "%s: From WS: %s, len = %d", AT_THREAD_NAME, buf, len);
 
     pu_queue_push(from_ws, buf, strlen(buf)+1);
-    IP_CTX_(501);
+    IP_CTX_(601);
 }
 
 static void *ws_thread(void *pvoid) {
-    IP_CTX_(502);
+    IP_CTX_(602);
     pu_log(LL_DEBUG,"%s: start", AT_THREAD_NAME);
     // wait for messages
     while (!stop && nopoll_conn_is_ok(conn)) {
-        IP_CTX_(503);
         char buf[512];
         int ret = nopoll_loop_wait(ctx, 1000);
         switch (ret) {
@@ -141,7 +140,7 @@ static void *ws_thread(void *pvoid) {
                 pu_log(LL_ERROR, "%s: nopoll_loop_wait undrcognized error: %d. Ignored.", AT_THREAD_NAME, ret);
                 break;
         }
-        IP_CTX_(504);
+        IP_CTX_(603);
     }
     pu_log(LL_DEBUG,"%s: exiting\n", AT_THREAD_NAME);
 
@@ -243,7 +242,7 @@ int at_is_ws_run() {
 }
 
 int at_ws_send(const char* msg) {
-    IP_CTX_(505);
+    IP_CTX_(604);
     if(!msg) {
         pu_log(LL_ERROR, "%s: Null pointer passed, send ignored", __FUNCTION__);
         return 0;
@@ -256,7 +255,7 @@ int at_ws_send(const char* msg) {
         pu_log(LL_ERROR, "%s: RC = %d - %s. Unable to send %s to Web Socket.", AT_THREAD_NAME, errno, strerror(errno), msg);
         ret = 0;
     }
-    IP_CTX_(506);
+    IP_CTX_(605);
     return ret;
 }
 

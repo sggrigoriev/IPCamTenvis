@@ -96,7 +96,7 @@ static int get_input_params(int argc, char* argv[], input_params_t* p) {
     mon_params_t i;
 
     if(argc != MON_SIZE) {
-        pu_log(LL_ERROR, "%s: Wrong input parameters number %d. Expected %d: name agent_ip agent_port cam_ip, cam_login cam_password", __FUNCTION__, argc, MON_SIZE);
+        pu_log(LL_ERROR, "%s: Wrong input parameters number %d. Expected %d", __FUNCTION__, argc, MON_SIZE);
         exit(-1);
     }
 
@@ -154,7 +154,7 @@ static int get_input_params(int argc, char* argv[], input_params_t* p) {
                 ag_saveProxyAuthToken(argv[i]);
                 break;
             default:
-                pu_log(LL_ERROR, "%s: Wrong input parameters number %d. Expected %d: name agent_ip agent_port cam_ip cam_login cam_password", __FUNCTION__, argc, MON_SIZE);
+                pu_log(LL_ERROR, "%s: Wrong input parameters number %d. Expected %d", __FUNCTION__, argc, MON_SIZE);
                 exit(-1);
         }
     }

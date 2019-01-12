@@ -18,7 +18,7 @@
 /*
  Created by gsg on 25/02/18.
 */
-
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <errno.h>
@@ -305,7 +305,7 @@ int ac_cam_init() {
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
 
     ret = 1;
-    on_error:
+on_error:
     if(md_uri) free(md_uri);
     if(sd_uri) free(sd_uri);
     if(time_uri) free(time_uri);
@@ -320,41 +320,41 @@ void ac_cam_deinit() {
  * Return 1 if OK
  */
 int ac_cam_make_snapshot(const char* full_path) {
-    pu_log(LL_DEBUG, "%s: on entry", __FUNCTION__);
+    IP_CTX_(300);
+    pu_log(LL_DEBUG, "%s: on enrty", __FUNCTION__);
     int ret = 0;
     CURLcode res;
     FILE* fp=NULL;
     char* uri = NULL;
+    CURL* crl = NULL;
 
-    CURL* crl = open_curl_session();
-    if(!crl) return 0;
+    if(crl = open_curl_session(), !crl) return 0;
 
     if(fp = fopen(full_path, "wb"), !fp) {
         pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
         goto on_error;
     }
+    pu_log(LL_DEBUG, "%s: after fopen()", __FUNCTION__);
     if(uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT, AO_CAM_WRITE), !uri) goto on_error;
+    pu_log(LL_DEBUG, "%s: after ao_make_cam_uri() uri = %s", __FUNCTION__, uri);
 
     if(res = curl_easy_setopt(crl, CURLOPT_URL, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
 
+    pu_log(LL_DEBUG, "%s: before curl_easy_perform()", __FUNCTION__);
+
     if(res = curl_easy_perform(crl), res != CURLE_OK) {
         pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));
         goto on_error;
     }
-    IP_CTX_(300);
     pu_log(LL_INFO, "%s: Got the picture!\n", __FUNCTION__);
     ret = 1;
 on_error:
-    IP_CTX_(301);
     close_curl_session(crl);
-    IP_CTX_(304);
     if(fp)fclose(fp);
-    IP_CTX_(302);
     if(uri) free(uri);
-    IP_CTX_(303);
-    pu_log(LL_DEBUG, "%s: on exit", __FUNCTION__);
+    IP_CTX_(301);
     return ret;
 }
 int ac_cam_make_video() {

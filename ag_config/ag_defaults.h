@@ -42,7 +42,7 @@
 #define DEFAULT_WATCHDOG_TO_SEC 30                  /* Default time for WD sending to WUD */
 
 /* IP Cam settings */
-#define DEFAULT_IPCAM_IP        "127.0.0.1"
+#define DEFAULT_IPCAM_IP        /*"192.168.1.71"*/"127.0.0.1"
 #define DEFAULT_IPCAM_PORT      554
 
 #define AG_VIDEO_RTMP           1
@@ -105,6 +105,6 @@
 
 #define DEFAULT_CAM_MON_PORT    8889
 
-#define IP_CTX_(a) /*pu_log(LL_DEBUG, "%s: %lu", __FUNCTION__, a) */ sht_add(a)
+#define IP_CTX_(a) /* pu_log(LL_DEBUG, "%s: %lu", __FUNCTION__, a) */ sht_add(a)
 
 #endif /* IPCAMTENVIS_AG_DEFAULTS_H  */
