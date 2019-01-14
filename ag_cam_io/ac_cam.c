@@ -122,7 +122,7 @@ static CURL *open_curl_session(){
         pu_log(LL_ERROR, "%s: Error on curl_easy_init call.", __FUNCTION__);
         return NULL;
     }
-    if(res = curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L), res != CURLE_OK) goto on_error;
+    if(res = curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(curl, CURLOPT_USERNAME, ag_getCamLogin()), res != CURLE_OK) goto on_error;

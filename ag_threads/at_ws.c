@@ -107,8 +107,6 @@ static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, no
     memcpy(buf, pld, len);
     buf[len] = '\0';
 
-    nopoll_msg_unref(msg);
-
     pu_log(LL_DEBUG, "%s: From WS: %s, len = %d", AT_THREAD_NAME, buf, len);
 
     pu_queue_push(from_ws, buf, strlen(buf)+1);

@@ -115,17 +115,17 @@ void sht_add(uint32_t ctx) {
     idx = idx_inc(idx);
 }
 static void printStack() {
-    printf("\nTENVIS.%s: Stack output:", __FUNCTION__);
+    pu_log(LL_ERROR, "TENVIS.%s: Stack output:", __FUNCTION__);
     int i = idx;
     int stop = i;
     do {
         i = idx_dec(i);
-        printf("\nTENVIS.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
+        pu_log(LL_ERROR, "TENVIS.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
     } while (i != stop);
 }
 /**/
 void signalHandler( int signum ) {
-    printf("\nTENVIS.%s: Interrupt signal (%d) received. thread_id=%lu\n", __FUNCTION__, signum, pthread_self());
+    pu_log(LL_ERROR, "TENVIS.%s: Interrupt signal (%d) received. thread_id=%lu\n", __FUNCTION__, signum, pthread_self());
     printStack();
     exit(signum);
 }
