@@ -146,6 +146,8 @@ int ac_connect_video() {
     }
     if(!ac_send_stream_initiation()) {
         pu_log(LL_ERROR, "%s: Error streaming initiation, exit.", __FUNCTION__);
+        sleep(1);
+        at_ws_stop();
         return 0;
     }
     return 1;

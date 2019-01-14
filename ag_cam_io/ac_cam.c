@@ -321,7 +321,6 @@ void ac_cam_deinit() {
  */
 int ac_cam_make_snapshot(const char* full_path) {
     IP_CTX_(300);
-    pu_log(LL_DEBUG, "%s: on enrty", __FUNCTION__);
     int ret = 0;
     CURLcode res;
     FILE* fp=NULL;
@@ -334,15 +333,12 @@ int ac_cam_make_snapshot(const char* full_path) {
         pu_log(LL_ERROR, "%s: Error open file: %d - %s\n", __FUNCTION__, errno, strerror(errno));
         goto on_error;
     }
-    pu_log(LL_DEBUG, "%s: after fopen()", __FUNCTION__);
+
     if(uri = ao_make_cam_uri(AO_CAM_CMD_SNAPSHOT, AO_CAM_WRITE), !uri) goto on_error;
-    pu_log(LL_DEBUG, "%s: after ao_make_cam_uri() uri = %s", __FUNCTION__, uri);
 
     if(res = curl_easy_setopt(crl, CURLOPT_URL, uri), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEFUNCTION, NULL), res != CURLE_OK) goto on_error;
     if(res = curl_easy_setopt(crl, CURLOPT_WRITEDATA, fp), res != CURLE_OK) goto on_error;
-
-    pu_log(LL_DEBUG, "%s: before curl_easy_perform()", __FUNCTION__);
 
     if(res = curl_easy_perform(crl), res != CURLE_OK) {
         pu_log(LL_ERROR, "%s: Curl error %s", __FUNCTION__, curl_easy_strerror(res));

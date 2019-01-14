@@ -1,3 +1,8 @@
+VERSION 1.4.0 11-Dec-2018
+=================================================================================================
+1. Motion detection notification changed: cam sends it at the beginning of MD w/o file reference with time of event in seconds
+2. Request for File server contais the event time. The GUI could link the event and the file using this time
+3. Cam's unexpected offlines fixed.
 VERSION 1.3.1 11-Dec-2018
 =================================================================================================
 0. Bugs fixed:

@@ -300,7 +300,7 @@ static void make_snapshot() {
     char buf[512]={0};
     ac_make_name_from_date(DEFAULLT_SNAP_FILE_PREFIX, time(NULL), DEFAULT_SNAP_FILE_POSTFIX, DEFAULT_SNAP_FILE_EXT, name, sizeof(name)-1);
     snprintf(path, sizeof(path)-1, "%s/%s/%s", DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR, name);
-    pu_log(LL_DEBUG, "%s: name = %s, path = %s, buf = %s", __FUNCTION__, name, path, buf);
+
     if (!ac_cam_make_snapshot(path)) {
         pu_log(LL_ERROR, "%s: Error picture creation", __FUNCTION__);
         ag_db_set_int_property(AG_DB_STATE_SNAPSHOT, 0);
@@ -352,7 +352,7 @@ static void run_agent_actions() {
         case AG_DB_BIN_ON_OFF:
             event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
             pu_log(LL_INFO, "%s: Stop %s", __FUNCTION__, "FILES_SENDER");
-            ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);   /* Stop WS if it is running */
+            ag_db_set_int_property(AG_DB_STATE_WS_ON, 0);               /* Stop WS if it is running */
             break;
         case AG_DB_BIN_ON_ON:       /* connection info changed - total reconnect! - same as OFF->ON */
             event_monitor_pid = stop_events_monitor(event_monitor_pid); /* Stop Files Sender - no connection! */
@@ -385,7 +385,7 @@ static void run_ws_actions() {
     switch(variant) {
         case AG_DB_BIN_NO_CHANGE:
             if(ag_db_get_int_property(AG_DB_STATE_WS_ON)) break;     /* If WS on - nothing to care about  */
-        case AG_DB_BIN_OFF_OFF:     /* start if agent online */
+        case AG_DB_BIN_OFF_OFF:                                      /* start if agent online */
             if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
                 pu_log(LL_INFO, "%s: Agent is ON -> Connect required", __FUNCTION__);
                 if (!ac_connect_video()) {
@@ -394,6 +394,7 @@ static void run_ws_actions() {
                 }
                 else {
                     ag_db_set_int_property(AG_DB_STATE_VIEWERS_COUNT, 1);   /* To warm-up streaming unconditionally*/
+                    ag_db_set_int_property(AG_DB_STATE_WS_ON, 1);
                     send_startup_reports();
                 }
             }
@@ -742,6 +743,7 @@ static void process_em_message(msg_obj_t* obj_msg) {
         const char* msg = ao_cmd_cloud_msg(ag_getProxyAuthToken(), ao_cmd_cloud_alerts(ag_getProxyAuthToken(), data.cam_event, data.start_date, NULL), NULL, NULL, buf, sizeof(buf));
         if(msg) {
             pu_queue_push(to_proxy, msg, strlen(msg)+1);
+            pu_log(LL_DEBUG, "%s: alert %s was sent to the Cloud (Proxy)", __FUNCTION__, buf);
         }
         else {
             pu_log(LL_ERROR, "%s: alert %s was not sent to the Cloud (Proxy)", __FUNCTION__, buf);

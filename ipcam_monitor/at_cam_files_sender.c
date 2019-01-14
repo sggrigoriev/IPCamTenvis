@@ -572,7 +572,7 @@ static int sendSF_update(fd_t* in_par) {
     if(!is_cloud_answerOK(ptr)) goto on_exit;
 
     ret = 1;
-    on_exit:
+on_exit:
     if(ptr) free(ptr);
     if(hs) curl_slist_free_all(hs);
     return ret;
