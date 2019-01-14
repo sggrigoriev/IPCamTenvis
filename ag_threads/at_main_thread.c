@@ -740,7 +740,7 @@ static void process_em_message(msg_obj_t* obj_msg) {
     }
     if(send_alert) {
         char buf[512]={0};
-        const char* msg = ao_cmd_cloud_msg(ag_getProxyAuthToken(), ao_cmd_cloud_alerts(ag_getProxyAuthToken(), data.cam_event, data.start_date, NULL), NULL, NULL, buf, sizeof(buf));
+        const char* msg = ao_cmd_cloud_msg(ag_getProxyID(), ao_cmd_cloud_alerts(ag_getProxyID(), data.cam_event, data.start_date, NULL), NULL, NULL, buf, sizeof(buf));
         if(msg) {
             pu_queue_push(to_proxy, msg, strlen(msg)+1);
             pu_log(LL_DEBUG, "%s: alert %s was sent to the Cloud (Proxy)", __FUNCTION__, buf);
