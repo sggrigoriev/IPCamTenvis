@@ -148,15 +148,15 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec, char* msg, 
             }
             break;
         case EMM_TIMEOUT:   /* This is our own timeout - time to check alarm clocks */
-            if(lib_timer_alarm(alarm_to_md) && (is_md)) {
+            if((is_md) && lib_timer_alarm(alarm_to_md)) {
                 is_md = 0;
                 return AC_CAM_STOP_MD;
             }
-            if(lib_timer_alarm(alarm_to_sd) && (is_sd)) {
+            if((is_sd) && lib_timer_alarm(alarm_to_sd)) {
                 is_sd = 0;
                 return AC_CAM_STOP_SD;
             }
-            if(lib_timer_alarm(alarm_to_io) && (is_io)) {
+            if((is_io) && lib_timer_alarm(alarm_to_io)) {
                 is_io = 0;
                 return AC_CAM_STOP_IO;
             }
