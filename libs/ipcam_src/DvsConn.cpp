@@ -2556,7 +2556,7 @@ BOOL SnapshotCallback(BYTE *pBytes, int len, void *arg)
 #ifdef WIN32
 		ssarg->hf = CreateFile(ssarg->fn, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 #elif defined(__LINUX__)
-		ssarg->hf = open(ssarg->fn, O_CREAT|O_TRUNC|O_WRONLY);
+		ssarg->hf = open(ssarg->fn, O_CREAT|O_TRUNC|O_WRONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 #else
 #error "Platform specified feature must be implemented!"
 #endif
@@ -2644,7 +2644,7 @@ int _DVSCONN::CTPDownloadFile(const char *remotefile, const char *localfile, DOW
 #ifdef WIN32
 			       	hf = CreateFile(localfile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 #elif defined(__LINUX__)
-				hf = open(localfile, O_WRONLY|O_CREAT);
+				hf = open(localfile, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 #else
 #error "Platform specified feature needed!"
 #endif

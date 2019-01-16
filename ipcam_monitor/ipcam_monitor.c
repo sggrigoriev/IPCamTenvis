@@ -53,12 +53,12 @@ void sht_add(uint32_t ctx) {
     idx = idx_inc(idx);
 }
 static void printStack() {
-    printf("\nTENVIS.%s: Stack output:", __FUNCTION__);
+    pu_log(LL_ERROR, "MONITOR.%s: Stack output:", __FUNCTION__);
     int i = idx;
     int stop = i;
     do {
         i = idx_dec(i);
-        printf("\nTENVIS.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
+        pu_log(LL_ERROR, "MONITOR.%s ctx[%d] = %d", __FUNCTION__, i, stck[i]);
     } while (i != stop);
 }
 /**/
@@ -74,24 +74,29 @@ void totalStopp(int signum) {
 }
 
 static char* get_string(const char* buf) {
+    IP_CTX_(100);
     if(!buf) return NULL;
     char* ret = strdup(buf);
     if(!ret) {
         pu_log(LL_ERROR, "%s: Not enough memory", __FUNCTION__);
     }
+    IP_CTX_(101);
     return ret;
 }
 static int get_number(const char* buf) {
+    IP_CTX_(102);
     int ret, amt;
     if(!buf) return -1;
     if(amt = sscanf(buf, "%d", &ret), amt!= 1) {
         pu_log(LL_ERROR, "%s: Wrong format of %s. Decimal number expected", __FUNCTION__, buf);
         return -1;
     }
+    IP_CTX_(103);
     return ret;
 }
 
 static int get_input_params(int argc, char* argv[], input_params_t* p) {
+    IP_CTX_(104);
     int ret = 0;
     mon_params_t i;
 
@@ -166,6 +171,7 @@ static int get_input_params(int argc, char* argv[], input_params_t* p) {
             );
     ret = 1;
 on_exit:
+    IP_CTX_(105);
     return ret;
 }
 

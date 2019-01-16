@@ -65,7 +65,7 @@ const char* ao_make_MDSD(t_ac_cam_events event, time_t start_date, time_t end_da
     else
         snprintf(buf, size-1, alert_stop, ac_cam_event2string(event), start_date, end_date);
 
-    buf[size] = '\0';
+    buf[size-1] = '\0';
     return buf;
 
 }

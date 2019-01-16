@@ -48,13 +48,10 @@
 
 #define AT_THREAD_NAME "CAM_ALERTS_READER"
 
-extern volatile uint32_t contextId;
-
+extern int sht_add(uint32_t ctx);
 /******************************************************************
  * Local data
  */
-static char out_buf[512]; /* buffer for sending data */
-
 static int to_agent = -1;                /* transport here */
 static int from_agent = -1;             /* for SF thread */
 static int server_socket = -1;
@@ -70,6 +67,7 @@ static int is_md=0, is_sd=0, is_io=0;
  * Return write socket to agent or -1 if error
  */
 static int mon_connect(const char* cam_ip, int cam_port, const char* agent_ip, int agent_port) {
+    IP_CTX_(1);
     server_socket = lib_tcp_get_server_socket(agent_port);
     if(server_socket < 0) {
         pu_log(LL_ERROR, "%s: unable to bind to port %d. %d %s", __FUNCTION__, agent_port, errno, strerror(errno));
@@ -87,17 +85,20 @@ static int mon_connect(const char* cam_ip, int cam_port, const char* agent_ip, i
         return -1;
     }
     pu_log(LL_INFO, "%s: connected to Agent by socket %d", __FUNCTION__, sock);
+    IP_CTX_(2);
     return sock;
 }
 /*
  * Return !0 if OK, 0 if not
  */
 static int mon_write(int wr_sock, const char* msg) {
+    IP_CTX_(3);
     int ret = lib_tcp_write(wr_sock, msg, strlen(msg)+1, 10);    /* 10 seconds timeout */
     if(!ret) {
         pu_log(LL_ERROR, "%s: Timeout writing to Agent.");
     }
     if(ret != strlen(msg)+1) ret = 0;
+    IP_CTX_(4);
     return ret;
 }
 /*
@@ -105,15 +106,18 @@ static int mon_write(int wr_sock, const char* msg) {
  * Else do not update msg ane returns 0
  */
 static int process_file_message(char* msg, size_t size) {
+    IP_CTX_(5);
     size_t msg_len = strlen(msg);
     size_t pref_len = strlen(DEFAULT_MON_FMSG_PREFIX);
 
     if((msg_len <= pref_len) || strncmp(msg, DEFAULT_MON_FMSG_PREFIX, pref_len) != 0) return 0;
     memmove(msg, msg+pref_len, msg_len-pref_len+1);
+    IP_CTX_(6);
     return 1;
 }
 
 static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec, char* msg, size_t size) {
+    IP_CTX_(7);
     int ret = em_function(to_sec, msg, size);
 
     switch(ret) {
@@ -223,16 +227,21 @@ static t_ac_cam_events monitor_wrapper(int to_sec, int alert_to_sec, char* msg, 
             pu_log(LL_ERROR, "%s: Unrecognized event %d from Cam. Restart.", __FUNCTION__, ret);
             return AC_CAM_STOP_SERVICE;
     }
+    IP_CTX_(8);
     return AC_CAM_EVENT_UNDEF;
 }
 
 static void monitor() {
+    IP_CTX_(9);
     pu_log(LL_INFO, "%s starts", AT_THREAD_NAME);
 
+    static char out_buf[512]={0}; /* buffer for sending data */
     time_t md_start=0, sd_start=0, io_start=0;
     lib_timer_init(&wd_clock, 60);
 
     while(1) {
+        IP_CTX_(10);
+
         char buf[256]={0};
         t_ac_cam_events ret = monitor_wrapper(DEFAULT_AM_READ_TO_SEC, DEFAULT_AM_ALERT_TO_SEC, buf, sizeof(buf));
         switch(ret) {
@@ -279,20 +288,25 @@ static void monitor() {
             goto on_exit;
         }
         pu_log(LL_DEBUG, "%s: %s was sent to the Agent", AT_THREAD_NAME, out_buf);
+        IP_CTX_(11);
     }
     on_exit:
     pu_log(LL_INFO, "%s stops", AT_THREAD_NAME);
+    IP_CTX_(12);
 }
 /**********************************************************************/
 void at_mon_stop() {
+    IP_CTX_(13);
     at_stop_sf();
     if(to_agent > 0) lib_tcp_client_close(to_agent);
     if(from_agent > 0) lib_tcp_client_close(from_agent);
     if(server_socket > 0) lib_tcp_client_close(server_socket);
     em_deinit();
+    IP_CTX_(14);
 }
 
 void at_mon_function(const input_params_t* params) {
+    IP_CTX_(15);
     if(to_agent = mon_connect(params->cam_ip, params->cam_port, params->agent_ip, params->agent_port), to_agent < 0) {
         pu_log(LL_ERROR, "%s: Error connection to Agent. Exiting.", AT_THREAD_NAME);
         return;
@@ -306,4 +320,5 @@ void at_mon_function(const input_params_t* params) {
 
 on_exit:
     at_mon_stop();
+    IP_CTX_(16);
 }

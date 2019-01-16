@@ -65,6 +65,8 @@
 
 #define AT_THREAD_NAME "SF_TREAD"
 
+extern int sht_add(uint32_t ctx);
+
 static volatile int is_stop = 1;
 static pthread_t thread_id;
 static pthread_attr_t thread_attr;
@@ -78,9 +80,11 @@ typedef enum {
 const char* sf_action_name[SF_ACT_SIZE] = {"???", "SF_ACT_SEND", "SF_ACT_RESEND", "SF_ACT_UPLOAD", "SF_ACT_UPDATE"
 };
 static sf_action_t string2sfa(const char* str) {
+    IP_CTX_(200);
     sf_action_t i;
     if(!str) return SF_ACT_UNDEF;
     for(i = SF_ACT_UNDEF; i < SF_ACT_SIZE; i++) if(!strcmp(str, sf_action_name[i])) return i;
+    IP_CTX_(201);
     return SF_ACT_UNDEF;
 }
 typedef struct {
@@ -100,16 +104,20 @@ typedef struct {
     time_t file_creation_time;
 } fd_t;
 static void print_fd(const fd_t* fd) {
+    IP_CTX_(202);
     pu_log(LL_DEBUG, "%s:\naction = %s\npath = %s\nname = %s\next = %s\ntype=%s\nsize = %lu\nevent_time = %lu\nupl_url = %s\nheaders = %s\nfileRef = %lu\nurl_creation_time = %lu\nfile_creation_time = %lu",
            __FUNCTION__, sf_action_name[fd->action], fd->path, fd->name, fd->ext, fd->type, fd->size, fd->event_time, fd->upl_url, fd->headers, fd->fileRef, fd->url_creation_time, fd->file_creation_time);
+    IP_CTX_(203);
 }
 static void print_queue(const char* words, cJSON* q) {
+    IP_CTX_(204);
     if (!q) return;
     char *txt = cJSON_PrintUnformatted(q);
     if (txt) {
         pu_log(LL_DEBUG, "%s: %s queue = %s", __FUNCTION__, words, txt);
         free(txt);
     }
+    IP_CTX_(205);
 }
 typedef enum {
     SF_RC_SENT_OK,      /* 0    File sent */
@@ -124,6 +132,7 @@ typedef enum {
     SF_RC_BAD_FILE      /* 9    Currently - zero size. */
 } sf_rc_t;
 static sf_action_t calc_action(sf_rc_t rc) {
+    IP_CTX_(206);
     switch (rc) {
         case SF_RC_SENT_OK:      /* File sent */
         case SF_RC_NOT_FOUND:    /* No such file or directory */
@@ -143,9 +152,11 @@ static sf_action_t calc_action(sf_rc_t rc) {
         default:
             break;
     }
+    IP_CTX_(207);
     return SF_ACT_UNDEF;
 }
 static int type2cloud(char t) {
+    IP_CTX_(208);
     switch (t) {
         case 'M':
         case '\0':
@@ -158,6 +169,7 @@ static int type2cloud(char t) {
             pu_log(LL_ERROR, "%s: Unknown media type %c", __FUNCTION__, t);
             break;
     }
+    IP_CTX_(209);
     return 0;
 }
 typedef enum {SF_TASK_UNDEF, SF_TASK_ALL_OLD, SF_TASK_ALL_FOR_TODAY, SF_TASK_THIS_ONE} task_type_t;
@@ -167,7 +179,8 @@ typedef struct {
 } task_t;
 /******************************************************************/
 /*         Send files functions                                   */
-static CURL* init(){
+static CURL* init() {
+    IP_CTX_(210);
     CURL *curl;
     if(curl = curl_easy_init(), !curl) {
         pu_log(LL_ERROR, "%s: Error on curl_easy_init call.", __FUNCTION__);
@@ -185,10 +198,12 @@ static CURL* init(){
     if(strlen(ag_getCurloptCAInfo())) {
         curl_easy_setopt(curl, CURLOPT_CAINFO, ag_getCurloptCAInfo());
     }
+    IP_CTX_(211);
     return curl;
 }
 
 static struct curl_slist* make_getSF_header(const fd_t* in_par, struct curl_slist* sl) {
+    IP_CTX_(212);
     char buf[512]={0};
     const char* content;
     switch (type2cloud(in_par->type[0])) {
@@ -211,12 +226,14 @@ static struct curl_slist* make_getSF_header(const fd_t* in_par, struct curl_slis
 
     snprintf(buf, sizeof(buf)-1, "PPCAuthorization: esp token=%s", ag_getProxyAuthToken());
     sl = curl_slist_append(sl, buf);
+    IP_CTX_(213);
     return sl;
 }
 /*
  * parse {"<hdr_name>":"<hdr_value",...} message and add it into sl
  */
 static struct curl_slist* make_SF_header(const char* upl_hdrs, struct curl_slist* sl) {
+    IP_CTX_(214);
     struct curl_slist* ret = NULL;
 
     cJSON* obj = cJSON_Parse(upl_hdrs);
@@ -238,19 +255,23 @@ static struct curl_slist* make_SF_header(const char* upl_hdrs, struct curl_slist
     ret = sl;
     on_error:
     cJSON_Delete(obj);
+    IP_CTX_(215);
     return ret;
 }
 static struct curl_slist* make_SFupdate_header(struct curl_slist* sl, const char* auth_token) {
+    IP_CTX_(216);
     char buf[100] = {0};
 
     sl = curl_slist_append(sl, "Content-Type: application/json");
     snprintf(buf, sizeof(buf) - 1, "PPCAuthorization: esp token=%s", auth_token);
     sl = curl_slist_append(sl, buf);
 
+    IP_CTX_(217);
     return sl;
 }
 
 static const char* make_getSF_url(char* buf, size_t size, fd_t* in_par) {
+    IP_CTX_(218);
     snprintf(buf, size,
              "%s/%s?proxyId=%s&deviceId=%s&ext=%s&expectedSize=%zu&timesec=%lu&thumbnail=false&rotate=%d&incomplete=false&uploadUrl=true&type=%d",
              ag_getMainURL(),
@@ -263,9 +284,11 @@ static const char* make_getSF_url(char* buf, size_t size, fd_t* in_par) {
              (type2cloud(in_par->type[0])==2)?180:0,       /* Turn on 180 if image */
              type2cloud(in_par->type[0])
     );
+    IP_CTX_(219);
     return buf;
 }
 static const char* make_updSF_url(char* buf, size_t size, fd_t* in_par) {
+    IP_CTX_(220);
     snprintf(buf, size,
              "%s/%s/%lu?proxyId=%s&incomplete=false",
              ag_getMainURL(),
@@ -273,12 +296,14 @@ static const char* make_updSF_url(char* buf, size_t size, fd_t* in_par) {
              in_par->fileRef,
              ag_getProxyID()
     );
+    IP_CTX_(221);
     return buf;
 }
 /*
  * NB! answer should be freed after use!
  */
 static char* post_n_reply(const struct curl_slist *hs, const char* url) {
+    IP_CTX_(222);
     char* ret = NULL;
     char err_b[CURL_ERROR_SIZE]= {0};
     CURLcode res;
@@ -320,10 +345,12 @@ on_error:
     curl_easy_cleanup(curl);
     if(fp)fclose(fp);
     if(ptr)free(ptr);
+    IP_CTX_(223);
     return ret;
 }
 
 static char* put_n_reply(const struct curl_slist *hs, const char* url) {
+    IP_CTX_(224);
     char* ret = NULL;
     char err_b[CURL_ERROR_SIZE]= {0};
     CURLcode res;
@@ -377,6 +404,7 @@ on_error:
     if(ptrr)free(ptrr);
     if(fpw)fclose(fpw);
     if(ptrw)free(ptrw);
+    IP_CTX_(225);
     return ret;
 }
 /*
@@ -385,6 +413,7 @@ on_error:
  *          -1 if no space
  */
 static int parse_cloud_answer(const char* ptr, fd_t* in_par) {
+    IP_CTX_(226);
     int ret = 0;
     cJSON* obj = cJSON_Parse(ptr);
     if(!obj) {
@@ -426,9 +455,11 @@ static int parse_cloud_answer(const char* ptr, fd_t* in_par) {
 
     on_error:
     cJSON_Delete(obj);
+    IP_CTX_(227);
     return ret;
 }
 static int is_cloud_answerOK(const char* answer) {
+    IP_CTX_(228);
     int ret = 0;
 
     if(!strlen(answer)) {
@@ -453,12 +484,14 @@ static int is_cloud_answerOK(const char* answer) {
     ret = 1;
     on_error:
     cJSON_Delete(obj);
+    IP_CTX_(229);
     return ret;
 }
 /*
  * Return 1 if OK, 0 if error, -1 if no space
  */
 static int getSF_URL(fd_t* in_par) {
+    IP_CTX_(230);
     int ret = 0;
     char url_cmd[1024]={0};
     struct curl_slist *hs = NULL;
@@ -487,12 +520,14 @@ static int getSF_URL(fd_t* in_par) {
         in_par->headers[0] = '\0';
         in_par->fileRef = 0;
     }
+    IP_CTX_(231);
     return ret;
 }
 /*
  * Return 1 if OK, 0 if error, 2 if file not found
  */
 static int sendFile(fd_t* in_par) {
+    IP_CTX_(232);
     int ret = 0;
 
     struct curl_slist *hs=NULL;
@@ -555,9 +590,12 @@ on_exit:
     if(fd) fclose(fd);
     if(fp) fclose(fp);
     if(ptr) free(ptr);
+    IP_CTX_(233);
     return ret;
 }
 static int sendSF_update(fd_t* in_par) {
+    IP_CTX_(234);
+
     int ret = 0;
     struct curl_slist *hs = NULL;
     char* ptr = NULL;
@@ -575,6 +613,7 @@ static int sendSF_update(fd_t* in_par) {
 on_exit:
     if(ptr) free(ptr);
     if(hs) curl_slist_free_all(hs);
+    IP_CTX_(235);
     return ret;
 }
 /*****************************************************************/
@@ -584,6 +623,7 @@ on_exit:
  * Return sf_src_t
  */
 static const sf_rc_t send_file(fd_t* fd) {
+    IP_CTX_(236);
     sf_rc_t ret = SF_RC_SENT_OK;
     int rc;
     print_fd(fd);
@@ -649,17 +689,21 @@ static const sf_rc_t send_file(fd_t* fd) {
             pu_log(LL_ERROR, "%s: Internal error. Unknown action type = %d.", __FUNCTION__, fd->action);
             break;
     }
+    IP_CTX_(237);
     return ret;
 }
 /**********************************************************************************/
 static int ymd_tm2int(struct tm* date) {
+    IP_CTX_(238);
 /*     int dir_time =  */
     return date->tm_year*10000 + date->tm_mon*100 + date->tm_mday;
 }
 static int ymd2int(int y, int m, int d) {
+    IP_CTX_(239);
     return (y-1900)*10000 + (m-1)*100 + d;
 }
 static time_t ymdhms2ts(int y, int mon, int day, int hr, int min, int sec) {
+    IP_CTX_(240);
     struct tm t;
     t.tm_sec = sec;
     t.tm_min = min;
@@ -668,16 +712,19 @@ static time_t ymdhms2ts(int y, int mon, int day, int hr, int min, int sec) {
     t.tm_mon = mon-1;
     t.tm_year=y-1900;
     t.tm_isdst = 0;
+    IP_CTX_(241);
     return mktime(&t);
 }
 /*
  * Returns name YYYY-MM-DD made from today's date
  */
 static const char* make_today_dir_name(char* buf, size_t size) {
+    IP_CTX_(242);
     time_t now = time(NULL);
     struct tm tm_now;
     gmtime_r(&now, &tm_now);
     snprintf(buf, size, "%04d-%02d-%02d", tm_now.tm_year+1900, tm_now.tm_mon+1, tm_now.tm_mday);
+    IP_CTX_(243);
     return buf;
 }
 /*
@@ -685,8 +732,10 @@ static const char* make_today_dir_name(char* buf, size_t size) {
  * NB! path does not include file
  */
 static const char* get_last_dir(const char* path) {
+    IP_CTX_(244);
     size_t n = strlen(path);
     while(n && path[n] != '/') n--;
+    IP_CTX_(245);
     return (path[n] == '/')?path+n+1:path+n;
 }
 /*
@@ -694,6 +743,7 @@ static const char* get_last_dir(const char* path) {
  * NB! returned memory should be freed afetr use!
  */
 static char* get_full_name(const char* path, const char* name) {
+    IP_CTX_(246);
     char buf[PATH_MAX]={0};
     snprintf(buf, sizeof(buf)-1, "%s/%s", path, name);
 
@@ -701,6 +751,7 @@ static char* get_full_name(const char* path, const char* name) {
     if(!ret) {
         pu_log(LL_ERROR, "%s: Not enugh memory", __FUNCTION__);
     }
+    IP_CTX_(247);
     return ret;
 }
 /*
@@ -709,7 +760,7 @@ static char* get_full_name(const char* path, const char* name) {
  * return 0 if Ok
  */
 static int remove_dir(const char* path_n_name) {
-
+    IP_CTX_(248);
     pu_log(LL_DEBUG, "%s: Remove %s", __FUNCTION__, path_n_name);
 
     DIR *d = opendir(path_n_name);
@@ -740,7 +791,7 @@ static int remove_dir(const char* path_n_name) {
         if(full_name) free(full_name);
     }
     closedir(d);
-
+    IP_CTX_(249);
     return rmdir(path_n_name);
 }
 /*
@@ -752,6 +803,7 @@ static int remove_dir(const char* path_n_name) {
  * NB! if fd fileld is undefined -> no fileld in item as well!
  */
 static int fd2json(const fd_t* step, cJSON** item) {
+    IP_CTX_(250);
     int ret = 0;
 
     cJSON* i = cJSON_CreateObject();
@@ -792,6 +844,7 @@ static int fd2json(const fd_t* step, cJSON** item) {
         i = NULL;
     }
     *item = i;
+    IP_CTX_(251);
     return ret;
 }
 /*
@@ -802,6 +855,7 @@ static int fd2json(const fd_t* step, cJSON** item) {
 * "url":<string>, "headers":<string>, "url_time":<number>,"file_ref":<number>, "file_ref_time":<number>}
  */
 static int json2fd(cJSON* item, fd_t* step) {
+    IP_CTX_(252);
     cJSON* i;
 /* action */
     if(i=cJSON_GetObjectItem(item, ATI_ACTION), !i) {
@@ -876,6 +930,7 @@ static int json2fd(cJSON* item, fd_t* step) {
         step->file_creation_time = i->valueint;
     else
         step->file_creation_time = 0;
+    IP_CTX_(253);
     return 1;
 }
 static const char* g_prefix;
@@ -890,6 +945,7 @@ static const char* g_ext;
  * ext - up to el-1
  */
 static int parse_fname(const char* name, char* pref, size_t pl, char* postf, size_t pol, char* ext, size_t el, int* h, int* m, int* s) {
+    IP_CTX_(254);
     if(!au_getNsyms(&name, pref, pl)) return 0;    /* prefix */
 
     if(!au_getNdigs(&name, h, 2)) return 0;     /* hours */
@@ -906,6 +962,7 @@ static int parse_fname(const char* name, char* pref, size_t pl, char* postf, siz
     if(*name++ != '.') return 0;
 
     if(!au_getUntil(&name, ext, el, '\0')) return 0;
+    IP_CTX_(255);
     return 1;
 }
 /*
@@ -913,7 +970,7 @@ static int parse_fname(const char* name, char* pref, size_t pl, char* postf, siz
  * Return 1 if name got this structure
  */
 static int parse_dname(const char* name, int* y, int* m, int* d) {
-
+    IP_CTX_(256);
     if(!au_getNdigs(&name, y, 4)) return 0;
 
     if(*name++ != '-') return 0;
@@ -925,13 +982,14 @@ static int parse_dname(const char* name, int* y, int* m, int* d) {
 
     if(!au_getNdigs(&name, d, 2)) return 0;
     if((*d < 1) || (*d > 31)) return 0;
-
+    IP_CTX_(257);
     return 1;
 }
 /*
  * YYYY-MM-DD
  */
 int is_dname(const char* name) {
+    IP_CTX_(258);
     int y,m,d;
     return parse_dname(name, &y, &m, &d);
 }
@@ -945,6 +1003,7 @@ int is_dname(const char* name) {
  * NB-3! Uses only for old direcories scan! today is out of scope!
  */
 static int files_filter(const struct dirent * dn) {
+    IP_CTX_(259);
     if(dn->d_type != DT_REG) return 0;
 
     char prefix[3]={0};
@@ -960,14 +1019,17 @@ static int files_filter(const struct dirent * dn) {
     if(pref_len && g_prefix && (strcmp(prefix, g_prefix)!=0)) return 0;
     if(post_len && g_postfix && (strcmp(postfix, g_postfix)!=0)) return 0;
     if(ext_len && g_ext && (strcmp(ext, g_ext)!=0)) return 0;
+    IP_CTX_(260);
     return 1;
 }
 int dirs_filter(const struct dirent * dn) {
+    IP_CTX_(261);
     if(dn->d_type != DT_DIR) return 0;
     if(!strcmp(dn->d_name, DEFAULT_SNAP_DIR)) return 1;
     char buf[20] = {0};
     make_today_dir_name(buf, sizeof(buf));
     if(!strcmp(dn->d_name, buf)) return 0;      /* Today is out of scope */
+    IP_CTX_(262);
     return is_dname(dn->d_name);
 }
 /*
@@ -976,6 +1038,7 @@ int dirs_filter(const struct dirent * dn) {
  * Return 0 if error
  */
 static int pn2fd(const char* path, const char* name, fd_t* step) {
+    IP_CTX_(263);
     memset(step, 0, sizeof(fd_t));
     step->action = SF_ACT_SEND;
     strncpy(step->path, path, sizeof(step->path));
@@ -1011,6 +1074,7 @@ static int pn2fd(const char* path, const char* name, fd_t* step) {
         return 0;
     }
     step->size = (size_t)st.st_size;
+    IP_CTX_(264);
     return 1;
 }
 /*
@@ -1019,6 +1083,7 @@ static int pn2fd(const char* path, const char* name, fd_t* step) {
  * else add last
  */
 static cJSON* insert_task(cJSON* item, cJSON* queue) {
+    IP_CTX_(265);
     time_t item_send_time = cJSON_GetObjectItem(item, ATI_SEND_TIME)->valueint;
 /******/
     if(!item_send_time) {   /* Set item first */
@@ -1031,6 +1096,7 @@ static cJSON* insert_task(cJSON* item, cJSON* queue) {
         cJSON_AddItemToArray(queue, item);
     }
  /******/
+    IP_CTX_(266);
     return queue;
 }
 /*
@@ -1043,6 +1109,7 @@ static cJSON* insert_task(cJSON* item, cJSON* queue) {
  * start_date && end_date - take from interval
  */
 static cJSON* scan_one_dir(const char* path, const char* prefix, const char* postfix, const char* ext, cJSON* queue) {
+    IP_CTX_(267);
     fd_t step = {0};
     struct dirent** list = NULL;
 
@@ -1082,7 +1149,7 @@ static cJSON* scan_one_dir(const char* path, const char* prefix, const char* pos
         free(list[rc]);
     }
     free(list);
-
+    IP_CTX_(268);
     return queue;
 }
 /*
@@ -1092,6 +1159,7 @@ static cJSON* scan_one_dir(const char* path, const char* prefix, const char* pos
  * Called after send_files()
  */
 int empty_dir_delete(const char* path) {
+    IP_CTX_(269);
     int ret = 0;
     int y, m, d;
 
@@ -1112,6 +1180,7 @@ int empty_dir_delete(const char* path) {
         }
         if(q) cJSON_Delete(q);
     }
+    IP_CTX_(270);
     return ret;
 }
 /*
@@ -1121,6 +1190,7 @@ int empty_dir_delete(const char* path) {
  * Called from old_all
  */
 static cJSON* old_dirs_delete(const char* path, cJSON* queue) {
+    IP_CTX_(271);
     int y, m, d;
 
     const char* last_dir = get_last_dir(path);
@@ -1151,6 +1221,7 @@ static cJSON* old_dirs_delete(const char* path, cJSON* queue) {
         }
         if(q) cJSON_Delete(q);
     }
+    IP_CTX_(272);
     return queue;
 }
 /*
@@ -1158,6 +1229,7 @@ static cJSON* old_dirs_delete(const char* path, cJSON* queue) {
  * Queue should be totally rewritten!
  */
 static cJSON* old_all(const char* path, cJSON* queue) {
+    IP_CTX_(273);
     struct dirent** list;
 
     if(queue) cJSON_Delete(queue);
@@ -1176,7 +1248,7 @@ static cJSON* old_all(const char* path, cJSON* queue) {
         free(list[rc]);
     }
     free(list);
-
+    IP_CTX_(274);
     return queue;
 }
 /*
@@ -1187,6 +1259,7 @@ static cJSON* old_all(const char* path, cJSON* queue) {
  * return 1 of OK, return 0 if parsing error
  */
 static int msg2type(pu_queue_msg_t* msg, task_t* task) {
+    IP_CTX_(275);
     int ret = 0;
     cJSON* obj = NULL;
 
@@ -1220,6 +1293,7 @@ static int msg2type(pu_queue_msg_t* msg, task_t* task) {
     ret = 1;
     on_exit:
     if(obj) cJSON_Delete(obj);
+    IP_CTX_(276);
     return ret;
 }
 /*
@@ -1229,6 +1303,7 @@ static int msg2type(pu_queue_msg_t* msg, task_t* task) {
  * [<action>,...<action>]
  */
 static cJSON* fill_queue(task_t* task, cJSON* rq) {
+    IP_CTX_(277);
     char buf[PATH_MAX]={0};
 
     switch (task->task_type) {
@@ -1270,9 +1345,11 @@ static cJSON* fill_queue(task_t* task, cJSON* rq) {
         default:
             pu_log(LL_ERROR, "%s: Undefined task type = %d. Task ignored.", task->task_type);
     }
+    IP_CTX_(278);
     return rq;
 }
 static void file_delete(const char* dir, const char* name) {
+    IP_CTX_(279);
     char buf[PATH_MAX]={0};
     snprintf(buf, sizeof(buf), "%s/%s", dir, name);
     if(!unlink(buf)) {
@@ -1281,12 +1358,14 @@ static void file_delete(const char* dir, const char* name) {
     else {
         pu_log(LL_ERROR, "%s: error deletion %s: %d - %s", __FUNCTION__, buf, errno, strerror(errno));
     }
+    IP_CTX_(280);
 }
 /*
  * Send files from queue if it is not empty.
  * If the file can't be sent - put it to the end of queue
  */
 static cJSON* sendFromQueue(cJSON* rq) {
+    IP_CTX_(281);
     if(!rq) return NULL;
     if(!cJSON_GetArraySize(rq)) {
         cJSON_Delete(rq);
@@ -1337,11 +1416,14 @@ static cJSON* sendFromQueue(cJSON* rq) {
             break;
     }
     print_queue("sendFromQueue on exit", rq);
+    IP_CTX_(282);
     return rq;
 }
-
+extern lib_timer_clock_t alarm_to_md;
 static void* thread_function(void* params) {
+    IP_CTX_(283);
     pu_log(LL_INFO, "%s: started", AT_THREAD_NAME);
+
     is_stop = 0;
 
     lib_timer_clock_t files_resend_clock = {0};
@@ -1362,6 +1444,7 @@ static void* thread_function(void* params) {
     send_all_queue = fill_queue(&task, send_all_queue);
 
     while(!is_stop) {
+        IP_CTX_(284);
         int rc;
         lib_tcp_rd_t *conn = lib_tcp_read(connections, 1, &rc); /* connection removed inside */
         if(rc == LIB_TCP_READ_EOF) {
@@ -1403,16 +1486,19 @@ static void* thread_function(void* params) {
             print_queue("send_all_queue after fill", send_queue);
             lib_timer_init(&scan_all_clock, DEAULT_TO_SCAN_ALL);
         }
+        IP_CTX_(285);
     }
     if(send_queue) cJSON_Delete(send_queue);
     if(send_all_queue) cJSON_Delete(send_all_queue);
     lib_tcp_destroy_conns(connections);
     is_stop = 1;
     pu_log(LL_INFO, "%s: stop", AT_THREAD_NAME);
+    IP_CTX_(286);
     return NULL;
 }
 
 int at_start_sf(int rd_sock) {
+    IP_CTX_(287);
     if(!is_stop) {
         pu_log(LL_WARNING, "%s: %s is already runs!", __FUNCTION__, PT_THREAD_NAME);
         return 1;
@@ -1422,9 +1508,11 @@ int at_start_sf(int rd_sock) {
     if(pthread_attr_init(&thread_attr)) return 0;
     if(pthread_create(&thread_id, &thread_attr, &thread_function, NULL)) return 0;
     is_stop = 0;
+    IP_CTX_(288);
     return 1;
 }
 void at_stop_sf() {
+    IP_CTX_(289);
     void *ret;
     if(is_stop) {
         pu_log(LL_WARNING, "%s: %s already stops", __FUNCTION__, PT_THREAD_NAME);
@@ -1433,7 +1521,10 @@ void at_stop_sf() {
     at_set_stop_sf();
     pthread_join(thread_id, &ret);
     pthread_attr_destroy(&thread_attr);
+    IP_CTX_(290);
 }
 void at_set_stop_sf() {
+    IP_CTX_(291);
     is_stop = 1;
+    IP_CTX_(292);
 }
