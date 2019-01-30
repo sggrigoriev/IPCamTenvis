@@ -270,16 +270,47 @@ static int update_one_parameter(int cmd_id, user_par_t par_id, int par_value) {
  * "enable=1&sensitivity=5&tapech=1&recch=1&dealmode=0x20000001&chn=0" -- w/o any TS
  */
 int ac_cam_init() {
-    const char* TIME_1st_PARAM = "time=";
-    const char* TIME_FORMAT = "%Y%m%d%H%M%S";
-    const char* TIME_REST_PARAMS = "&ntpen=1&tz=GMT&location=GMT&ck_dst=0&ntpserver=time.nist.gov";
-    const char* MD_INIT_PARAMS = "recch=1&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
-    const char* SD_INIT_PARAMS = "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
+    const char* TIME_1st_PARAM = 
+            "time=";    
+    const char* TIME_FORMAT = 
+            "%Y%m%d%H%M%S";
+    const char* TIME_REST_PARAMS = 
+            "&ntpen=1&tz=GMT&location=GMT&ck_dst=0&ntpserver=time.nist.gov";
+    
+    const char* H264_INIT_PARAMS = 
+            "encoder=1&res=8&fmode=0&bps=2048&fps=30&gop=50&quality=0&chn=0&sub=0&res_mask 256&max_fps=30";
+    
+    const char* CFGREC_INIT_PARAMS = 
+            "-sizelmt 100\n-timelmt 120\n-alrmtrgrec 20\n-vstrm 0\n-record_audio 1\n-snap_instead 0\n-snap_interval 60"
+            "\n-schedule \"default\"\nrecchn 3\n\n\n";
+    
+    const char* SETVIDEO_INIT_PARAMS =
+            "active=1&norm=1&achn=0&res_comb=0&res=8&fmode=0&bps=2048&fps=25&gap=5&quality=0"
+            "&res_sub=3&fmode_sub=0&bps_sub=308&fps_sub=25&gap_sub=30&quality_sub=0"
+            "&res_rec=8&fmode_rec=0&bps_rec=2048&fps_rec=25&gap_rec=5&quality_rec=0&chn=0";
+    
+    const char* MD_INIT_PARAMS = 
+            "recch=1&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
+    
+    const char* SD_INIT_PARAMS = 
+            "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
 
+    char* h264_uri = NULL;
+    char* cfgrec_uri = NULL;
+    char* setvideo_uri = NULL;
     char* md_uri = NULL;
     char* sd_uri = NULL;
     char* time_uri = NULL;
     int ret = 0;
+
+    if(h264_uri = ao_make_cam_uri(AO_CAM_CMD_H264, AO_CAM_WRITE), !h264_uri) goto on_error;
+    if(!send_command(h264_uri, H264_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error h264 initiation", __FUNCTION__);
+
+    if(cfgrec_uri = ao_make_cam_uri(AO_CAM_CMD_CFGREC, AO_CAM_WRITE), !cfgrec_uri) goto on_error;
+    if(!send_command(cfgrec_uri, CFGREC_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error cfgrec initiation", __FUNCTION__);
+
+    if(setvideo_uri = ao_make_cam_uri(AO_CAM_CMD_SETVIDEO, AO_CAM_WRITE), !setvideo_uri) goto on_error;
+    if(!send_command(setvideo_uri, SETVIDEO_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error setvideo initiation", __FUNCTION__);
 
     if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
     if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
@@ -297,7 +328,10 @@ int ac_cam_init() {
 
     if(time_uri = ao_make_cam_uri(AO_CAM_CMD_TIME, AO_CAM_WRITE), !time_uri) goto on_error;
     if(!send_command(time_uri, buf)) pu_log(LL_ERROR, "%s: Error Camera time setup", __FUNCTION__);
-
+    
+    pu_log(LL_INFO, "%s: Initiation parameters for H264 %s", __FUNCTION__, H264_INIT_PARAMS);    
+    pu_log(LL_INFO, "%s: Initiation parameters for CFGREC %s", __FUNCTION__, CFGREC_INIT_PARAMS);
+    pu_log(LL_INFO, "%s: Initiation parameters for SETVIDEO %s", __FUNCTION__, SETVIDEO_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
@@ -306,6 +340,9 @@ int ac_cam_init() {
 
     ret = 1;
 on_error:
+    if(h264_uri) free(h264_uri);
+    if(cfgrec_uri) free(cfgrec_uri);
+    if(setvideo_uri) free(setvideo_uri);
     if(md_uri) free(md_uri);
     if(sd_uri) free(sd_uri);
     if(time_uri) free(time_uri);

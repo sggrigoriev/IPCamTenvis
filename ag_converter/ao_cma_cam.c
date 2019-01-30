@@ -38,6 +38,8 @@
 #define CMD_SNAP_NAME   "snapshot?&strm=0&q=0"
 #define CMD_CFGREC_NAME "cfgrec"
 #define CMD_SNAP_VIDEO_NAME "record"
+#define CMD_H264_NAME    "cfgh264"
+#define CMD_SETVIDEO_NAME   "setvideo"
 
 #define PAR_READ    "?list=1"
 /* Cam's parameters names */
@@ -355,6 +357,12 @@ char* ao_make_cam_uri(int cmd_id, int read_pars) {
             break;
         case AO_CAM_CMD_CFGREC:
             name = (read_pars)?CMD_CFGREC_NAME PAR_READ:CMD_CFGREC_NAME;
+            break;
+        case AO_CAM_CMD_H264:
+            name = (read_pars)?CMD_H264_NAME PAR_READ:CMD_H264_NAME;
+            break;
+        case AO_CAM_CMD_SETVIDEO:
+            name = (read_pars)?CMD_SETVIDEO_NAME PAR_READ:CMD_H264_NAME;
             break;
         default:
             pu_log(LL_ERROR, "%s: Unrecognized cmd_id = %d", __FUNCTION__, cmd_id);
