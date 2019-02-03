@@ -1,4 +1,8 @@
-VERSION 1.4.0 11-Dec-2018
+VERSION 1.4.1 03-Feb-2019
+=================================================================================================
+HD recording and streaming added
+NB! It is testing version - currently the HD streaming can't be played on WEB/android GUI!
+VERSION 1.4.0 14-Jan-2019
 =================================================================================================
 1. Motion detection notification changed: cam sends it at the beginning of MD w/o file reference with time of event in seconds
 2. Request for File server contais the event time. The GUI could link the event and the file using this time
