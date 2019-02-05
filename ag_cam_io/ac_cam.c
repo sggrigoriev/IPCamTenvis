@@ -276,19 +276,19 @@ int ac_cam_init() {
             "%Y%m%d%H%M%S";
     const char* TIME_REST_PARAMS = 
             "&ntpen=1&tz=GMT&location=GMT&ck_dst=0&ntpserver=time.nist.gov";
+
+    const char* H264_INIT_PARAMS =
+            "encoder=0&res=8&fmode=0&bps=2048&fps=25&gop=50&quality=0&chn=0&sub=0&res_mask 256&max_fps=30";
     
-    const char* H264_INIT_PARAMS = 
-            "encoder=1&res=8&fmode=0&bps=2048&fps=30&gop=50&quality=0&chn=0&sub=0&res_mask 256&max_fps=30";
-    
-    const char* CFGREC_INIT_PARAMS = 
+    const char* CFGREC_INIT_PARAMS =
             "-sizelmt 100\n-timelmt 120\n-alrmtrgrec 20\n-vstrm 0\n-record_audio 1\n-snap_instead 0\n-snap_interval 60"
             "\n-schedule \"default\"\nrecchn 3\n\n\n";
     
     const char* SETVIDEO_INIT_PARAMS =
-            "active=1&norm=1&achn=0&res_comb=0&res=8&fmode=0&bps=2048&fps=25&gap=5&quality=0"
+            "active=1&norm=1&achn=0&res_comb=0&res=8&fmode=0&bps=2048&fps=25&gap=30&quality=0"
             "&res_sub=3&fmode_sub=0&bps_sub=308&fps_sub=25&gap_sub=30&quality_sub=0"
-            "&res_rec=8&fmode_rec=0&bps_rec=2048&fps_rec=25&gap_rec=5&quality_rec=0&chn=0";
-    
+            "&res_rec=8&fmode_rec=0&bps_rec=2048&fps_rec=25&gap_rec=30&quality_rec=0&chn=0";
+
     const char* MD_INIT_PARAMS = 
             "recch=1&tapech=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&rect0=0,0,999,999, 5&rect1=&rect2=&rect3=&chn=0";
     
@@ -302,16 +302,16 @@ int ac_cam_init() {
     char* sd_uri = NULL;
     char* time_uri = NULL;
     int ret = 0;
-
+/*
     if(h264_uri = ao_make_cam_uri(AO_CAM_CMD_H264, AO_CAM_WRITE), !h264_uri) goto on_error;
     if(!send_command(h264_uri, H264_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error h264 initiation", __FUNCTION__);
-
+*/
     if(cfgrec_uri = ao_make_cam_uri(AO_CAM_CMD_CFGREC, AO_CAM_WRITE), !cfgrec_uri) goto on_error;
     if(!send_command(cfgrec_uri, CFGREC_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error cfgrec initiation", __FUNCTION__);
-
+/*
     if(setvideo_uri = ao_make_cam_uri(AO_CAM_CMD_SETVIDEO, AO_CAM_WRITE), !setvideo_uri) goto on_error;
     if(!send_command(setvideo_uri, SETVIDEO_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error setvideo initiation", __FUNCTION__);
-
+*/
     if(md_uri = ao_make_cam_uri(AO_CAM_CMD_MD, AO_CAM_WRITE), !md_uri) goto on_error;
     if(!send_command(md_uri, MD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error MD initiation", __FUNCTION__);
 
