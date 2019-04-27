@@ -371,11 +371,9 @@ static void run_agent_actions() {
             pu_log(LL_WARNING, "%s: Unprocessed variant %d", __FUNCTION__, variant);
             break;
     }
-    if(ag_db_get_int_property(AG_DB_STATE_AGENT_ON)) {
-        if (ag_db_get_int_property(AG_DB_CMD_SEND_WD_AGENT)) {  /* PING processing */
-            send_wd();
-            ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 0);
-        }
+    if (ag_db_get_int_property(AG_DB_CMD_SEND_WD_AGENT)) {  /* PING processing */
+        send_wd();
+        ag_db_set_int_property(AG_DB_CMD_SEND_WD_AGENT, 0);
     }
     IP_CTX_(17001);
 }
