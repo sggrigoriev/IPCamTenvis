@@ -888,6 +888,9 @@ void at_main_thread() {
 
     lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
 
+    lib_timer_clock_t reboot_clock = {0};           /* timer for watchdog sending */
+    lib_timer_init(&reboot_clock, DEFAULT_REBOOT_PERIOD);   /* Initiating the timer for reboot */
+
 
     unsigned int events_timeout = 1;
 
@@ -948,6 +951,15 @@ void at_main_thread() {
             restart_events_monitor();
             lib_timer_init(&em_clock, DEFAULT_EM_TO);   /* Initiating the timer for event monitor */
         }
+        /* Reboot timeout */
+        if(lib_timer_alarm(reboot_clock)) {
+            pu_log(LL_WARNING, "%s: Time to reboot - 12 hours passed. Reboot", AT_THREAD_NAME);
+            send_reboot();
+            lib_timer_init(&reboot_clock, DEFAULT_REBOOT_PERIOD);
+            main_finish = 1;
+            continue;           /* Do not need run actions - reboot */
+        }
+
 
 /* Interpret changes made in properties */
         run_actions();

@@ -41,6 +41,9 @@
 #define DEFAULT_WUD_PORT        8887                /* Port to communicate with WUD. Configured */
 #define DEFAULT_WATCHDOG_TO_SEC 30                  /* Default time for WD sending to WUD */
 
+/* Periodic reboot time */
+#define DEFAULT_REBOOT_PERIOD   43200               /* Once per 12 hours after start */
+
 /* IP Cam settings */
 #define DEFAULT_IPCAM_IP        /*"192.168.1.71"*/"127.0.0.1"
 #define DEFAULT_IPCAM_PORT      554

@@ -116,9 +116,16 @@ static void messageHandler (noPollCtx* ctx, noPollConn* conn, noPollMsg* msg, no
 static void *ws_thread(void *pvoid) {
     IP_CTX_(602);
     pu_log(LL_DEBUG,"%s: start", AT_THREAD_NAME);
+
     // wait for messages
-    while (!stop && nopoll_conn_is_ok(conn)) {
+    while (!stop) {
         char buf[512];
+        if(!nopoll_conn_is_ok(conn)) {
+            pu_log(LL_ERROR, "%s: nopoll connection descriptor error! Stop", AT_THREAD_NAME);
+            ao_cmd_ws_error_answer(buf, sizeof(buf));
+            pu_queue_push(from_ws, buf, strlen(buf)+1);
+            stop = 1;
+        }
         int ret = nopoll_loop_wait(ctx, 1000);
         switch (ret) {
             case 0:         //No error
@@ -128,19 +135,26 @@ static void *ws_thread(void *pvoid) {
                 pu_log(LL_ERROR, "%s: nopoll_loop_wait error - context is NULL or negative TO! Stop", AT_THREAD_NAME);
                 ao_cmd_ws_error_answer(buf, sizeof(buf));
                 pu_queue_push(from_ws, buf, strlen(buf)+1);
+                stop = 1;
                 break;
             case -4:
                 pu_log(LL_ERROR, "%s: nopoll_loop_wait error: %d-%s", AT_THREAD_NAME, errno, strerror(errno));
                 ao_cmd_ws_error_answer(buf, sizeof(buf));
                 pu_queue_push(from_ws, buf, strlen(buf)+1);
+                stop = 1;
                 break;
             default:
-                pu_log(LL_ERROR, "%s: nopoll_loop_wait undrcognized error: %d. Ignored.", AT_THREAD_NAME, ret);
+                pu_log(LL_ERROR, "%s: nopoll_loop_wait unrecognized error: %d. Ignored.", AT_THREAD_NAME, ret);
                 break;
         }
         IP_CTX_(603);
     }
-    pu_log(LL_DEBUG,"%s: exiting\n", AT_THREAD_NAME);
+    pu_log(LL_DEBUG,"%s: exiting", AT_THREAD_NAME);
+    if(ctx) nopoll_loop_stop(ctx);
+    if(conn) nopoll_conn_close(conn);
+    if(ctx) nopoll_ctx_unref(ctx);
+    nopoll_cleanup_library();
+
 
     stop = 1;
     pthread_exit(NULL);
@@ -212,7 +226,7 @@ int at_ws_start(const char *host, int port,const char *path, const char *session
     pthread_create(&ws_thread_id, &threadAttr, &ws_thread, NULL);
 
     return 1;
-on_error:
+    on_error:
     if(conn) nopoll_conn_close(conn);
     if(ctx) nopoll_ctx_unref(ctx);
     nopoll_cleanup_library();
@@ -226,13 +240,8 @@ void at_ws_stop() {
         return;
     }
     stop = 1;
-    nopoll_loop_stop(ctx);
     pthread_join(ws_thread_id, &ret);
     pthread_attr_destroy(&threadAttr);
-
-    if(conn) nopoll_conn_close(conn);
-    if(ctx) nopoll_ctx_unref(ctx);
-    nopoll_cleanup_library();
 }
 
 int at_is_ws_run() {

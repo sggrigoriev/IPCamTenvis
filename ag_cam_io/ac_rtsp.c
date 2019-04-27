@@ -112,9 +112,7 @@ t_at_rtsp_session* ac_rtsp_init(t_ac_rtsp_device device, const char* ip, int por
                 pu_log(LL_ERROR, "%s: Memory allocation error ar %d", __FUNCTION__, __LINE__);
                 goto on_error;
             }
-            pu_log(LL_DEBUG, "%s before ac_WowzaInit", __FUNCTION__);
             if(rc = ac_WowzaInit(sess, session_id), !rc) goto on_error;
-            pu_log(LL_DEBUG, "%s after ac_WowzaInit", __FUNCTION__);
             break;
         default:
             pu_log(LL_ERROR, "%s: Unsupported device type %d", __FUNCTION__, sess->device);

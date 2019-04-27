@@ -281,7 +281,7 @@ int ac_cam_init() {
             "encoder=0&res=8&fmode=0&bps=2048&fps=25&gop=50&quality=0&chn=0&sub=0&res_mask 256&max_fps=30";
     
     const char* CFGREC_INIT_PARAMS =
-            "-sizelmt 100\n-timelmt 120\n-alrmtrgrec 20\n-vstrm 0\n-record_audio 1\n-snap_instead 0\n-snap_interval 60"
+            "-sizelmt 100\n-timelmt 120\n-alrmtrgrec 22\n-vstrm 0\n-record_audio 1\n-snap_instead 0\n-snap_interval 60"
             "\n-schedule \"default\"\nrecchn 3\n\n\n";
     
     const char* SETVIDEO_INIT_PARAMS =
@@ -295,12 +295,17 @@ int ac_cam_init() {
     const char* SD_INIT_PARAMS = 
             "tapech=1&recch=1&ts0=&ts1=&ts2=&ts3=&dealmode=536870912&enable=1&sensitivity=6";
 
+    const char* OSD_INIT_PARAMS =
+            "chn=0&chibl=0&chifg=5&chilc=2&tmibl=0&tmifg=5&tmilc=1&ctibl=0&ctifg=5&ctilc=0&ctifl=0";
+
+
     char* h264_uri = NULL;
     char* cfgrec_uri = NULL;
     char* setvideo_uri = NULL;
     char* md_uri = NULL;
     char* sd_uri = NULL;
     char* time_uri = NULL;
+    char* osd_uri = NULL;
     int ret = 0;
 /*
     if(h264_uri = ao_make_cam_uri(AO_CAM_CMD_H264, AO_CAM_WRITE), !h264_uri) goto on_error;
@@ -308,6 +313,10 @@ int ac_cam_init() {
 */
     if(cfgrec_uri = ao_make_cam_uri(AO_CAM_CMD_CFGREC, AO_CAM_WRITE), !cfgrec_uri) goto on_error;
     if(!send_command(cfgrec_uri, CFGREC_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error cfgrec initiation", __FUNCTION__);
+
+    if(osd_uri = ao_make_cam_uri(AO_CAM_CMD_OSD, AO_CAM_WRITE), !osd_uri) goto on_error;
+    if(!send_command(osd_uri, OSD_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error OSD initiation", __FUNCTION__);
+
 /*
     if(setvideo_uri = ao_make_cam_uri(AO_CAM_CMD_SETVIDEO, AO_CAM_WRITE), !setvideo_uri) goto on_error;
     if(!send_command(setvideo_uri, SETVIDEO_INIT_PARAMS)) pu_log(LL_ERROR, "%s: Error setvideo initiation", __FUNCTION__);
@@ -328,13 +337,18 @@ int ac_cam_init() {
 
     if(time_uri = ao_make_cam_uri(AO_CAM_CMD_TIME, AO_CAM_WRITE), !time_uri) goto on_error;
     if(!send_command(time_uri, buf)) pu_log(LL_ERROR, "%s: Error Camera time setup", __FUNCTION__);
-    
-    pu_log(LL_INFO, "%s: Initiation parameters for H264 %s", __FUNCTION__, H264_INIT_PARAMS);    
+
+/*
+    pu_log(LL_INFO, "%s: Initiation parameters for H264 %s", __FUNCTION__, H264_INIT_PARAMS);
+*/
     pu_log(LL_INFO, "%s: Initiation parameters for CFGREC %s", __FUNCTION__, CFGREC_INIT_PARAMS);
+/*
     pu_log(LL_INFO, "%s: Initiation parameters for SETVIDEO %s", __FUNCTION__, SETVIDEO_INIT_PARAMS);
+*/
     pu_log(LL_INFO, "%s: Initiation parameters for MD %s", __FUNCTION__, MD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for SD %s", __FUNCTION__, SD_INIT_PARAMS);
     pu_log(LL_INFO, "%s: Initiation parameters for TIME %s", __FUNCTION__, buf);
+    pu_log(LL_INFO, "%s: Initiation parameters for OSD %s", __FUNCTION__, OSD_INIT_PARAMS);
 /* TODO if can't make directory - snaphots sohuld be disabled! */
     ac_make_directory(DEFAULT_DT_FILES_PATH, DEFAULT_SNAP_DIR);
 
