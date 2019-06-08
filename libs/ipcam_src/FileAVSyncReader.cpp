@@ -89,6 +89,8 @@ void CFileAVSyncReader::OnStopThread(void)
 // MAIN THREAD HANDLER - The only method that must be implemented.
 /////////////////////////////////////////////////////////////////////////////////////
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 void CFileAVSyncReader::CommandHandler(UINT cmd)
 {
 	switch (cmd)
@@ -155,6 +157,7 @@ void CFileAVSyncReader::CommandHandler(UINT cmd)
 	};
 }
 
+#pragma GCC diagnostic ignored "-Wparentheses"
 BOOL CFileAVSyncReader::SingleStep(void)
 {
 	DWORD ts2 = PA_GetTickCount();
@@ -230,6 +233,7 @@ BOOL CFileAVSyncReader::SingleStep(void)
 
 	return bDo;
 }
+#pragma GCC diagnostic pop
 
 BOOL CFileAVSyncReader::OnFrameReady(UINT strmType, FRAMENODE *f)
 {

@@ -111,6 +111,8 @@ int timed_recv(int sk, void* ptr, int size, unsigned int ms)
 	return r;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpointer-sign"
 int timed_recv_from(int sk, void* ptr, int size, struct sockaddr* addr, int *sock_len, unsigned int ms)
 {
 	int r = timed_wait_fd(sk, ms);
@@ -121,6 +123,7 @@ int timed_recv_from(int sk, void* ptr, int size, struct sockaddr* addr, int *soc
 	if(r < 0) { return -1; }
 	return r;
 }
+#pragma GCC diagnostic pop
 
 int timed_wait_fd_w(int fd, unsigned int ms)
 {

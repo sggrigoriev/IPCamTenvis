@@ -72,6 +72,8 @@ int InsertIdName(LPIDNAME* ppIdNames, UINT* pcount, const IDNAME *pIN)
 {
 	return InsertIdName(ppIdNames, pcount, pIN->id, pIN->name);
 }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 int InsertIdName(LPIDNAME* ppIdNames, UINT* pcount, int id, const char *sName)
 {
 	int count = *pcount;
@@ -115,6 +117,7 @@ IDNAME* IdNameFindID(LPIDNAME pIdNames, UINT count, int id)
 	}
 	return NULL;
 }
+#pragma GCC diagnostic pop
 
 UINT GetUnusedID(const IDNAME *pIdNames, UINT count)
 {
@@ -531,10 +534,13 @@ int _DVSCONN::BeginAsynConnect()
 	}
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 int _DVSCONN::Resume()
 {
 	return Connect(CF_RESUME | dwConnFlags & ~CF_ASYNC);//(hAlertSock != INVALID_SOCKET ? CF_CREATEALERTCONN : 0));
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::AsynResume()
 {
@@ -721,7 +727,8 @@ int _DVSCONN::RequestNewConn(/*OUT*/PA_SOCKET* hSock)
 	}
 	return rlt;
 }
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 BOOL _DVSCONN::CreateAlertConnection()	//????? Connect to Proxy or Real-Device
 {
 	if(pAgent) return FALSE;
@@ -752,7 +759,11 @@ BOOL _DVSCONN::CreateAlertConnection()	//????? Connect to Proxy or Real-Device
 
 	return hAlertSock != INVALID_SOCKET;
 }
+#pragma GCC diagnostic pop
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wparentheses"
 int DVSCONN::__DoRecv(char *cBuffer, UINT uiBuffSize, int iRecvLen, CString& strBody, VSCMDLINECB pCmdCbFunc, void *arg, BOOL bBinary)
 {
 rewait:
@@ -875,7 +886,6 @@ rewait:
 
 	return 0;
 }
-
 int _DVSCONN::_CTPCommandWithCallback(const char *scmd, /*INOUT*/ CString &strBody, const char *extra_headers, VSCMDLINECB pCmdCbFunc, void *arg, BOOL bBinary)
 {
 	HEADERHELPER hdrs(this, extra_headers);
@@ -938,6 +948,7 @@ int _DVSCONN::_CTPCommandWithCallback(const char *scmd, /*INOUT*/ CString &strBo
 #undef CMDBUF_SIZE	
 	return rlt;
 }
+#pragma GCC diagnostic pop
 int _DVSCONN::CTPCommand(const char *cmd, /*INOUT*/ CString &str, const char *extra_headers)
 {
 	return _CTPCommandWithCallback(cmd, str, extra_headers, NULL, NULL, 0);
@@ -1198,6 +1209,8 @@ static int isSeperator(int ch)
 	return ch>0 && (isspace(ch) || ch == ':' || ch == '=');
 }
 #define MAX_IDNAME_COUNT	128
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 static int ParseIdNameBody(char *pBody, LPIDNAME *ppIdName)
 {
 	int cnt;
@@ -1237,6 +1250,7 @@ static int ParseIdNameBody(char *pBody, LPIDNAME *ppIdName)
 	*ppIdName = pIdName;
 	return cnt;
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPGetAlarmInChnInfo(UINT chn, ALARMINCHNINFO *pAici)
 {
@@ -1582,6 +1596,9 @@ BOOL IsRectEmpty(const RECT *pRc)
 	return pRc->right <= pRc->left || pRc->bottom <= pRc->top;
 }
 #endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat="
+#pragma GCC diagnostic ignored "-Wsign-compare"
 int _DVSCONN::CTPGetChnMD(UINT vchn, MDPARAM *pMd)
 {
 	if(vchn >= devInfo.iNumOfVChn) return E_INVALID_PARAM;
@@ -1641,6 +1658,7 @@ int _DVSCONN::CTPGetChnMD(UINT vchn, MDPARAM *pMd)
 	}
 	return rlt;
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPSetChnMD(UINT vchn, const MDPARAM *pMd)
 {
@@ -1727,7 +1745,8 @@ int _DVSCONN::CTPGetNICInfo(NICPARAM *pNic)
 	if(!pNic->bDhcp) pNic->bAutoDNS = FALSE;
 	return rlt;
 }
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 int _DVSCONN::CTPSetNICInfo(const NICPARAM *pNic)
 {
 	if(iStatus == DEVICESTATUS_DISCONNECTED || iStatus == DEVICESTATUS_RESUMEFAILED) return E_NO_CONN;
@@ -1767,6 +1786,7 @@ int _DVSCONN::CTPSetNICInfo(const NICPARAM *pNic)
 	}
 	return ExecCmd(strCmd);
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPIwList(struct iw_ap **ppAp, UINT *pNAp)
 {
@@ -2098,7 +2118,9 @@ void FreeRRSResource(REMOTERECORDSETTING *prs)
 	prs->pRRS = NULL;
 	prs->nRRS = 0;
 }
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 int _DVSCONN::CTPGetRecordSetting(REMOTERECORDSETTING *prs)
 {
 //	struct __RRCBWorkParam param;
@@ -2177,6 +2199,7 @@ int _DVSCONN::CTPGetRecordSetting(REMOTERECORDSETTING *prs)
 
 	//return pConn->CTPCommandWithCallback("cfgrec", str, ParaLineCB, &param);
 }
+
 int _DVSCONN::CTPSetRecordSetting(const REMOTERECORDSETTING *prs)
 {
 	if(iStatus == DEVICESTATUS_DISCONNECTED || iStatus == DEVICESTATUS_RESUMEFAILED) return E_NO_CONN;
@@ -2209,6 +2232,7 @@ int _DVSCONN::CTPSetRecordSetting(const REMOTERECORDSETTING *prs)
 
 	return ExecCmd("cfgrec", str);
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPGetVideoMask(UINT vchn, VIDEOMASK *pMask)
 {
@@ -2304,6 +2328,9 @@ int _DVSCONN::CTPPTZLens(UINT chn, UINT act)
 	return -1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 //向量式云台运动控制、预置点/巡航轨迹设置
 int _DVSCONN::CTPPTZCommand(UINT chn, UINT code, UINT para1, UINT para2)
 {
@@ -2419,6 +2446,7 @@ int _DVSCONN::CTPPTZCommand(UINT chn, UINT code, UINT para1, UINT para2)
 	return ExecCmd(strCmd);
 }
 
+
 int _DVSCONN::CTPRelay485(const BYTE *cmd, UINT size)
 {
 	CString str;
@@ -2450,6 +2478,7 @@ int _DVSCONN::CTPRelay485(const COMMSETTING *pCfg, const BYTE *cmd, UINT size)
 
 	return ExecCmd("cfg485", str);
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPSetPspName(UINT chn, UINT pos, const char *name)
 {
@@ -2511,6 +2540,8 @@ int _DVSCONN::CTPGetCruiseTracks(UINT vchn, IDNAME **ppTrack, UINT *puiCount)
 	return rlt;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 ALARMOUTNAME* _DVSCONN::GetAlarmOutNames()
 {
 	if(bProxy || !devInfo.iAlarmOut) return NULL;
@@ -2526,6 +2557,7 @@ ALARMOUTNAME* _DVSCONN::GetAlarmOutNames()
 	}
 	return pAon;
 }
+#pragma GCC diagnostic pop
 
 int _DVSCONN::CTPReboot()
 {
@@ -2621,6 +2653,8 @@ int _DVSCONN:: CTPFileSession(const char *fn, char sid[20], int *flen)
 	return QueryCmd("filesess", str, kv, sizeof(kv)/sizeof(KEYVAL), 0);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 int _DVSCONN::CTPDownloadFile(const char *remotefile, const char *localfile, DOWNLOADCALLBACK pfDwnldCB, DOWNLOADCBPARAM *arg)
 {
 	DWORD rlt;
@@ -2676,6 +2710,7 @@ int _DVSCONN::CTPDownloadFile(const char *remotefile, const char *localfile, DOW
 	}
 	return rlt;
 }
+#pragma GCC diagnostic pop
 
 //------------------------------------------------------------------------------------------------------
 int PTZCommandEx(DVSCONN *pConn, UINT chn, UINT code, UINT para1, UINT para2)
@@ -2896,6 +2931,9 @@ static void KeepAliveCallback(DVSCONN *pConn, int err, DWORD events, void *param
 		LibNotify(DEVICEEVENT_IS_ALIVE, pConn, 0);
 	}
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 void CDvsConnManager::KeepAlive()
 {
 	m_RWLock.LockR();
@@ -2925,6 +2963,7 @@ void CDvsConnManager::KeepAlive()
 	}
 	m_RWLock.Unlock();
 }
+#pragma GCC diagnostic pop
 
 BOOL CDvsConnManager::QueueCmd(DVSCONN *pConn, DWORD event, CONCURRENTCMDCALLBACK lpFunc, void *param, int timewait, const char *psczCmd, UINT len, DWORD flags)
 {
@@ -3027,6 +3066,8 @@ void CDvsConnManager::MarkCmdFinished(CMDNODE *pNode)
 	m_QueueLock.Unlock();
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 struct NEWCONN {
 	PA_SOCKET sock;
 	char conn_id[24];
@@ -3037,11 +3078,15 @@ struct NEWCONN {
 		conn_id[0] = '\0';
 	}
 };
+#pragma GCC diagnostic pop
+
 typedef struct _tagConnSock {
 	DVSCONN* pConn; 
 	PA_SOCKET sock; 
 } CONNSOCK;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 void* ConcurentExcutionThread(void *pParam)
 {
 	UINT i;
@@ -3274,8 +3319,11 @@ loop:
 
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 //---------------------------- >>> ALERT THREAD <<< ---------------------------------
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 typedef std::vector<NEWCONN> NEWCONN_VECTOR;
 void HandleAlertDvsConn(DVSCONN *pConn)
 {
@@ -3401,6 +3449,7 @@ void HandleAlertDvsConn(DVSCONN *pConn)
 		}
 	}
 }
+#pragma GCC diagnostic pop
 
 typedef struct _tagNewPassiveConn {
 	DVSCONN *pConn;
@@ -3414,6 +3463,8 @@ void *NewPassiveClientHandler(void* pParam)
 	return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 #ifdef WIN32
 void* WINAPI AlertReceiveThread(LPVOID pParam)
 #else
@@ -3575,3 +3626,4 @@ void* AlertReceiveThread(void *pParam)
 	if(pvNewConn) delete pvNewConn;
 	return 0;
 }
+#pragma GCC diagnostic pop

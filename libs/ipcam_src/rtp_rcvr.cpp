@@ -42,6 +42,8 @@ int HI_RTP_Recv_Create(/*IO*/ RTP_RECV_S ** ppRtpStream, int sock, IN RTP_ON_REC
 	return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 static void RTP_RecvTcp(RTP_RECV_S *pRtpStream)
 {
 	BYTE RecvBuff[MAX_PACKET_SIZE];
@@ -169,6 +171,7 @@ static void RTP_RecvTcp(RTP_RECV_S *pRtpStream)
 		//if(nExistedData) dbg_msg("Partial packet. nExistedData = %d\n", nExistedData);
 	}//while
 }
+#pragma GCC diagnostic pop
 
 static void WaitForFirstPacket(RTP_RECV_S *pRtpStream)
 {
@@ -414,6 +417,8 @@ UINT MemPoolGetDataMemBlock(MEMPOOL* pPool, MEMBLOCK *ppMemBlks[MAX_BUFFERED_PAC
 }
 //------------------------------------------------------------------------------
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 void RTP_RecvUdp(RTP_RECV_S *pRtpStream)
 {    
 	struct sockaddr_in from;
@@ -526,6 +531,7 @@ requeue:
 	}//while(!...STOP)
 	MemPoolFree(pMemPool);
 }
+#pragma GCC diagnostic pop
 
 void *__STDCALL HI_RTP_RecvHandle(void* args)
 {

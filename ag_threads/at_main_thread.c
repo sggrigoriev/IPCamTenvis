@@ -560,8 +560,29 @@ static void run_actions() {
 static protocol_type_t get_protocol_number(pu_queue_event_t ev, msg_obj_t* obj) {
     IP_CTX_(25000);
     if(!obj) return MT_PROTO_UNDEF;
-    if(cJSON_GetObjectItem(obj, "gw_cloudConnection") != NULL) return MT_PROTO_OWN;
-    if(cJSON_GetObjectItem(obj, "commands") != NULL) return MT_PROTO_CLOUD;
+
+    char* txt = cJSON_PrintUnformatted(obj);
+    pu_log(LL_DEBUG, "%s: msg = %s", __FUNCTION__, txt);
+    free(txt);
+
+    cJSON* cmd_arr = cJSON_GetObjectItem(obj, "commands");
+    if(cmd_arr != NULL) {
+        cJSON *cmd = cJSON_GetArrayItem(cmd_arr, 0);
+        if(!cmd) return MT_PROTO_CLOUD;
+
+        cJSON *params = cJSON_GetObjectItem(cmd, "parameters");
+        if(!params) return MT_PROTO_CLOUD;
+
+        int i;
+        for(i = 0; i < cJSON_GetArraySize(params); i++) {
+            cJSON* el = cJSON_GetArrayItem(params, i);
+            if(!el) return MT_PROTO_CLOUD;
+            cJSON* conn_par = cJSON_GetObjectItem(el, "name");
+            if(!conn_par) return MT_PROTO_CLOUD;
+            if(!strcmp(conn_par->valuestring, "cloudConnection")) return MT_PROTO_OWN;
+        }
+        return MT_PROTO_CLOUD;
+    }
     if(ev == AQ_FromWS) return MT_PROTO_WS;
     if(ev == AQ_FromRW) return MT_PROTO_STREAMING;
     if(ev == AQ_FromCam) return MT_PROTO_EM;

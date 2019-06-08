@@ -30,10 +30,8 @@
 #include "ao_cmd_proxy.h"
 
 
-static const char* F_CLOUD_CONN = "gw_cloudConnection";
 static const char* F_DEVICE_ID_OLD = "gw_gatewayDeviceId";
 static const char* F_DEVICE_ID = "deviceId";
-static const char* F_PAR_MAP = "paramsMap";
 static const char* F_CONN_STATE = "cloudConnection";
 static const char* F_AUTH_TOKEN = "deviceAuthToken";
 static const char* F_CONN_STRING = "connString";
@@ -114,16 +112,22 @@ static int get_old_proxy_msg_with_device_id(cJSON* data) {
     return (item != NULL);
 }
 /*
- * {"gw_cloudConnection": [{"deviceId":"<gateway device id>", "paramsMap": {"cloudConnection": "<connected/disconnected>", "deviceAuthToken":"<auth_token>"}}]}
+ * 		{"commands": [
+			{"deviceId":"<deviceID>", "type":0, "parameters": [
+				{"name":"cloudConnection","value":"<connected/disconnected>"},
+				{"name":"deviceAuthToken","value":"<auth_token>"},
+				{"name":"connString","value":"<Main_Cloud_URL>"}
+			]}
+		]}
 */
 static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
     cJSON* arr;
     cJSON* arr_item;
-    cJSON* map;
+    cJSON* p_arr;
     cJSON* ent;
 
-    if(arr = cJSON_GetObjectItem(data, F_CLOUD_CONN), (!arr || arr->type != cJSON_Array) || (cJSON_GetArraySize(arr) < 1)) {
-        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_CLOUD_CONN);
+    if(arr = cJSON_GetObjectItem(data, F_COMMAND_ARRAY), (!arr || arr->type != cJSON_Array) || (cJSON_GetArraySize(arr) < 1)) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_COMMAND_ARRAY);
         return 0;
     }
     arr_item = cJSON_GetArrayItem(arr, 0);
@@ -133,36 +137,36 @@ static int get_proxy_conn_status(cJSON* data, t_ao_in_connection_state* fld) {
     }
     if(!au_strcpy(fld->proxy_device_id, ent->valuestring, sizeof(fld->proxy_device_id))) return 0;
 
-    if(map = cJSON_GetObjectItem(arr_item, F_PAR_MAP), !map) {
-        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PAR_MAP);
+    if(p_arr = cJSON_GetObjectItem(arr_item, F_PARAMS_ARRAY), !p_arr) {
+        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_PARAMS_ARRAY);
         return 0;
     }
-
-    if(ent = cJSON_GetObjectItem(map, F_CONN_STATE), !ent) {
-        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_CONN_STATE);
-        return 0;
+    int i;
+    for(i = 0; i < cJSON_GetArraySize(p_arr); i++) {
+        ent = cJSON_GetArrayItem(p_arr, i);
+        cJSON* ent_name = cJSON_GetObjectItem(ent, F_PARAM_NAME);
+        cJSON* ent_val = cJSON_GetObjectItem(ent, F_PARAM_VALUE);
+        if(!ent||!ent_name||!ent_val||(ent_name->type!=cJSON_String)||(ent_val->type!=cJSON_String)) {
+            pu_log(LL_ERROR, "%s: ConnInfo message expected from Proxy. Message ignored", __FUNCTION__);
+            return 0;
+        }
+        if(!strcmp(ent_name->valuestring, F_CONN_STATE)) {
+            if(!strcmp(ent_val->valuestring, V_CONNECTED))
+                fld->is_online = 1;
+            else if(!strcmp(ent_val->valuestring, V_DISCONNECTED))
+                fld->is_online = 0;
+            else {
+                pu_log(LL_ERROR, "%s: '%s' value %s/%s for field %s is not found", __FUNCTION__, V_CONNECTED, V_DISCONNECTED, F_CONN_STATE);
+                return 0;
+            }
+        }
+        else if(!strcmp(ent_name->valuestring, F_AUTH_TOKEN)) {
+            if(!au_strcpy(fld->proxy_auth, ent_val->valuestring, sizeof(fld->proxy_auth))) return 0;
+        }
+        else if(!strcmp(ent_name->valuestring, F_CONN_STRING)) {
+            if(!au_strcpy(fld->main_url, ent_val->valuestring, sizeof(fld->main_url))) return 0;
+        }
     }
-    if(!strcmp(ent->valuestring, V_CONNECTED))
-        fld->is_online = 1;
-    else if(!strcmp(ent->valuestring, V_DISCONNECTED))
-        fld->is_online = 0;
-    else {
-        pu_log(LL_ERROR, "%s: '%s' value %s/%s for field %s is not found", __FUNCTION__, V_CONNECTED, V_DISCONNECTED, F_CONN_STATE);
-        return 0;
-    }
-
-    if(ent = cJSON_GetObjectItem(map, F_AUTH_TOKEN), !ent) {
-        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_AUTH_TOKEN);
-        return 0;
-    }
-    if(!au_strcpy(fld->proxy_auth, ent->valuestring, sizeof(fld->proxy_auth))) return 0;
-
-    if(ent = cJSON_GetObjectItem(map, F_CONN_STRING), !ent) {
-        pu_log(LL_ERROR, "%s: '%s' field is not found", __FUNCTION__, F_CONN_STRING);
-        return 0;
-    }
-    if(!au_strcpy(fld->main_url, ent->valuestring, sizeof(fld->main_url))) return 0;
-
     return 1;
 }
 

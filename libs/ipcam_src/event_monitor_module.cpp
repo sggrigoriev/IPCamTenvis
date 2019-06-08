@@ -56,6 +56,8 @@ void em_deinit() {
     close(g_pipeFd[1]);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 int em_function(int to_sec, char* buf, size_t size) {
     fd_set rfds;
     struct timeval tv;
@@ -106,3 +108,4 @@ int em_function(int to_sec, char* buf, size_t size) {
     else if(ret < 0) return EMM_SELECT_ERR;
     return EMM_TIMEOUT; // ret == 0 - most popular case
 }
+#pragma GCC diagnostic pop

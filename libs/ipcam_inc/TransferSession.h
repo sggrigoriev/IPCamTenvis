@@ -162,11 +162,13 @@ public:
 	void	SetTransportType(TRANSPORTTYPE transport);	//用于在SetTarget()后切换使用数据连接
 	void	SetStreamType(MEDIASTREAM video, MEDIASTREAM audio);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 protected:
 	virtual BOOL OnFrameReceived(UINT strm, BYTE *pData, UINT len, DWORD ts, DWORD flag);
 	virtual BOOL ReceiverThreadBeginning(UINT strm) {}
 	virtual void ReceiverThreadEnding(UINT strm) {}
-
+#pragma GCC diagnostic pop
 public:
 	volatile static DWORD		s_dwMaxFileMB;		//单位: K Bytes
 	volatile static DWORD		s_dwMaxFileDuration;//单位: s

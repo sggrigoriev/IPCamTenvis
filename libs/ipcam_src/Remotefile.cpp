@@ -63,6 +63,9 @@ typedef struct _tagRRDATA {
 	UINT	iDnldProgress;	//千分比
 } RRDATA;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnarrowing"
+#pragma GCC diagnostic ignored "-Wsign-compare"
 PA_THREAD_RETTYPE __STDCALL RecvThread(void *lpParameter)
 {
 #define BUFSIZE (sizeof(PFPACKET) + 200*1024)
@@ -157,6 +160,7 @@ PA_THREAD_RETTYPE __STDCALL RecvThread(void *lpParameter)
 	free(buf);
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 DWORD RemoteFile_GetFileInfo(FILEINFO *pFi, void *pData)
 {
@@ -251,6 +255,8 @@ DWORD RemoteFile_BeginReading(const char *sFileName, void **ppData)
 	pRRData->hRcvThd = PA_ThreadCreate(RecvThread, pRRData);
 	return E_OK;
 }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 DWORD RemoteFile_LookAhead(DWORD *streamType, DWORD *timeStamp, DWORD *flag, DWORD *size, void *data)
 {
 	RRDATA *pRRData = (RRDATA*)data;
@@ -318,6 +324,7 @@ DWORD RemoteFile_Read(DWORD *streamType, DWORD *timeStamp, BYTE *buf, /*INOUT*/D
 	PA_MutexUnlock(pRRData->hFileMutex);
 	return 0;
 }
+#pragma GCC diagnostic pop
 DWORD RemoteFile_SeekKeyFrame(DWORD timeStamp, void *data)
 {
 	RRDATA *pRRData = (RRDATA*)data;

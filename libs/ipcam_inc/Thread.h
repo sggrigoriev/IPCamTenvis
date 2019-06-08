@@ -27,9 +27,12 @@ protected:
 	};
 	std::vector<struct CmdNode> m_vCmdQueue;
 	CMutexLock	m_cqLock;
-		
-	BOOL	m_bThreadCreated, m_bNoCommand;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreorder"
+    BOOL	m_bThreadCreated, m_bNoCommand;
 	THREAD_STATE m_eState;
+#pragma GCC diagnostic pop
 	PA_HTHREAD m_hThread;
 	
 	virtual void CommandHandler(UINT cmd) = 0;

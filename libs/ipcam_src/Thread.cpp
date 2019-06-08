@@ -43,9 +43,12 @@ void* _ThreadHandler(void *pData)
 	return NULL;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreorder"
 CThread::CThread() : m_bThreadCreated(FALSE), m_eState(THREADSTATE_STOPPED), m_bNoCommand(FALSE)
 {
 }
+#pragma GCC diagnostic pop
 
 CThread::~CThread()
 {

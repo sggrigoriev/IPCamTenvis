@@ -81,7 +81,8 @@ typedef struct OWData {
 	VIDEOFILEHEADER	vfhdr;
 } OURWRITERDATA;
 
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmultichar"
 static BOOL OurWriter_BeginWriting(const char *sFileName, DWORD streamTypes, void **ppData)
 {
 	OURWRITERDATA *pData = (OURWRITERDATA*)calloc(sizeof(OURWRITERDATA), 1);
@@ -122,6 +123,7 @@ static BOOL OurWriter_BeginWriting(const char *sFileName, DWORD streamTypes, voi
 	return FALSE;
 }
 
+#pragma GCC diagnostic ignored "-Wformat="
 static BOOL OurWriter_Write(DWORD streamType, DWORD timeStamp, BYTE *buf, DWORD len, DWORD flag, void *data)
 {
 	OURWRITERDATA *pWrtd = (OURWRITERDATA*)data;
@@ -208,6 +210,7 @@ static BOOL OurWriter_Write(DWORD streamType, DWORD timeStamp, BYTE *buf, DWORD 
 	}
 	return E_OTHER;
 }
+#pragma GCC diagnostic pop
 static BOOL OurWriter_WriteTag(const char *TagName, const void *Tag, UINT len, void *data)
 {
 	OURWRITERDATA *pWrtd = (OURWRITERDATA*)data;
@@ -327,6 +330,8 @@ typedef struct _ORData {
 	VIDEOFILEHEADER vfhdr;
 } OURREADERDATA;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmultichar"
 static DWORD OurReader_Probe(const char *sFileName, FILEINFO *pFi)
 {
 	VIDEOFILEHEADER vfhdr;
@@ -363,6 +368,7 @@ static DWORD OurReader_Probe(const char *sFileName, FILEINFO *pFi)
 	fclose(fp);
 	return rlt;
 }
+
 static DWORD OurReader_BeginReading(const char *sFileName, void **ppData)
 {
 	FILE *fp;
@@ -434,6 +440,7 @@ static DWORD OurReader_BeginReading(const char *sFileName, void **ppData)
 
 	return E_OK;
 }
+#pragma GCC diagnostic pop
 
 static DWORD OurReader_GetFileInfo(FILEINFO *pFi, void *data)
 {
@@ -456,6 +463,10 @@ static DWORD OurReader_GetFileInfo(FILEINFO *pFi, void *data)
 
 	return E_OK;
 }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 static DWORD OurReader_LookAhead(DWORD *streamType, DWORD *timeStamp, DWORD *flag, DWORD *size, void *data)
 {
 	OURREADERDATA *pRdd = (OURREADERDATA*)data;
@@ -638,6 +649,7 @@ static DWORD OurReader_ReadTag(const char *TagName, void *Tag, /*INOUT*/UINT *le
 
 	return E_OK;
 }
+#pragma GCC diagnostic pop
 
 static DWORD OurReader_SeekKeyFrame(DWORD timeStamp, void *data)
 {

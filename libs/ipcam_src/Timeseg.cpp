@@ -6,8 +6,8 @@
 
 extern int ScatterResStrings(UINT sId, char *buf, int len, char *pStr[], int size);
 
-//×Ö·û´®¸ñÊ½: (+|_)T;Mask;HH:MM:SS~HH:MM:SS,HH:MM:SS~HH:MM:SS ...
-//			  Mask ¿ÉÓÃ 16 ½øÖÆ±íÊ¾
+//ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½Ê½: (+|_)T;Mask;HH:MM:SS~HH:MM:SS,HH:MM:SS~HH:MM:SS ...
+//			  Mask ï¿½ï¿½ï¿½ï¿½ 16 ï¿½ï¿½ï¿½Æ±ï¿½Ê¾
 static BOOL str2time(const char *str, TIMEOFDAY *ptod)
 {
 	int h,m,s;
@@ -48,6 +48,8 @@ BOOL str2timeseg(const char *s, TIMESEG *pts)
 	return TRUE;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 BOOL timeInSeg(struct tm *ptm, const TIMESEG *pts)
 {
 	int i;
@@ -75,6 +77,7 @@ BOOL timeInSeg(struct tm *ptm, const TIMESEG *pts)
 	return FALSE;
 }
 
+#pragma GCC diagnostic ignored "-Wparentheses"
 BOOL timeValid(struct tm *ptm, const TIMESEG *pts, int size)
 {
 	int i;
@@ -158,4 +161,4 @@ CString Timeseg2Str(const TIMESEG *pts)
 	return rlt;
 }
 
-
+#pragma GCC diagnostic pop

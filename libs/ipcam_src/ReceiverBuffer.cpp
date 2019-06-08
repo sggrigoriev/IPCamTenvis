@@ -85,6 +85,8 @@ BOOL CReceiverBuffer::ReserveSpace(UINT len)
 	return TRUE;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 FRAMENODE *CReceiverBuffer::NextFrame(FRAMENODE *pNode)
 {
 	int index = (pNode - m_pNodes);
@@ -101,7 +103,7 @@ void CReceiverBuffer::QueueFrame(FRAMENODE *pNode)
 		int index = (pNode - m_pNodes);
 		if(index == m_wIdx)
 		{
-			if(pNode->isKeyFrame)	//Ԥ¼֧��
+			if(pNode->isKeyFrame)	//Ԥ¼֧��
 			{
 				if(pNode->timeStamp - m_pNodes[m_rPrerecordStart].timeStamp > 5000)
 				{
@@ -189,6 +191,7 @@ void CReceiverBuffer::DequeueFrame(FRAMENODE *pNode)
 		}
 	}
 }
+#pragma GCC diagnostic pop
 
 void CReceiverBuffer::ClearBuffer()
 {

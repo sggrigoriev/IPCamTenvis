@@ -399,6 +399,8 @@ static int isSeperator(int ch)
 	return ch>0 && (isspace(ch) || ch == ':' || ch == '=');
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
 //可能会修改pBody的内容
 int ParseBody(char *pBody, KEYVAL *pKv, int cnt, DWORD flags)
 {
@@ -481,6 +483,7 @@ int ParseBody(char *pBody, KEYVAL *pKv, int cnt, DWORD flags)
 	}
 	return rval;
 }
+#pragma GCC diagnostic pop
 
 KEYVAL *KvOf(const char *name, KEYVAL *pKv, int size)
 {
@@ -762,6 +765,8 @@ DWORD CtpLogin(PA_SOCKET hSocket, const char *psczUser, const char *psczPswd, co
 	return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 BOOL EnumDevices(LPENUMDEVICE *ppEnumDev, UINT *pNDev, const char *pszOemId, UINT try_cnt)
 {
 	PA_SOCKET sk;
@@ -873,3 +878,4 @@ BOOL EnumDevices(LPENUMDEVICE *ppEnumDev, UINT *pNDev, const char *pszOemId, UIN
 
 	return TRUE;
 }
+#pragma GCC diagnostic pop

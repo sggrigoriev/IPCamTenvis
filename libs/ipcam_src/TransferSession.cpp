@@ -19,6 +19,7 @@ CString StreamName(MEDIASTREAM stream)
 	case STREAM_VIDEO/*: case STREAM_VIDEO_0*/: strm = "video0"; break;
 	case STREAM_VIDEO_1: strm = "video1"; break;
 	case STREAM_VIDEO_2: strm = "video2"; break;
+	default: strm = "???"; break;
 	}
 	return strm;
 }
@@ -392,6 +393,9 @@ static int uev(unsigned char **bytes, int *bitoff)
 	return val;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wparentheses"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 int __STDCALL _OnRecvVideo(unsigned char * pBuff,  unsigned int len, void *pParam)
 {
 	BYTE *pData, nNalType;
@@ -671,6 +675,7 @@ int __STDCALL _OnRecvVideo(unsigned char * pBuff,  unsigned int len, void *pPara
 
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 int __STDCALL _OnRecvAudio(unsigned char * pBuff,  unsigned int len, void *pParam)
 {
@@ -832,6 +837,8 @@ int CTransferSession::CTPStopSess(const char *sessid)
 	return m_pConn->ExecCmd("stopsess", str);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 int CTransferSession::StartReceiverThread(SESSPARAM *pSessPm, MEDIASTREAM stream, int UdpPort/*for TRANSPORT_UDP only*/)
 {
     RTP_RECV_S     *pRtpRecvS;
@@ -951,6 +958,7 @@ int CTransferSession::StartReceiverThread(SESSPARAM *pSessPm, MEDIASTREAM stream
 
 	return TRUE;
 }
+#pragma GCC diagnostic pop
 
 BOOL CTransferSession::OnFrameReceived(UINT strm, BYTE *pData, UINT len, DWORD ts, DWORD flags)
 {

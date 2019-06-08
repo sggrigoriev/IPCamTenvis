@@ -188,7 +188,8 @@ bool CString::operator < (CString &str)
 	}
 	return false;
 }
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 void CString::_Alloc(int size, bool bShrink)
 {
 	if(!m_pData) m_pData = (StringData*)calloc(sizeof(StringData), 1);
@@ -214,6 +215,7 @@ void CString::_Alloc(int size, bool bShrink)
 		m_nLength = 0;
 		m_pData->nRef = 1;
 }	}
+#pragma GCC diagnostic pop
 
 void CString::_Release()
 {

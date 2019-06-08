@@ -46,6 +46,8 @@ static const char *sProduct[] = {
 static const unsigned char xorstr[] = { 0xa1, 0x83, 0x24, 0x78, 0xb3, 0x41, 0x43, 0x56 };
 //RETURN: <  0:  error
 //	      >=  0:  product id
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 int VerifyFile(const char *sfile, CString& product, CString& ver, CString& pub)
 {
 	int rlt = -1;
@@ -127,6 +129,7 @@ int VerifyFile(const char *sfile, CString& product, CString& ver, CString& pub)
 	if(rlt < 0) return rlt;
 	else return fhdr.product;
 }
+#pragma GCC diagnostic pop
 
 //Return:	0 - OK;
 #define INVALID_RESPONSE	-3
@@ -282,6 +285,9 @@ DWORD CTPUpdate(DVSCONN *pConn, const char *file, UPDATECALLBACK pFunc, void* da
 	return rlt;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat="
+#pragma GCC diagnostic ignored "-Wsign-compare"
 //Return: 0 - OK; Otherwise - something wrong
 int SendFile(PA_SOCKET sk, FILE *fp, UPDATECALLBACK pFunc, void* data)
 {
@@ -367,4 +373,4 @@ int SendFile(PA_SOCKET sk, FILE *fp, UPDATECALLBACK pFunc, void* data)
 	}
 	return rlt;
 }
-
+#pragma GCC diagnostic pop
