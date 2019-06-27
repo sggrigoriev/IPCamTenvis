@@ -35,17 +35,30 @@ typedef enum {AQ_Timeout = PQ_TIMEOUT,
     AQ_ToSF = 7,
     AQ_STOP = PQ_STOP} queue_events_t;      /* MAX queue number (15th currently) */
 
-/* Init Agent queues service */
+/**
+ * Init Agent queues service
+ */
 void aq_init_queues();
 
-/* Stop Agent queues service */
+/**
+ * Stop Agent queues service
+ */
 void aq_erase_queues();
 
-/* Get the queue pointed by associated event number
- *  Return pointer to the queue or NULL if no queue associated
+/**
+ * Get the queue pointed by associated event number
+ *
+ * @param que_number    - number from AQ_MIN_QUEUE to AQ_MAX_QUEUE
+ * @return  - pointer to the queue or NULL if no queue associated
  */
 pu_queue_t* aq_get_gueue(int que_number);
 
+/**
+ * Return the message source queue name
+ *
+ * @param ev    - number of source queue   -
+ * @return  - source queue name
+ */
 const char* aq_event_2_char(pu_queue_event_t ev);
 
 #endif /* IPCAMTENVIS_AQ_QUEUES_H */

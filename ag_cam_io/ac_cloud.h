@@ -17,7 +17,8 @@
 */
 /*
  Created by gsg on 12/12/17.
- Suppor all HTTP Cam's negotiations with the cloud
+ Support retrieving video parameters and WS interface parameters from the cloud
+ It is some workflow inside.
 */
 
 #ifndef IPCAMTENVIS_AC_CLOUD_H
@@ -25,6 +26,21 @@
 
 #include <stdlib.h>
 
+/**
+ * Get camera connection parameters from the cloud
+ *
+ * @param v_url     - URL for streaming into Wowza
+ * @param v_size    - buffer size
+ * @param v_port    - Wowza port
+ * @param v_sess    - session ID
+ * @param vs_size   - buffer size
+ * @param w_url     - WEB socket url (Cam manages by the cloud with separate Web Socket interface!)
+ * @param w_size    - buffer size
+ * @param w_port    - WEB socket port
+ * @param w_sess    - WEB socket session ID
+ * @param ws_size   - buffer size
+ * @return  - 0 if errorm 1 if Ok
+ */
 int ac_cloud_get_params(char* v_url, size_t v_size, int* v_port, char* v_sess, size_t vs_size, char* w_url, size_t w_size, int* w_port, char* w_sess, size_t ws_size);
 
 #endif /* IPCAMTENVIS_AC_CLOUD_H */

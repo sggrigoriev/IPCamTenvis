@@ -17,24 +17,39 @@
 */
 /*
  Created by gsg on 17/10/17.
+ Thread-manager for assync IO Agent-Proxy
 */
 
 #ifndef IPCAMTENVIS_AT_PROXY_RW_H
 #define IPCAMTENVIS_AT_PROXY_RW_H
 
-/* Start the thread. Return 1 */
+/**
+ * Start the thread.
+ *
+ * @return  - 1
+*/
 int at_start_proxy_rw();
 
-/* Stop the thread */
+/**
+ * Stop the thread
+*/
 void at_stop_proxy_rw();
 
-/* Say stop to the thread - external interface for async thread stop */
+/**
+ * Say stop to the thread - external interface for async thread stop
+*/
 void at_set_stop_proxy_rw();
 
-/* Say stop to the r/w threads - external interface for async threads stop */
+/**
+ * Say stop to the r/w threads - external interface for async threads stop
+*/
 void at_set_stop_proxy_rw_children();
 
-/* Check the stop flag. Return 1 if flag is on, 0 if not*/
+/**
+ * Check the stop flag.
+ *
+ * @return  - 1 if flag is on, 0 if not
+*/
 int at_are_childs_stop();
 
 #endif /* IPCAMTENVIS_AT_PROXY_RW_H */

@@ -17,11 +17,16 @@
 */
 /*
  Created by gsg on 17/10/17.
+ Main Cam loop. Make all startup and shutdown activities.
+ Run all threads and EM process
 */
 
 #ifndef IPCAMTENVIS_AT_MAIN_THREAD_H
 #define IPCAMTENVIS_AT_MAIN_THREAD_H
 
-void at_main_thread();      /* Main Agent's thread */
+/**
+ * Main Agent's thread
+ */
+void at_main_thread();
 
 #endif /* IPCAMTENVIS_AT_MAIN_THREAD_H */

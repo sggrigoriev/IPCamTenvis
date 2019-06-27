@@ -17,6 +17,7 @@
 */
 /*
  Created by gsg on 25/02/18.
+ High-level interfaces to manage video streaming
 */
 
 #ifndef IPCAMTENVIS_AC_VIDEO_H
@@ -24,34 +25,73 @@
 
 #include <unistd.h>
 
-/*
+/**
+ * Prepare streaming:
  * 1. Get streaming & WS connection parameters
  * 2. Make initial Cam setuo
  * 3. Run WebSocket interface
- * 4. Run Cam's async interface (phase - II
+ * 4. Run Cam's async interface (phase - II)
+ *
+ * @return  - 0 if error, 1 if Ok
  */
 int ac_connect_video();
 
+/**
+ * Close streaming session
+ */
 void ac_disconnect_video();
 
-/*
- * Rus video streaming (and audio - later)
+/**
+ * Run video streaming
+ *
+ * @param is_video  - 0 no video (debugging only!), 1 video enabled
+ * @param is audio  - 0 no audio, 1 audio enabled
+ * @return  - 0 if error, 1 if Ok
  */
 int ac_start_video(int is_video, int is_audio);
 
-/*
- * Stops videostreaming
- */
-
+/**
+ * Stops video streaming
+*/
 void ac_stop_video();
 
 /*
  * Thread-protected functions
  */
+
+/**
+ * Set module static parameter to be used in anther thread
+ * @param err   - string with error text
+ */
 void ac_set_stream_error(const char* err);
+
+/**
+ * Clear error message
+ */
 void ac_clear_stream_error();
+
+/**
+ * Copy error string to the local memory
+ *
+ * @param buf   - buffer to store the string
+ * @param size  - buffer size
+ * @return  - pointer to the buffer
+ */
 const char* ac_get_stream_error(char* buf, size_t size);
+
+/**
+ * Get the presence of error message
+ *
+ * @return  - 0 error string is empty, 1 error string is not empty
+ */
 int ac_is_stream_error();
 
+/**
+ * Get video server (Wowza) session ID
+ * @param buf   - buffer to save the session ID
+ * @param size  - buffer size
+ * @return  - pointer to the buffer
+ */
 const char* ac_get_session_id(char* buf, size_t size);
+
 #endif /* IPCAMTENVIS_AC_VIDEO_H */

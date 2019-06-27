@@ -16,8 +16,9 @@
  *  limitations under the License.
 */
 /*
- * Made to separate the 3rd-party lib and its memory leaks from own problems
  * Created by gsg on 17/11/18.
+ * Made to separate the 3rd-party lib and its memory leaks from own problems
+ * Later on Send Files thread was added to the process
 */
 
 

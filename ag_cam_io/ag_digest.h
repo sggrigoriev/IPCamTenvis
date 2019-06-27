@@ -18,6 +18,7 @@
 /*
  Created by gsg on 21/12/17.
  Responsible for DIGEST auth
+ Not in use after shifting to gstreamer library
 */
 
 #ifndef IPCAMTENVIS_AG_DIGEST_H

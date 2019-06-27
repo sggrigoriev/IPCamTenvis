@@ -17,6 +17,7 @@
 */
 /*
  Created by gsg on 29/11/17.
+ TCP in/out primitives. Obsolete.
 */
 
 #ifndef IPCAMTENVIS_AC_TCP_H

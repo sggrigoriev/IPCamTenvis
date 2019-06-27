@@ -17,19 +17,31 @@
 */
 /*
  Created by gsg on 17/10/17.
+ Thread to read messages from Proxy and EM and forward it to Agent;
+  Wrapper for TCP-queue transport
 */
 
 #ifndef IPCAMTENVIS_AT_PROXY_READ_H
 #define IPCAMTENVIS_AT_PROXY_READ_H
 
-/* Start the thread
- *      read_socket - the open socket to read
+/**
+ * Start the thread
+ *
+ * @param read_socket   - the open socket to read
+ * @return  - 1
 */
 int at_start_proxy_read(int read_socket);
 
-/* stop the thread */
+/**
+ * Stop the thread
+ */
 void at_stop_proxy_read();
 
+/**
+ * Get the EM open socket
+ *
+ * @return  - socket
+ */
 int at_get_sf_write_sock();
 
 

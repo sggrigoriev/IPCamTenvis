@@ -17,7 +17,8 @@
 */
 /*
  Created by gsg on 30/10/17.
- Contains internal presentation for all cloud, Proxy & camera messages
+ Contains internal presentation for cloud, Proxy & camera messages
+ Has to be refactored
 */
 
 #ifndef IPCAMTENVIS_AO_CMD_DATA_H
@@ -27,14 +28,15 @@
 
 #include "ag_defaults.h"
 
-/* Alert constants: EM->Agent->SF */
+/* Alert constants: EventMonitor->Agent->SendFiles thread */
 #define AC_ALERT_NAME   "alertName"
 #define AC_ALERT_START  "startDate"
 #define AC_ALERT_END    "endDate"
 #define AC_ALERT_MSG    "path"
 
 /*************************************************************************
- * All from and to Agent messages internak format: from Proxy, from Cam
+ * Obsolete
+ * All from and to Agent messages internal format: from Proxy, from Cam
  */
 typedef enum {
     AO_CMD_NOTHING,             //No command
@@ -54,12 +56,13 @@ typedef enum {
     AT_CMD_SIZE
 } t_ao_agent_command;
 
+/* Onsolete */
 typedef enum {
     AO_ACT_NO,              /* No action expected */
     AO_ACT_ALIEN_PROPERTY   /* No shch a property in dB */
-
 } t_ao_app_actions;
 
+/* Message type */
 typedef enum {
     AO_UNDEF,
     AO_IN_PROXY_ID,         /* Obsolete. Proxy device ID - the command feft for compatibility with M-3 agent*/
@@ -69,6 +72,7 @@ typedef enum {
     AO_ALRT_CAM             /* camera alert */
 } t_ao_msg_type;
 
+/* WS messages type */
 typedef enum {
     AO_WS_UNDEF,
     AO_WS_PING,
@@ -76,6 +80,7 @@ typedef enum {
     AO_WS_ERROR
 } t_ao_ws_msg_type;
 
+/* Connection request data */
 typedef struct {
     char url[4097];
     int port;
@@ -115,6 +120,7 @@ typedef struct {
     int                 timeout;       /* cloud pings period */
 } t_ao_ws_ping;
 
+/* All camera events list */
 typedef enum {
     AC_CAM_EVENT_UNDEF,
     AC_CAM_START_MD, AC_CAM_STOP_MD, AC_CAM_START_SD, AC_CAM_STOP_SD, AC_CAM_START_IO, AC_CAM_STOP_IO,
@@ -124,15 +130,42 @@ typedef enum {
     AC_CAM_EVENTS_SIZE
 } t_ac_cam_events;
 
+/**
+ * Convert string presentation to number
+ *
+ * @param string    - event name
+ * @return  - event number or 0 (AC_CAM_EVENT_UNDEF) if the event name is not recognized
+ */
 t_ac_cam_events ac_cam_string2event(const char* string);
+
+/**
+ * Convert event number to event string
+ *
+ * @param event - event number
+ * @return  - event name or "AC_CAM_EVENT_UNDEF" if event number is out of range
+ */
 const char* ac_cam_event2string(t_ac_cam_events event);
 
-/*
- * Alert EM->Agent (got file) and/or Agent->SF (got file, got stapshot)
+/**
+ * Create alert message: got new file (snapshot/MD/SD) EventManager - Agent interface as
+ * {"AC_ALERT_NAME": "AC_ALERT_MSG", "AC_CAM_GOT_FILE": "AC_ALERT_MSG": "path"}";
+ *
+ * @param path  - full path and file name
+ * @param buf   - buffer to store aert
+ * @param size  - bufer size
+ * @return  - pointer to the buffer
  */
 const char* ao_make_got_files(const char* path, char* buf, size_t size);
-/*
- * Alert EM-> Agent about motion od sound detection
+
+/**
+ * Create alert message about MD or SD event Agent - EM interface
+ *
+ * @param event         - event number
+ * @param start_date    - event start date; 0 if no start_date
+ * @param end_date      - event end_date; 0 if no end date
+ * @param buf           - buffer to store the result
+ * @param size          - buffer size
+ * @return  - pointer to the buffer
  */
 const char* ao_make_MDSD(t_ac_cam_events event, time_t start_date, time_t end_date, char* buf, size_t size);
 

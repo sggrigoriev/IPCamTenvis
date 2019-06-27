@@ -17,6 +17,8 @@
 */
 /*
  Created by gsg on 29/11/17.
+ read/write streaming functions to read from Camera and send it immediately to videoserver
+ Name is wrong. Has to be renamed/redesigned.
 */
 
 #ifndef IPCAMTENVIS_AC_UDP_H
@@ -41,7 +43,24 @@ int ac_udp_p2p_connection(const char* remote_ip, int remote_port, int home_port)
 void ac_udp_close_connection(int sock);
 
 /* Return -1 if error, 0 if timeout, >0 if read smth */
+/**
+ * Read from socket. TCP socket used. Has to be renamed.
+ *
+ * @param sock  - open TCP socket
+ * @param buf   - buffer for data read
+ * @param size  - buffer size
+ * @param to    - read timeout - obsolete!
+ * @return  - -1 if error, 0 if timeout >0 amount of bytes red
+ */
 t_ac_udp_read_result ac_udp_read(int sock, char* buf, size_t size, int to);
+
+/**
+ * Write to socket, TCP socket used, Has to be renamed
+ * @param sock  - open TCP socket
+ * @param buf   - buffer to be sent
+ * @param size  - amount of bytes to be sent
+ * @return  - -1 if error, 0 if timeout >0 amount of bytes red
+ */
 int ac_udp_write(int sock, const char* buf, size_t size);
 
 #endif /* IPCAMTENVIS_AC_UDP_H */

@@ -17,18 +17,28 @@
 */
 /*
  Created by gsg on 15/12/17.
+ Agent -> WUD async write thread
+ Wrapper for queue-TCP interface
 */
 
 #ifndef IPCAMTENVIS_AT_WUD_WRITE_H
 #define IPCAMTENVIS_AT_WUD_WRITE_H
 
-/* Start thread */
+/**
+ * Start thread
+ *
+ * @return  - 1
+ */
 int at_start_wud_write();
 
-/* Stop the thread */
+/**
+ * Stop the thread
+ */
 void at_stop_wud_write();
 
-/* Set stip flag on for async stop */
+/**
+ * Set stop flag on for async stop
+*/
 void at_set_stop_wud_write();
 
 #endif /* IPCAMTENVIS_AT_WUD_WRITE_H */

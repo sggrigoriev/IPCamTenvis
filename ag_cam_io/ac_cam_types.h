@@ -17,6 +17,7 @@
 */
 /*
  Created by gsg on 10/01/18.
+ Types, constants an helpers used for Cam RTSP session implementation
 */
 
 #ifndef IPCAMTENVIS_AC_CAM_TYPES_H
@@ -49,11 +50,13 @@
 #define AC_RTSP_SERVER_PORT "server_port="
 #define AC_RTSP_SOURCE_IP   "source="
 
+/* Session type: camera or server */
 typedef enum {
     AC_CAMERA,
     AC_WOWZA
 } t_ac_rtsp_device;
 
+/* Obsolete */
 typedef enum {
     AC_STATE_UNDEF,
     AC_STATE_CONNECT,
@@ -65,16 +68,19 @@ typedef enum {
     AC_STATE_ON_ERROR
 } t_ac_rtsp_states;
 
+/* Just pair definition */
 typedef struct {
     int rtp;
     int rtcp;
 } t_rtsp_pair;
 
+/* Obsolete */
 typedef struct {
     t_rtsp_pair video_pair;
     t_rtsp_pair audio_pair;
 } t_rtsp_media_pairs;
 
+/* All types below - RTSP session connection param definition */
 typedef struct {
     char* ip;
     t_rtsp_pair port;
@@ -100,6 +106,7 @@ typedef union {
     t_ac_rtsp_rt_media  rt_media;
 } t_ac_rtsp_media;
 
+/* RTSP session definition */
 typedef struct _ACRTSPSession {
     t_ac_rtsp_device device;
     t_ac_rtsp_states state;
@@ -151,6 +158,7 @@ typedef struct _ACRTSPSession {
    a=control:<cam setup audio url>
    to:
    a=control:trackID=1
+
  * @param new_sdp - changed SDP
  * @param size - buf size
  * @param old_sdp  - cam's SDP
@@ -159,15 +167,15 @@ typedef struct _ACRTSPSession {
 */
 int ac_rtsp_make_announce_body(char* new_sdp, size_t size, const char* old_sdp, const char* control_url);
 
-/**************************************************
+/**
  * Setup sess->audie/video _url use audio/media "a=control": values
  * Add values to the session url or replace session url for audio/video setupsac_rtsp_set_setup_urls
- * @param sdp - Wowze/AP SDP
- * @param sess - Wowza/AP sesion descriptor
- * @param is_replace - 1 - make replacement,0 - concatinate
- * @return - 1 if OK, 0 if not
+ *
+ * @param sdp -         Wowza/AP SDP
+ * @param sess -        Wowza/AP sesion descriptor
+ * @param is_replace -  1 - make replacement,0 - concatinate
+ * @return  - 1 if OK, 0 if not
  */
 int ac_rtsp_set_setup_urls(const char* text_sdp, t_at_rtsp_session* sess, int is_replace);
-
 
 #endif /* IPCAMTENVIS_AC_CAM_TYPES_H */

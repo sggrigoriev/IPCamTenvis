@@ -17,6 +17,8 @@
 */
 /*
  Created by gsg on 27/10/17.
+ Obsolete. Currently streaming uses system TCP buffer.
+
  Implements thread-safe ring buffer for video stream forwardring.
  NB! Limitations: properly worsk with only one read and only write threads!!!
 
@@ -41,34 +43,38 @@ typedef enum {
     AB_OVFERFLOW   /* Buffer overflown, data rewrires non-readed block */
 } t_ab_put_rc;
 
-/****************************************
+/**
  * Initialise ring buffer.
  * NB1. Total size in bytes = max_cunks*chunk_size + ((sizeof(size_t)+(sizeof(t_ab_byre*))*max_chunks)
  * NB2. Buffer can not take more than chunk_size bytes in one shot!
- * @param no_block - if 1 no rewrite oldest data on overflow state. Also no waits inside!
- * @param max_chunks - max amount of chunks stored ar one time
- * @return - 1 if OK, 0 if not (worng input params or memory allocation problems
+ *
+ * @param no_block      - if 1 no rewrite oldest data on overflow state. Also no waits inside!
+ * @param max_chunks    - max amount of chunks stored ar one time
+ * @return  - 1 if OK, 0 if not (worng input params or memory allocation problems
  */
 int ab_init(int no_block, size_t max_chunks);
-/****************************************
+
+/**
  * Closes the ring buffer
  */
 void ab_close();
-/****************************************
+
+/**
  * Get block for read. If nothing to read - wait until the info or timeout.
  * In case of timeout returns zero data: {0, NULL}
- * @param - to_sec - timeout in seconds waiting for data. If 0 it should wait forever
- * @return pointer to data and size. NB! The reader will be responsible for block memory erase!
+ *
+ * @param to_sec    - timeout in seconds waiting for data. If 0 it should wait forever
+ * @return  - pointer to data and size. NB! The reader will be responsible for block memory erase!
  */
 const t_ab_block ab_getBlock(unsigned long to_sec);
-/*****************************************
+
+/**
  * Put the block with the data into buffer
+ *
  * @param data_size - data size in bytes. NB! max allowed data size is chunk_size (see ab_init() parameters)
- * @param data  pointer to the data to be saved
- * @return t_ab_put_rc (see the description on t_ab_put_rc)
+ * @param data      - pointer to the data to be saved
+ * @return  - t_ab_put_rc (see the description on t_ab_put_rc)
  */
 t_ab_put_rc ab_putBlock(t_ab_block* blk);
-
-
 
 #endif /* IPCAMTENVIS_AB_RING_BUFER_H */

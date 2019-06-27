@@ -2,7 +2,8 @@
 /*
  Created by gsg on 13/01/18.
  Here are parts of gstreamer rtsp sources from plugins.
- We got a little different tast - make proxy client, so we need just small part of all code.
+ We got a little different task - make proxy client, so we need just small part of all code.
+ NB! Currently works on Ubuntu only. Has to be ported to Hisilicon as well - it will reduce the huge Agent size!
 */
 
 #ifndef IPCAMTENVIS_RTSP_MSG_EXT_H

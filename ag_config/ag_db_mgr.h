@@ -36,11 +36,18 @@
 
 #include "ao_cmd_data.h"
 
+/**
+ * Initiate cam properties. Load defaults if no file was saved or from the file.
+ * @return  - 0 if error, 1 if Ok
+ */
 int ag_db_load_cam_properties();
-void ag_db_unload_cam_properties();
-/*TODO! */
-int ag_save_cam_properties();
 
+/**
+ * Delete camera peoperties in memory
+ */
+void ag_db_unload_cam_properties();
+
+/* Not used */
 typedef enum {
     AG_DB_ANY,      /* All types */
     AG_DB_OWN,      /* Agent's properties */
@@ -54,31 +61,64 @@ typedef enum {
  * NB1 Changes list deleted after use!
  * NB2 Returned list should be erased after use !!!
  */
+/**
+ * Create the report to the cloud with Camera parameter changes.
+ * for all parameters which changed their values
+ * NB1 Changes list deleted after use!
+ * NB2 Returned list should be erased after use !!!
+ *
+ * @return  - cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
+ */
 cJSON* ag_db_get_changes_report();
-/*
+/**
  * Create JSON report same format as above for all properties has to be reported at startup phase
+ *
+ * @return  - cJSON array of [{"name":"<ParameterName>", "value":"<ParameterValue"}, ...]
  */
 cJSON* ag_db_get_startup_report();
-/*
- * Return 0 if no change; return 1 if proprrty changed
- * !Set the property's flag ON in any case!.
+
+/**
+ * Set property by name.
+ *
+ * @param property_name
+ * @param property_value - value in string format
+ * @return  - 0 if no change, 1 if property changed
  */
 int ag_db_set_property(const char* property_name, const char* property_value);
+
+/**
+ * Set peoperty by name
+ *
+ * @param property_name
+ * @param property_value - int value
+ * @return  - 0 if no change, 1 if property changed
+ */
 int ag_db_set_int_property(const char* property_name, int property_value);
 
+/**
+ * Get int property value by its name
+ * @param property_name
+ * @return  - property value
+ */
 int ag_db_get_int_property(const char* property_name);
-/* Cloud-Cam parameter set: set on cam, re-read and store into DB
- * If re-read value differs - change_flag On if same after update - Off
+
+/**
+ * Cloud-Cam parameter set: set on cam, re-read and store into DB
+ * If re-read value differs - dB change_flag On if same after update - Off
+ * @return  - 1
  */
 int ag_db_update_changed_cam_parameters();
-/*
- * Save persistent chabges
+
+/**
+ * Save changes on disk only parameters marked as persistent will be saved
  */
 void ag_db_save_persistent();
-/*
- * Reset all flags at the end of cycle
+
+/**
+ * Reset flags changed and change_flag at the end of cycle of use.
 */
 void ag_clear_flags();
+
 /*
  * Binary properties analysis
  */
@@ -91,6 +131,12 @@ typedef enum {
     AG_DB_BIN_ON_ON         /* 1->1 */
 } ag_db_bin_state_t;
 
+/**
+ * Get binary property status
+ *
+ * @param property_name
+ * @return  - see the ag_db_bin_state_t above
+ */
 ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
 
 
@@ -111,7 +157,7 @@ ag_db_bin_state_t ag_db_bin_anal(const char* property_name);
 #define AG_DB_CMD_DISCONNECT_RW     "disconnect_rw_cmd"     /* obsolete */
 
 /* AG_DB_CAM */
-#define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"              /* Active Viewers amoint total */
+#define AG_DB_STATE_VIEWERS_COUNT   "viewersCount"              /* Active Viewers amount total */
 #define AG_DB_STATE_PING_INTERVAL   "pingInterval"              /* WS ping interval  */
 #define AG_DB_STATE_STREAM_STATUS   "ppc.streamStatus"          /* Command to initiate streaming */
 #define AG_DB_STATE_RAPID_MOTION    "ppc.rapidMotionStatus"     /* ? */

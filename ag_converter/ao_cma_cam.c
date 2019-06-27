@@ -91,7 +91,7 @@ static md_par_t MD_PARAMS = {0};
 static sd_par_t SD_PARAMS = {0};
 static cfgrec_par_t CFGREC_PARAMS = {0};
 /*
- * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if snth wrong
+ * Return camera event or 0 (AC_CAM_EVENT_UNDEF) if smth wrong
  * {"alertName" : "<name>[, "startDate" : <time_t>[, "endDate" : time_t]]}
  */
 t_ao_cam_alert ao_cam_decode_alert(cJSON* obj) {
@@ -451,7 +451,7 @@ void ao_save_params(int cmd_id, const char* lst) {
     }
 }
 /*
- * create params list from local store and return ub lst
+ * create params list from local store and return as lst
  * NB! lst sould be freed after use!
  */
 char* ao_make_params(int cmd_id) {

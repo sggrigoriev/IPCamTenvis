@@ -17,11 +17,12 @@
 */
 /*
     Created by gsg on 16/10/17.
+    Keeps Camera release version
 */
 
 #ifndef AGENT_RELEASE_VERSION_H
 #define AGENT_RELEASE_VERSION_H
 
-#define AGENT_FIRMWARE_VERSION  "1.0.4 08-Jun-2019"
+#define AGENT_FIRMWARE_VERSION  "1.0.5 27-Jun-2019"
 
 #endif /* AGENT_RELEASE_VERSION_H */

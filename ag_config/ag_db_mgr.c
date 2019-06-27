@@ -427,11 +427,6 @@ int ag_db_load_cam_properties() {
 void ag_db_unload_cam_properties() {
     FREE(IMDB);
 };
-/* Save persistent data to disk */
-int ag_save_cam_properties() {
-//TODO!!! updated flag set t 0!
-    return 0;
-}
 
 static void add_reported_property(cJSON* report, const char* name, int value) {
     cJSON* obj = cJSON_CreateObject();

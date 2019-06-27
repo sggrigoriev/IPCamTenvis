@@ -17,15 +17,39 @@
 */
 /*
  Created by gsg on 07/12/17.
+ WebSocket IO interface thread
 */
 
 #ifndef IPCAMTENVIS_AT_WS_H
 #define IPCAMTENVIS_AT_WS_H
 
+/**
+ * Start WS IO thread
+ *
+ * @param host          - WS host
+ * @param port          - WS port
+ * @param path          - path in WS host
+ * @param session_id    - WS session id
+ * @return  - 0 if error, 1 if Ok
+ */
 int at_ws_start(const char *host, int port, const char *path, const char *session_id);
+
+/**
+ * Get the thread status
+ * @return  0 thread stop, 1 thread run
+ */
 int at_is_ws_run();
+
+/**
+ * Sync WS IO thread stop (jhoin inside)
+ */
 void at_ws_stop();
 
+/**
+ * Send message to remote WS
+ * @param msg   - message to send (string)
+ * @return  - 0 if error, 1 if Ok
+ */
 int at_ws_send(const char* msg);
 
 #endif /* IPCAMTENVIS_AT_WS_H */

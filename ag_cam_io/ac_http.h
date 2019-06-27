@@ -17,6 +17,7 @@
 */
 /*
  Created by gsg on 12/12/17.
+ Local cURL wrapper. Has to be joined with libhttp sometime,
 */
 
 #ifndef IPCAMTENVIS_AC_HTTP_H
@@ -43,17 +44,49 @@ typedef struct {
     char err_buf[CURL_ERROR_SIZE];
     struct curl_slist* slist;
 } t_ac_http_handler;
-
+/**
+ * Currently it is empty. Obsolete.
+ * @return  - 1
+ */
 int ac_http_init();
+
+/**
+ * Also clean & empty. Obsolete.
+ */
 void ac_http_close();
 
+/**
+ * Prepare cURL GET
+ *
+ * @param url_string    - URL for GET
+ * @param auth_string   - auth token (session ID in our case)
+ * @return  - poiner to ready handler, NULL if error
+ */
 t_ac_http_handler* ac_http_prepare_get_conn(const char* url_string, const char* auth_string);
-/* -1 - retry, 0 - error, 1 - OK */
+/**
+ * Run prepared GET
+ * @param h         - poiner to the handler
+ * @param answer    - aswer came from GET
+ * @param size      - buffer size
+ * @return  -   -1 - retry, 0 - error, 1 - OK (see AC_HTTP_RC_*)
+ */
 int ac_perform_get_conn(t_ac_http_handler* h, char* answer, size_t size);
 
+/**
+ * Close the connection, delete memory.
+ * @param h - pointer to the handler
+ */
 void ac_http_close_conn(t_ac_http_handler* h);
 
-/* return CurlErro */
+/* return CurlErrno */
+/**
+ * Get cURL errno. Service function.
+ *
+ * @param perform_rc    - rc returned by cURL
+ * @param handler       - pointer to the connection handler
+ * @param function      - function returned the rc
+ * @return  - returned errno
+ */
 long ac_http_analyze_perform(CURLcode perform_rc, CURLSH* handler, const char* function);
 
 #endif /* IPCAMTENVIS_AC_HTTP_H */

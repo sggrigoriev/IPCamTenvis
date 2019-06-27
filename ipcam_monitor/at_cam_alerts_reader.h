@@ -17,11 +17,13 @@
 */
 /*
  Created by gsg on 18/09/18.
+ Main camera monitor process function.
 */
 
 #ifndef IPCAMTENVIS_AT_CAM_ALERTS_READER_H
 #define IPCAMTENVIS_AT_CAM_ALERTS_READER_H
 
+/* Monitor input parameter types */
 typedef enum {
     MON_NAME=0,
     MON_AGENT_IP=1,
@@ -36,6 +38,7 @@ typedef enum {
     MON_SIZE
 } mon_params_t;
 
+/* Structure for Monitor start parameters */
 typedef struct {
     char* process_name;
     char* agent_ip;
@@ -46,8 +49,16 @@ typedef struct {
     char* cam_password;
 } input_params_t;
 
+/**
+ * Stop Monitor function
+ */
 void at_mon_stop();
 
+/**
+ * Monitor function itself
+ *
+ * @param params    - parsed start parameters
+ */
 void at_mon_function(const input_params_t* params);
 
 #endif /* IPCAMTENVIS_AT_CAM_ALERTS_READER_H */

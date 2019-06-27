@@ -17,6 +17,9 @@
 */
 /*
  Created by gsg on 17/03/18.
+ Streaming thread(s)
+ Initially was designed for interleaved and non-interleaved modes
+ Finally just interleaved mode is supported. Has to be cleaned-up.
 */
 
 #ifndef IPCAMTENVIS_AT_RW_THREAD_H
@@ -24,21 +27,32 @@
 
 #include "ac_cam_types.h"
 
+/**
+ * Set parameters for interleaved streaming type
+ *
+ * @param rd        - read socket (stream from camera)
+ * @param wr        - write socket (stream  to Wowza)
+ * @param cam_sess  - camera RTSP session context
+ * @return  - 0 if error, 1 if Ok
+ */
 int at_set_interleaved_rw(int rd, int wr, t_at_rtsp_session* cam_sess);
 
-/***************************
- * Start getting cideo stream from the camera in RT mode - using 4 streams: video & audio
+/**
+ * Start getting video stream from the camera in RT mode - using 4 streams: video & audio
+ *
  * @return - 1 is OK, 0 if not
  */
 int at_start_rw();
 
-/*****************************
+/**
  * Stop read streaming (join)
  */
 void at_stop_rw();
-/*****************************
+
+/**
  * Check if read stream runs
- * @return 1 if runs 0 if not
+ *
+ * @return  - 1 if runs 0 if not
  */
 int at_is_rw_thread_run();
 

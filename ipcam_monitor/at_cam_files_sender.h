@@ -17,13 +17,28 @@
 */
 /*
  Created by gsg on 18/10/18.
+ Camera's generated files sender (SF).
 */
 
 #ifndef IPCAMTENVIS_AT_CAM_FILES_SENDER_H
 #define IPCAMTENVIS_AT_CAM_FILES_SENDER_H
 
+/**
+ * Start SF thread
+ *
+ * @param rd_sock   - open TCP read socket
+ * @return  - 1
+ */
 int at_start_sf(int rd_sock);
+
+/**
+ * Sync stop SF thread (join() inside
+ */
 void at_stop_sf();
+
+/**
+ * Set async stop for SF externally
+ */
 void at_set_stop_sf();
 
 #endif /* IPCAMTENVIS_AT_CAM_FILES_SENDER_H */

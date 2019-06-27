@@ -17,6 +17,7 @@
 */
 /*
  Created by gsg on 16/10/17.
+ Getters and setters for Camera configuration file
 */
 
 #ifndef IPCAMTENVIS_AG_SETTINGS_H
@@ -58,8 +59,8 @@ const char*     ag_getCamChannel();         /* "0" - hi res, "1" - low res, "2" 
 const char*     ag_getCamMode();            /* "av" or "video" or "audio" */
 const char*     ag_getCamLogin();
 const char*     ag_getCamPassword();
-int             ag_getIPCamProtocol();      /* RTMP or RTSP */
-int             ag_isCamInterleavedMode();
+int             ag_getIPCamProtocol();      /* RTSP only!*/
+int             ag_isCamInterleavedMode();  /* Should be 1 */
 
 unsigned int    ag_getStreamBufferSize();
 
@@ -69,28 +70,28 @@ long    ag_getDisconnectRespTO();   /* TO to wait video disconnect confirmation 
 long    ag_getSessionIdTO();        /* TO to wait session info form cloud */
 
 /* Thread-protected functions */
-void ag_saveProxyID(const char* proxyID);
-const char* ag_getProxyID();
+void ag_saveProxyID(const char* proxyID);       /* Save deviceID sent by Proxy */
+const char* ag_getProxyID();                    /* Get device ID */
 
-void ag_saveProxyAuthToken(const char* token);
-const char* ag_getProxyAuthToken();
+void ag_saveProxyAuthToken(const char* token);  /* Save auth token sent by Proxy */
+const char* ag_getProxyAuthToken();             /* Get auth token */
 
-void ag_saveMainURL(const char* mu);
-const char* ag_getMainURL();
+void ag_saveMainURL(const char* mu);            /* Save main URL sent by Proxy */
+const char* ag_getMainURL();                    /* Get main URL */
 /********************************/
 
-int ag_getIsSSL();
+int ag_getIsSSL();                              /* 1 if SSL (HTTPS) used */
 
-const char* ag_getCurloptCAInfo();
-int ag_getCurloptSSLVerifyPeer();
+const char* ag_getCurloptCAInfo();              /* cURL-related stuff */
+int ag_getCurloptSSLVerifyPeer();               /* cURL-related stuff */
 
-int ag_load_config(const char* cfg_file_name);
+int ag_load_config(const char* cfg_file_name);  /* Load configuration file */
 
-int ag_load_cam_settings(); /* Load cam settings from file. Return 0 if no file or file corrupted */
-const char* ag_request_cam_settings(); /* Return JSON with settings required or NULL if error */
-const char* ag_get_cam_properties(const char* property_name); /* Return JSON with camera propertiy and format. If property_name == NULL - returns all. NULL if error*/
+int ag_load_cam_settings();                     /* Not in use. Load cam settings from file. Return 0 if no file or file corrupted */
+const char* ag_request_cam_settings();          /* Not in use. Return JSON with settings required or NULL if error */
+const char* ag_get_cam_properties(const char* property_name); /* Not in use. Return JSON with camera propertiy and format. If property_name == NULL - returns all. NULL if error*/
 /* Alert reactions */
-int ag_isMsgSendOnAlert(t_ac_cam_events alert_type);
-int ag_isFileSendOnAlert(t_ac_cam_events alert_type);
+int ag_isMsgSendOnAlert(t_ac_cam_events alert_type);    /* Not in use */
+int ag_isFileSendOnAlert(t_ac_cam_events alert_type);   /* Not in use */
 
 #endif /* IPCAMTENVIS_AG_SETTINGS_H */
