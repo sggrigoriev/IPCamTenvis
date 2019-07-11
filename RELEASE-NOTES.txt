@@ -1,4 +1,4 @@
-VERSION 1.0.6 11-Jul-2019
+VERSION 1.0.7 11-Jul-2019
 =================================================================================================
 1. Cam synced with Proxy & WUD changes (* -> 127.0.0.1 for litening)
 2. Monitor process is listening 127.0.0.1 instead of *
