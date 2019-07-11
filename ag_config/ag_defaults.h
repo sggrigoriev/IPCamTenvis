@@ -107,6 +107,7 @@
 #define DEFAULT_FILES_UPL_PATH  "cloud/json/files"  /* Should be added to the main URL for files upload */
 
 #define DEFAULT_CAM_MON_PORT    8889
+#define DEFAULT_LISTEN_IP       "127.0.0.1"
 
 #define IP_CTX_(a) /* pu_log(LL_DEBUG, "%s: %lu", __FUNCTION__, a) */ sht_add(a)
 

@@ -68,7 +68,7 @@ static int is_md=0, is_sd=0, is_io=0;
  */
 static int mon_connect(const char* cam_ip, int cam_port, const char* agent_ip, int agent_port) {
     IP_CTX_(1);
-    server_socket = lib_tcp_get_server_socket(agent_port);
+    server_socket = lib_tcp_get_server_socket(agent_port, DEFAULT_LISTEN_IP);
     if(server_socket < 0) {
         pu_log(LL_ERROR, "%s: unable to bind to port %d. %d %s", __FUNCTION__, agent_port, errno, strerror(errno));
         return -1;
