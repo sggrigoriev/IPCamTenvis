@@ -71,7 +71,7 @@
 
 #define SET_SSL_FOR_URL_REQUEST     "SET_SSL_FOR_URL_REQUEST"
 
-#define AGENT_CURLOPT_CAINFO        "CURLOPT_INFO"
+#define AGENT_CURLOPT_CAINFO        "CURLOPT_CAINFO"
 #define AGENT_CURLOPT_SSL_VERIFYPEER "CURLOPT_SSL_VERIFYPEER"
 
 /*************************************************************************

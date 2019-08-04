@@ -1,3 +1,8 @@
+VERSION 1.0.8 04-AUG-2019
+=================================================================================================
+1. Fixed setting name: CURLOPT_INFO changed to CURLOPT_CA_INFO
+2. Fixed syntax error in activate.sh: Line 365 [! -> [ !
+
 VERSION 1.0.7 11-Jul-2019
 =================================================================================================
 1. Cam synced with Proxy & WUD changes (* -> 127.0.0.1 for litening)
